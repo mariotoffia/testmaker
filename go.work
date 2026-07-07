@@ -7,7 +7,9 @@ go 1.25.0
 use (
 	.
 	./adapters/native/fetch/stubfetcher
+	./adapters/native/llm/openaicompat
 	./adapters/native/source/filecatalog
 	./adapters/native/source/memorycatalog
 	./cmd/testmaker
+	./testutil/ollamalocal
 )

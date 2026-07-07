@@ -155,7 +155,7 @@ which then pass `item.NewItem` like any other input.
 
 ---
 
-## 6. LLM support 🚧 <a name="6-llm-support"></a> (port + prompts + service ✅; backends 🚧)
+## 6. LLM support 🚧 <a name="6-llm-support"></a> (port + prompts + service ✅; `openaicompat` backend ✅; prompt stores 🚧)
 
 Three pieces, innermost-out:
 
@@ -224,14 +224,16 @@ different base URL/key, chosen in the composition root. Optional later:
 `adapters/aws/llm/bedrock` (AWS SDK v2) and a native Ollama adapter only if
 model-management APIs are needed.
 
-**`adapters/native/llm/openaicompat` 🚧 — the buildable spec:**
+**`adapters/native/llm/openaicompat` ✅ — the buildable spec:**
 
 - Stdlib only (`net/http`, `encoding/json`); arch component
   `adapter_llm_openaicompat` with `canUse: [_no_external_deps_]`.
 - `New(cfg Config) (*Client, error)`. `Config`: `BaseURL` (required, e.g.
   `https://api.openai.com/v1` or `http://localhost:11434/v1`), `APIKey`
-  (optional — local servers need none), `HTTPClient *http.Client` (optional
-  override; default has a sane timeout). Constructor validates, no lazy init.
+  (optional — local servers need none), `AuthScheme` (optional — zero value
+  sends `Authorization: Bearer <key>`; `AuthSchemeAPIKey` sends Azure's
+  `api-key: <key>` header), `HTTPClient *http.Client` (optional override;
+  default has a sane timeout). Constructor validates, no lazy init.
 - Request mapping to `POST {BaseURL}/chat/completions`: `Model`, `Messages`
   (roles as-is), `MaxTokens`, `Temperature` map directly, zero values
   omitted from the wire; `JSONSchema` → `response_format:

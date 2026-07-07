@@ -12,6 +12,7 @@ import (
 	"sort"
 
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher"
+	"github.com/mariotoffia/testmaker/adapters/native/llm/openaicompat"
 	"github.com/mariotoffia/testmaker/adapters/native/source/filecatalog"
 	"github.com/mariotoffia/testmaker/adapters/native/source/memorycatalog"
 	"github.com/mariotoffia/testmaker/app/catalog"
@@ -21,15 +22,16 @@ import (
 
 func main() {
 	path := flag.String("catalog", "data/catalog/sources.json", "path to the source catalogue (json or yaml)")
+	llmPrompt := flag.String("llm-prompt", "", "if set (and TESTMAKER_LLM_BASE_URL is configured), send this prompt to the LLM backend")
 	flag.Parse()
 
-	if err := run(context.Background(), *path); err != nil {
+	if err := run(context.Background(), *path, *llmPrompt); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, path string) error {
+func run(ctx context.Context, path, llmPrompt string) error {
 	// --- composition root: choose adapters, wire the service ---
 	var (
 		repo    ports.SourceRepository = memorycatalog.NewStore()
@@ -73,6 +75,42 @@ func run(ctx context.Context, path string) error {
 		}
 		fmt.Printf("\nFetch demo (%s): %s\n", res.SourceID, res.Note)
 	}
+	return llmDemo(ctx, llmPrompt)
+}
+
+// llmDemo wires the OpenAI-compatible LLM adapter behind config: with no
+// TESTMAKER_LLM_BASE_URL the step is skipped and the CLI still runs. When
+// configured, the adapter is used through ports.LLM — the composition root is
+// the only place that knows the concrete backend.
+func llmDemo(ctx context.Context, userPrompt string) error {
+	baseURL := os.Getenv("TESTMAKER_LLM_BASE_URL")
+	if baseURL == "" {
+		fmt.Println("\nLLM: not configured (set TESTMAKER_LLM_BASE_URL to enable); skipping.")
+		return nil
+	}
+
+	client, err := openaicompat.New(openaicompat.Config{
+		BaseURL:    baseURL,
+		APIKey:     os.Getenv("TESTMAKER_LLM_API_KEY"),
+		AuthScheme: openaicompat.AuthScheme(os.Getenv("TESTMAKER_LLM_AUTH_SCHEME")),
+	})
+	if err != nil {
+		return err
+	}
+	if userPrompt == "" {
+		fmt.Println("\nLLM: configured; pass -llm-prompt to run a completion.")
+		return nil
+	}
+
+	var backend ports.LLM = client
+	resp, err := backend.Generate(ctx, ports.LLMRequest{
+		Model:    os.Getenv("TESTMAKER_LLM_MODEL"),
+		Messages: []ports.LLMMessage{{Role: ports.LLMRoleUser, Content: userPrompt}},
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\nLLM (%s): %s\n", resp.Model, resp.Content)
 	return nil
 }
 

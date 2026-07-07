@@ -31,6 +31,7 @@ exclude:
   - reports
   - docs
   - data
+  - testutil          # test-support infra (docker backends), outside the arch graph
 
 excludeFiles:
   - "^.*_test\\.go$"         # tests live outside the arch scope
@@ -52,6 +53,7 @@ components:
   adapter_source_memorycatalog: { in: [adapters/native/source/memorycatalog, adapters/native/source/memorycatalog/**] }
   adapter_source_filecatalog: { in: [adapters/native/source/filecatalog, adapters/native/source/filecatalog/**] }
   adapter_fetch_stubfetcher: { in: [adapters/native/fetch/stubfetcher, adapters/native/fetch/stubfetcher/**] }
+  adapter_llm_openaicompat: { in: [adapters/native/llm/openaicompat, adapters/native/llm/openaicompat/**] }
 
   # --- composition root ---
   cmd: { in: [cmd, cmd/**] }
@@ -91,6 +93,11 @@ deps:
     canUse: [yaml]
 
   adapter_fetch_stubfetcher:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [_no_external_deps_]
+
+  # OpenAI-compatible LLM backend: stdlib net/http + encoding/json only.
+  adapter_llm_openaicompat:
     mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
 

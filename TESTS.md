@@ -36,7 +36,11 @@ For an adapter over a real backend (HTTP API, sqlite file, live LLM):
   process; these run under `-short`.
 - **Integration tests are env-gated**: skip under `testing.Short()` **and**
   when the backend's `TESTMAKER_*` env var is unset (e.g.
-  `TESTMAKER_LLM_BASE_URL`), so `make test` stays green on any machine.
+  `TESTMAKER_LLM_BASE_URL`), so `make test` stays green on any machine. A
+  backend may instead be **provisioned on demand** — `testutil/ollamalocal`
+  starts a real OpenAI-compatible LLM (Ollama + a tiny model) in Docker and
+  skips when Docker is absent — so a non-`-short` run needs no hand-stood
+  server, while `TESTMAKER_LLM_BASE_URL` still points at an external one.
 - **Assert shape, not content** — a real backend's output is
   nondeterministic; check "non-empty content, model reported", never the
   generated text itself.

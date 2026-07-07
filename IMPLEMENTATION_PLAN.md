@@ -121,16 +121,17 @@ figural item media referenced by `Stimulus`.
 **Depends on:** Block 4.
 **Done when:** figural items resolve their media through the port in the renderer.
 
-## Block 12 — LLM library 🚧 (port + prompts + service ✅)
+## Block 12 — LLM library 🚧 (port + prompts + service + `openaicompat` backend ✅)
 
 **Goal:** back the LLM stack with working adapters and the first consuming
 step. Already in place: `ports.LLM`, `domain/prompt` (versioned Go-template
-prompts), `ports.PromptRepository`, and the hook-running `app/llm.Service`
-(prompt auto-application per Purpose, BeforeGenerate/AfterGenerate hooks).
-Remaining: `adapters/native/llm/openaicompat` — plain `net/http` +
-`encoding/json` against the OpenAI-compatible chat API, covering cloud
-(OpenAI/Azure) and local (Ollama `/v1`, vLLM, LM Studio, llama.cpp) via
-base-URL config; the prompt stores `memoryprompts` (tests) + `fileprompts`
+prompts), `ports.PromptRepository`, the hook-running `app/llm.Service`
+(prompt auto-application per Purpose, BeforeGenerate/AfterGenerate hooks), and
+`adapters/native/llm/openaicompat` ✅ — plain `net/http` + `encoding/json`
+against the OpenAI-compatible chat API, covering cloud (OpenAI/Azure) and local
+(Ollama `/v1`, vLLM, LM Studio, llama.cpp) via base-URL config, wired in the CLI
+behind `TESTMAKER_LLM_*` config.
+Remaining: the prompt stores `memoryprompts` (tests) + `fileprompts`
 (default, `data/prompts/*.yaml`) validated by a `ports/prompttest` conformance
 suite; then the LLM extraction step in `app/ingest` (structured `JSONSchema`
 output). Translation and run-time derivation follow inside Blocks 5–8 as

@@ -70,7 +70,8 @@ can never leak into the memory adapter or the core.
                           │ wires
           ┌───────────────▼─────────────────────────────┐
  Ring 3   │  adapters/native/source/{memorycatalog,      │  each: domain + ports
-          │     filecatalog}  · fetch/stubfetcher · ...   │        (+ own vendor)
+          │     filecatalog} · fetch/stubfetcher ·        │        (+ own vendor)
+          │     llm/openaicompat · ...                    │
           └───────────────┬─────────────────────────────┘
                           │ implement
           ┌───────────────▼───────────────┐
@@ -181,7 +182,7 @@ one shared conformance suite (see [TESTS.md](TESTS.md)).
 | testdb | sqlite | `adapters/native/testdb/sqlitetestdb` | `TestRepository` | 🚧 |
 | fetch | download/scrape/headless/generate | `adapters/native/fetch/*` | `Fetcher` | 🚧 |
 | generate | sandia / raven / matriks | `adapters/native/generate/*` | `Generator` | 🚧 |
-| llm | openaicompat | `adapters/native/llm/openaicompat` | `LLM` | 🚧 |
+| llm | openaicompat | `adapters/native/llm/openaicompat` | `LLM` | ✅ |
 | llm | bedrock | `adapters/aws/llm/bedrock` | `LLM` | 🚧 (optional) |
 | llm | memory | `adapters/native/llm/memoryprompts` | `PromptRepository` | 🚧 |
 | llm | file | `adapters/native/llm/fileprompts` | `PromptRepository` (default) | 🚧 |
@@ -283,6 +284,7 @@ testmaker/
   app/{catalog,llm}/
   adapters/native/source/{memorycatalog,filecatalog}/   (own go.mod each)
   adapters/native/fetch/stubfetcher/                     (own go.mod)
+  adapters/native/llm/openaicompat/                      (own go.mod)
   cmd/testmaker/                                          (own go.mod)
   data/catalog/sources.{json,yaml}                        seed catalogue
   ARCHITECTURE.md DDD.md UBIQUITOUS.md DESIGN.md IMPLEMENTATION_PLAN.md

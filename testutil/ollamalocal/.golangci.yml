@@ -1,0 +1,13 @@
+# Test-support infrastructure: it legitimately uses package-level container
+# state and polls the wall clock for Docker readiness, so it runs the standard
+# linter set rather than the repo's production-only rules (forbidigo,
+# gochecknoglobals, revive complexity budgets) enforced by the root config.
+version: "2"
+
+linters:
+  default: standard
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
