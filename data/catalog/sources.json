@@ -1,0 +1,4125 @@
+{
+  "meta": {
+    "catalog": "Testmaker source catalog",
+    "purpose": "Downloadable / scrapable sources of cognitive-aptitude / IQ test items (logic-first) for the Testmaker item bank, designer/generator, and renderer.",
+    "generated": "2026-07-07",
+    "source_count": 81,
+    "taxonomy": {
+      "A1": "Figure series (pick next figure in a sequence)",
+      "A2": "Matrices (3x3/2x2 grid, one missing tile)",
+      "A3": "Mensa-style homogeneous figure reasoning (speeded)",
+      "A4": "Odd-one-out / classification (figural)",
+      "A5": "Logical deduction / syllogisms (true/false/cannot-say)",
+      "B1": "Data interpretation (table/graph)",
+      "B2": "Calculation / equations / word problems",
+      "B3": "Number series",
+      "B4": "Arithmetic signs (insert + - x /)",
+      "B5": "Number speed & accuracy",
+      "C1": "Reading comprehension (true/false/cannot-say)",
+      "C2": "Analogies (A:B :: C:?)",
+      "C3": "Antonyms / synonyms / similarities",
+      "C4": "Sentence completion",
+      "D1": "Mental rotation (rotated / mirrored)",
+      "D2": "Cube / 3D reasoning (nets, folding)",
+      "D3": "Figure composition (assemble fragments / hidden figures)",
+      "E1": "Perceptual speed (rapid matching)",
+      "E2": "Working-memory reasoning"
+    },
+    "field_notes": {
+      "access_class": "downloadable-artifact | site-scrape | dataset-repo | api | interactive-only | generator",
+      "license.category": "public-domain | gov-public | open-source | open-cc | commercial-free-sample | commercial-paid | academic-restricted | unknown",
+      "license.redistributable": "yes | conditional | no",
+      "answer_keys": "yes | no | partial",
+      "norms_difficulty": "yes | no | partial",
+      "generator": "true = produces unlimited items + documented rules (powers the designer/generator)",
+      "ip_risk": "low | medium | high (risk if items were reused/redistributed)",
+      "priority": "high | medium | low (value for a logic-first cognitive test bank)"
+    }
+  },
+  "sources": [
+    {
+      "id": "omib",
+      "name": "Open Matrices Item Bank (OMIB)",
+      "provider": "Koch, Spinath, Greiff & Becker (Saarland/Luxembourg) via OSF",
+      "category": "open-data",
+      "urls": [
+        "https://osf.io/4km79/",
+        "https://www.mdpi.com/2079-3200/10/3/41"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "downloadable-artifact",
+        "api"
+      ],
+      "formats": [
+        "png",
+        "pdf",
+        "csv",
+        "docx"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "GPLv3",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A2"
+      ],
+      "item_count": "220 figural matrix items",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en",
+        "de"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "api",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "OSF project osf.io/4km79; download supplementary PNGs + pen-and-paper template. OSF has a REST API."
+      },
+      "notes": "Best single grab for a matrix bank: validated, IRT difficulty from N=2572, construction rules documented for your generator. Share-alike (GPL) obligations apply.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "mars-ib",
+      "name": "Matrix Reasoning Item Bank (MaRs-IB)",
+      "provider": "Chierchia, Blakemore et al.; Royal Society Open Science",
+      "category": "open-data",
+      "urls": [
+        "https://osf.io/g96f4/",
+        "https://royalsocietypublishing.org/doi/10.1098/rsos.190232"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "png",
+        "csv"
+      ],
+      "license": {
+        "category": "open-cc",
+        "detail": "CC-BY article; items free for non-commercial use",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A2"
+      ],
+      "item_count": "80 items (parallel forms)",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "api",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "OSF osf.io/g96f4; item images + item-level CSV. Abstract-analogy 3x3 with rule-defined distractors."
+      },
+      "notes": "Explicitly built as an open Raven's alternative. Non-commercial caveat - check before shipping commercially.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "icar",
+      "name": "International Cognitive Ability Resource (ICAR / ICAR16)",
+      "provider": "ICAR team (Condon, Revelle, Doebler, Holling) via PsychArchives",
+      "category": "open-data",
+      "urls": [
+        "https://icar-project.com/",
+        "https://doi.org/10.23668/psycharchives.22167",
+        "https://www.sciencedirect.com/science/article/pii/S0191886920300957"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "png",
+        "csv",
+        "txt",
+        "code"
+      ],
+      "license": {
+        "category": "academic-restricted",
+        "detail": "Full bank under PsychArchives Scientific-Use License; ICAR16 sample items freely citable",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A2",
+        "B3",
+        "D1",
+        "D2",
+        "C2"
+      ],
+      "item_count": "~60-item pool; ICAR16 = 16 items",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "order-required",
+        "auth": "yes",
+        "items_as": "mixed",
+        "notes": "Full 1GB bank + automatic item generators behind a scientific-use gate; ICAR16 & matrix samples are in open-access papers (scrape figures)."
+      },
+      "notes": "Ships AUTOMATIC ITEM GENERATORS - directly relevant to the generator subsystem. Matrix items = images; letter-number-series & verbal = text.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "sandia-matrices",
+      "name": "Sandia Matrices (norming set + Java generator)",
+      "provider": "Sandia National Laboratories (Matzen et al. 2010)",
+      "category": "open-data",
+      "urls": [
+        "https://github.com/sandialabs/Matrices"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "generator",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "png",
+        "jpg",
+        "csv",
+        "code"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "BSD-3-Clause (Sandia release); free with citation",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A2"
+      ],
+      "item_count": "Fixed 2010 norming set + unlimited (generator)",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Download Matzen_et_al_2010_norming_stim.zip for normed item images + CSV. Java generator is dated."
+      },
+      "notes": "One of very few truly free, NORMED, Raven-style sets from a reputable institution.",
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "sandia-review-2020",
+      "name": "Sandia Matrices - psychometric review supplementary tests",
+      "provider": "Harris et al. 2020, Personnel Assessment and Decisions (BGSU)",
+      "category": "open-data",
+      "urls": [
+        "https://scholarworks.bgsu.edu/pad/vol6/iss3/6/"
+      ],
+      "access_class": [
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "pdf",
+        "zip"
+      ],
+      "license": {
+        "category": "open-cc",
+        "detail": "Open-access journal",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A2"
+      ],
+      "item_count": "2 static short tests + 1 CAT (curated subsets)",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Download article PDF + SupplementaryMaterials.zip (scoring keys). Pairs with sandialabs image repo."
+      },
+      "notes": "Turns the raw Sandia generator into ready-to-administer short forms with keys.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "raven-matrix-py",
+      "name": "raven-matrix (Sandia SGMT Python port)",
+      "provider": "DH-Oz (independent) - Python reimplementation",
+      "category": "open-data",
+      "urls": [
+        "https://github.com/DH-Oz/raven-matrix"
+      ],
+      "access_class": [
+        "generator",
+        "dataset-repo"
+      ],
+      "formats": [
+        "svg",
+        "png",
+        "json",
+        "code"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "BSD-3-Clause (per upstream)",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A2"
+      ],
+      "item_count": "Unlimited (generator)",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "vectors",
+        "notes": "Modern Python; `raven-matrix build --code A1B2C4 --png`. SVG-first output ideal for a renderer. Shell out from Go or port logic."
+      },
+      "notes": "Most practical live matrix generator; carries Sandia normed difficulty. Top pick for the generator subsystem (safe BSD license).",
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "pyravenmatrices",
+      "name": "pyRavenMatrices",
+      "provider": "Christian Mekik",
+      "category": "open-data",
+      "urls": [
+        "https://github.com/cmekik/pyRavenMatrices"
+      ],
+      "access_class": [
+        "generator"
+      ],
+      "formats": [
+        "png",
+        "code"
+      ],
+      "license": {
+        "category": "unknown",
+        "detail": "No LICENSE file - treat as all-rights-reserved until clarified",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A2"
+      ],
+      "item_count": "Unlimited (generator library)",
+      "answer_keys": "partial",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "generator": true,
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "vectors",
+        "notes": "Cairo/pycairo; library-style rule composition. Good architecture reference."
+      },
+      "notes": "Clean rule-composition API. Missing license blocks production use - verify with author.",
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "matriks",
+      "name": "matRiks (R package)",
+      "provider": "Brancaccio, Epifania, Anselmi, de Chiusole (Univ. Padova)",
+      "category": "open-data",
+      "urls": [
+        "https://cran.r-project.org/package=matRiks",
+        "https://doi.org/10.1177/01466216251374826"
+      ],
+      "access_class": [
+        "generator",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "svg",
+        "png",
+        "pdf",
+        "code"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "GPL (CRAN)",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A2",
+        "A4"
+      ],
+      "item_count": "Unlimited (generator); 1 correct + 10 distractors each",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "generate",
+        "auth": "no",
+        "items_as": "vectors",
+        "notes": "install.packages('matRiks'); rules span visuospatial->logic. Distractors modeled on empirical Raven error patterns; Rasch-validated difficulty."
+      },
+      "notes": "Best-documented rule taxonomy + DIAGNOSTIC distractor logic. Tutorial paper is a design blueprint to port to Go.",
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "openpsych-matrix",
+      "name": "OpenPsychometrics - Matrix Reasoning IQ test + raw data",
+      "provider": "Open-Source Psychometrics Project",
+      "category": "open-data",
+      "urls": [
+        "https://openpsychometrics.org/tests/",
+        "https://openpsychometrics.org/_rawdata/IQ1.zip"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "site-scrape",
+        "interactive-only"
+      ],
+      "formats": [
+        "png",
+        "csv",
+        "html"
+      ],
+      "license": {
+        "category": "public-domain",
+        "detail": "Project releases data to public domain / CC0-style",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A2",
+        "C2"
+      ],
+      "item_count": "25 matrix items + ~400 response sets",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Download _rawdata/IQ1.zip (responses + codebook); scrape the 25 item PNGs from the live test pages."
+      },
+      "notes": "Rare combo: free items + real response data + PD license. Author flags quality as 'experimental' - cross-check item difficulty from the data.",
+      "generator": false,
+      "families": [
+        "logical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "openpsych-viqt",
+      "name": "OpenPsychometrics - Vocabulary IQ Test (VIQT)",
+      "provider": "Open-Source Psychometrics Project",
+      "category": "open-data",
+      "urls": [
+        "https://openpsychometrics.org/tests/VIQT/",
+        "https://openpsych.net/paper/62/"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "csv",
+        "txt"
+      ],
+      "license": {
+        "category": "public-domain",
+        "detail": "public domain",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "C3"
+      ],
+      "item_count": "45 items",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "text",
+        "notes": "Items are text; scrape VIQT page or pull response dataset. OpenPsych paper flags weak items to drop."
+      },
+      "notes": "High-quality, truly public-domain verbal filler for the C family.",
+      "generator": false,
+      "families": [
+        "verbal"
+      ]
+    },
+    {
+      "id": "psytoolkit",
+      "name": "PsyToolkit Experiment Library",
+      "provider": "Gijsbert Stoet",
+      "category": "open-data",
+      "urls": [
+        "https://www.psytoolkit.org/experiment-library/"
+      ],
+      "access_class": [
+        "downloadable-artifact",
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "zip",
+        "png"
+      ],
+      "license": {
+        "category": "open-cc",
+        "detail": "Free for research; copy/modify/embed (per-experiment copyright page)",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "D1",
+        "E1",
+        "E2"
+      ],
+      "item_count": "50+ experiments (procedurally generated trials)",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en",
+        "de"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "interactive",
+        "notes": "Each experiment has a downloadable zip (script + stimuli): mental rotation, N-back, Corsi, digit-symbol, Deary-Liewald."
+      },
+      "notes": "Best for SPEED / WORKING-MEMORY (E) & mental rotation (D1) mechanics and as a reference implementation of RT-scored timed tasks. No matrices.",
+      "generator": false,
+      "families": [
+        "spatial",
+        "speed"
+      ]
+    },
+    {
+      "id": "yerkes-army",
+      "name": "Yerkes 1921 - Army Alpha & Beta (Psychological Examining in the US Army)",
+      "provider": "US War Dept / NAS; digitized by Internet Archive",
+      "category": "classic-instrument",
+      "urls": [
+        "https://archive.org/details/psychologicalexa00yerkuoft"
+      ],
+      "access_class": [
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "pdf",
+        "txt",
+        "jpg",
+        "html"
+      ],
+      "license": {
+        "category": "public-domain",
+        "detail": "1921 US government publication - genuinely PD",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4",
+        "B1",
+        "B2",
+        "C1",
+        "C2",
+        "C3",
+        "D3",
+        "E1"
+      ],
+      "item_count": "Hundreds across Alpha (8) + Beta (7) tests + alternate forms",
+      "answer_keys": "partial",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "938-page book; PDF (59MB) or JP2 zip for clean plate images. Beta plates = figural images; Alpha = text via OCR. Items spread through document."
+      },
+      "notes": "Canonical fully-PD historical source. Beta = free figural/spatial/speed; Alpha = verbal + arithmetic. Curate dated 1917 content.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "speed",
+        "verbal"
+      ]
+    },
+    {
+      "id": "wikimedia-commons",
+      "name": "Wikimedia Commons - intelligence test figures",
+      "provider": "Wikimedia Commons contributors",
+      "category": "open-data",
+      "urls": [
+        "https://commons.wikimedia.org/wiki/Category:Intelligence_tests",
+        "https://commons.wikimedia.org/w/api.php"
+      ],
+      "access_class": [
+        "api",
+        "dataset-repo"
+      ],
+      "formats": [
+        "svg",
+        "png",
+        "jpg"
+      ],
+      "license": {
+        "category": "open-cc",
+        "detail": "PD or CC per-file (each file states its license)",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "D1",
+        "D2"
+      ],
+      "item_count": "Dozens of illustrative figures (not full item sets)",
+      "answer_keys": "no",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "api",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Use MediaWiki API (categorymembers + imageinfo) - category HTML is JS-rendered/empty. Verify each file's license individually."
+      },
+      "notes": "Cleanest source of individually-licensed, safely-reusable example figures + a few genuine PD Army plate scans. Not a bulk item source.",
+      "generator": false,
+      "families": [
+        "logical",
+        "spatial"
+      ]
+    },
+    {
+      "id": "raven",
+      "name": "RAVEN dataset",
+      "provider": "Zhang et al. (UCLA VCLA), CVPR 2019",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/WellyZhang/RAVEN",
+        "https://arxiv.org/abs/1903.02741"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "generator",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "png",
+        "npz",
+        "xml",
+        "code"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "GPL-3.0 (generator)",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4"
+      ],
+      "item_count": "70,000 problems (7 configs)",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "git clone + generate any N. Each item = PNG panels + XML rule annotation + npz. Legacy Py2.7."
+      },
+      "notes": "Canonical figural-matrix dataset with full rule grammar (A-SIG). KNOWN answer-set shortcut bias - prefer I-RAVEN / RAVEN-FAIR for training/eval.",
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "i-raven",
+      "name": "I-RAVEN / SRAN (Impartial RAVEN)",
+      "provider": "Hu et al. (Beihang), AAAI 2021",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/husheng12345/SRAN",
+        "https://arxiv.org/abs/2002.06838"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "generator"
+      ],
+      "formats": [
+        "png",
+        "npz",
+        "xml",
+        "code"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "MIT (verify LICENSE)",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4"
+      ],
+      "item_count": "70,000 (generatable)",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Attribute Bisection Tree builds balanced distractors that defeat the RAVEN shortcut. Same PNG+XML format, drop-in."
+      },
+      "notes": "Preferred over vanilla RAVEN: removes answer-set bias, cleaner license.",
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "raven-fair",
+      "name": "RAVEN-FAIR",
+      "provider": "Benny, Pekar, Wolf (Tel Aviv Univ.), CVPR 2021",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/yanivbenny/RAVEN_FAIR"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "generator"
+      ],
+      "formats": [
+        "png",
+        "npz",
+        "xml",
+        "code"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "MIT",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4"
+      ],
+      "item_count": "70,000 (generatable)",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "`python main.py --fair 1`. Different balanced-answer algorithm than I-RAVEN."
+      },
+      "notes": "Second impartial variant; good for cross-checking distractor strategies.",
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "a-i-raven",
+      "name": "A-I-RAVEN / I-RAVEN-Mesh (raven-datasets)",
+      "provider": "Malkinski & Mandziuk (Warsaw Univ. Tech), IJCAI 2025",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/mikomel/raven-datasets",
+        "https://github.com/mikomel/raven",
+        "https://huggingface.co/datasets/mikmal/attributeless-i-raven"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "generator",
+        "api"
+      ],
+      "formats": [
+        "png",
+        "npz",
+        "code"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "GPL-3.0",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4"
+      ],
+      "item_count": "Unlimited (generator); I-RAVEN-Large recipe; 10 generalization regimes",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "generate",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Modern Python 3.9, unit-tested. Flags to control color/position/size/type + mesh + held-out rules. Also on HuggingFace datasets."
+      },
+      "notes": "Most maintained, most configurable RAVEN-lineage generator (2025). Best modern starting point for the matrix engine.",
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "pgm",
+      "name": "PGM - Procedurally Generated Matrices",
+      "provider": "DeepMind (Barrett, Hill, Santoro et al.), ICML 2018",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/google-deepmind/abstract-reasoning-matrices",
+        "https://arxiv.org/abs/1807.04225"
+      ],
+      "access_class": [
+        "downloadable-artifact",
+        "api"
+      ],
+      "formats": [
+        "npz"
+      ],
+      "license": {
+        "category": "academic-restricted",
+        "detail": "Non-commercial research only",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2"
+      ],
+      "item_count": "1,420,000 matrices (8 regimes)",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "tar.gz from GCS 'ravens-matrices' bucket (tens of GB) or tfds.load('abstract_reasoning'). No generator source released."
+      },
+      "notes": "Largest keyed matrix corpus + best-documented [relation, object, attribute] rule schema. NON-COMMERCIAL - use as rule/format reference, do not ship items.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "vap",
+      "name": "DeepMind Visual Analogy (VAP)",
+      "provider": "DeepMind (Hill, Santoro et al.) 2019",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/google-deepmind/abstract-reasoning-matrices"
+      ],
+      "access_class": [
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "npz"
+      ],
+      "license": {
+        "category": "academic-restricted",
+        "detail": "Non-commercial research only",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "C2",
+        "A1"
+      ],
+      "item_count": "Large (many npz per regime)",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "analogies/*.tar.gz in the same GCS bucket as PGM."
+      },
+      "notes": "Best large figural-analogy corpus; same non-commercial restriction as PGM (format/rule model only).",
+      "generator": false,
+      "families": [
+        "logical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "arc-agi-1",
+      "name": "ARC-AGI-1 (Abstraction and Reasoning Corpus)",
+      "provider": "Francois Chollet / ARC Prize Foundation",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/fchollet/ARC-AGI",
+        "https://arxiv.org/abs/1911.01547"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "json"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "Apache-2.0",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A1",
+        "A4"
+      ],
+      "item_count": "1,000 tasks (400 train + 400 eval + 200 private)",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "grids",
+        "notes": "Each task = 2-5 demo grid pairs + test input. Open-ended output grids (not MCQ) - convert to pick-the-output if needed."
+      },
+      "notes": "Gold standard for abstraction; cleanest license. Source of transformation CONCEPTS (rotation, reflection, counting, symmetry) to adapt into matrix rules.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "arc-agi-2",
+      "name": "ARC-AGI-2",
+      "provider": "ARC Prize Foundation (Chollet et al.) 2025",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/arcprize/ARC-AGI-2",
+        "https://arxiv.org/abs/2505.11831"
+      ],
+      "access_class": [
+        "dataset-repo"
+      ],
+      "formats": [
+        "json"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "Apache-2.0",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A1",
+        "A4"
+      ],
+      "item_count": "1,000 train + 120 eval public (+ private)",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "grids",
+        "notes": "Same JSON schema as v1; harder, more compositional."
+      },
+      "notes": "Hardest abstract-reasoning concepts, same permissive license/format as v1.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "conceptarc",
+      "name": "ConceptARC",
+      "provider": "Moskvichev, Odouard, Mitchell (Santa Fe Institute)",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/victorvikram/ConceptARC",
+        "https://arxiv.org/abs/2305.07141"
+      ],
+      "access_class": [
+        "dataset-repo"
+      ],
+      "formats": [
+        "json",
+        "csv"
+      ],
+      "license": {
+        "category": "unknown",
+        "detail": "Verify LICENSE (likely permissive)",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A1",
+        "A4"
+      ],
+      "item_count": "16 concept groups x 10 tasks = 160",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "grids",
+        "notes": "JSON tasks + human/model performance CSVs. Concept-group labels = ready ontology of reasoning concepts."
+      },
+      "notes": "Best for a CONCEPT TAXONOMY to structure difficulty ladders; includes human performance as pseudo-norms.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "arc-gen",
+      "name": "ARC-GEN + ARC-GEN-100K",
+      "provider": "Michael D. Moffitt (Google) 2025",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/google/ARC-GEN",
+        "https://arxiv.org/abs/2511.00162"
+      ],
+      "access_class": [
+        "generator",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "json",
+        "code"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "Apache-2.0 expected (verify)",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A1",
+        "A4"
+      ],
+      "item_count": "All 400 ARC-1 tasks + ARC-GEN-100K (100k) + unlimited",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "grids",
+        "notes": "Python generators reproduce/vary each ARC task; emit unlimited grid pairs matching original distributions."
+      },
+      "notes": "Most faithful open procedural generator for ARC-style abstraction tasks.",
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "re-arc",
+      "name": "RE-ARC + ARC-DSL",
+      "provider": "Michael Hodel",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/michaelhodel/re-arc",
+        "https://github.com/michaelhodel/arc-dsl"
+      ],
+      "access_class": [
+        "generator"
+      ],
+      "formats": [
+        "json",
+        "code"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "MIT",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A1",
+        "A4"
+      ],
+      "item_count": "Unlimited per ARC task; DSL = 141 primitives",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "grids",
+        "notes": "Per-task generators + a 141-primitive DSL of grid ops (rotate, mirror, recolor, count, gravity)."
+      },
+      "notes": "The MIT-licensed ARC-DSL is a superb catalog of figural/grid transformation operations to reuse or port to Go for the rule engine.",
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "machine-number-sense",
+      "name": "Machine Number Sense (MNS)",
+      "provider": "Zhang et al. (UCLA VCLA), AAAI 2020",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/zwh1999anne/Machine-Number-Sense-Dataset",
+        "https://pypi.org/project/machine-number-sense/"
+      ],
+      "access_class": [
+        "dataset-repo",
+        "generator",
+        "api"
+      ],
+      "formats": [
+        "png",
+        "json",
+        "npz",
+        "code"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "Verify LICENSE (VCLA repos typically MIT/research)",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "B2",
+        "B3"
+      ],
+      "item_count": "~100,000+ visual arithmetic problems",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "generate",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "pip install machine-number-sense; And-Or-Graph grammar composes layouts with number symbols -> PNG + label."
+      },
+      "notes": "Supports the Numerical family (number sense / calculation) with a documented grammar generator. Same lab as RAVEN.",
+      "families": [
+        "numerical"
+      ]
+    },
+    {
+      "id": "bongard-logo",
+      "name": "Bongard-LOGO",
+      "provider": "NVIDIA (Nie, Yu, Mao et al.), NeurIPS 2020",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/NVlabs/Bongard-LOGO",
+        "https://arxiv.org/abs/2010.00763"
+      ],
+      "access_class": [
+        "generator",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "png",
+        "json",
+        "code"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "MIT",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "A4"
+      ],
+      "item_count": "12,000 problems + unlimited (generator)",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "pip install bongard; turtle action-program generation (BongardProblem->Image->OneStrokeShape). Needs xvfb/ghostscript headless."
+      },
+      "notes": "Premier open, MIT-licensed generator for ODD-ONE-OUT / classification figural items (A4). Invent unlimited original items.",
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "bongard-hoi",
+      "name": "Bongard-HOI",
+      "provider": "NVIDIA, CVPR 2022",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/NVlabs/Bongard-HOI",
+        "https://arxiv.org/abs/2205.13803"
+      ],
+      "access_class": [
+        "dataset-repo"
+      ],
+      "formats": [
+        "code",
+        "jpg"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "Code open; underlying photos have own licenses",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A4"
+      ],
+      "item_count": "Curated few-shot HOI instances",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Uses natural photos (HAKE/HICO); requires external image downloads."
+      },
+      "notes": "Poor fit - real photos, messier IP. Reasoning-benchmark reference only; skip for item generation.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "clevr",
+      "name": "CLEVR / CLEVRER",
+      "provider": "Johnson et al. (Stanford + FAIR); MIT/IBM/DeepMind",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/facebookresearch/clevr-dataset-gen",
+        "https://cs.stanford.edu/people/jcjohns/clevr/"
+      ],
+      "access_class": [
+        "generator",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "png",
+        "json",
+        "code"
+      ],
+      "license": {
+        "category": "open-cc",
+        "detail": "Data CC-BY 4.0; generator BSD/MIT-style",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "B1",
+        "A5"
+      ],
+      "item_count": "100k images / 865k questions + unlimited",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Blender-rendered 3D scenes + functional question programs. Heavy."
+      },
+      "notes": "3D-scene VQA, not figural matrices. Value = the functional-program -> guaranteed-correct-answer design pattern for your generator's answer-key guarantees.",
+      "families": [
+        "logical",
+        "numerical"
+      ]
+    },
+    {
+      "id": "seqsolver",
+      "name": "Number/letter-series generators & solvers (SeqSolver, sequence_generator)",
+      "provider": "Nizamani (SeqSolver) + community",
+      "category": "ml-dataset",
+      "urls": [
+        "https://github.com/arnizamani/SeqSolver",
+        "https://github.com/claytonbonelli/sequence_generator"
+      ],
+      "access_class": [
+        "generator"
+      ],
+      "formats": [
+        "code",
+        "txt"
+      ],
+      "license": {
+        "category": "open-source",
+        "detail": "Verify per repo (typically MIT/GPL)",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "B3",
+        "C3"
+      ],
+      "item_count": "Unlimited (rule-based)",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "generator": true,
+      "extraction": {
+        "method": "git-clone",
+        "auth": "no",
+        "items_as": "text",
+        "notes": "SeqSolver solves & validates number series (IST/PJP style); sequence_generator emits numeric/alpha/hex sequences. Lightweight, easy to port to Go."
+      },
+      "notes": "Supports Numerical B3 + letter-series. SeqSolver doubles as an auto-verifier / answer-key generator in the pipeline.",
+      "families": [
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "reasonera-index",
+      "name": "ReasonEra '47 datasets for abstract/logical/inductive reasoning' index",
+      "provider": "ReasonEra (curated index)",
+      "category": "ml-dataset",
+      "urls": [
+        "https://reasonera.medium.com/47-open-source-datasets-for-abstract-logical-and-inductive-reasoning-puzzles-plus-the-tool-that-actually-solves-these-puzzles-117ea4fdfb44"
+      ],
+      "access_class": [
+        "site-scrape"
+      ],
+      "formats": [
+        "html"
+      ],
+      "license": {
+        "category": "unknown",
+        "detail": "Aggregator; per-dataset licenses vary",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5"
+      ],
+      "item_count": "Directory of 47 datasets",
+      "answer_keys": "partial",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "text",
+        "notes": "Discovery hub to enumerate more downloadable figural/logical corpora; check each link's license."
+      },
+      "notes": "Efficient way to find additional keyed, downloadable reasoning datasets beyond this catalog.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "ravens-pm",
+      "name": "Raven's Progressive Matrices (SPM/APM/CPM)",
+      "provider": "John C. Raven; published by Pearson",
+      "category": "classic-instrument",
+      "urls": [
+        "https://en.wikipedia.org/wiki/Raven%27s_Progressive_Matrices"
+      ],
+      "access_class": [
+        "interactive-only",
+        "site-scrape"
+      ],
+      "formats": [
+        "png",
+        "jpg",
+        "pdf"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "STILL under Pearson copyright - NOT public domain",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A2",
+        "A1"
+      ],
+      "item_count": "SPM 60 / APM 48 / CPM 36 (cannot legally source real items)",
+      "answer_keys": "no",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "high",
+      "extraction": {
+        "method": "none",
+        "auth": "n/a",
+        "items_as": "images",
+        "notes": "DO NOT scrape/redistribute real items. Leaked 'full SPM/APM' PDFs are infringing. Harvest only FORMAT from vendor practice pages."
+      },
+      "notes": "The single biggest IP trap. Mirror the format via open banks (OMIB/MaRs-IB/Sandia/matRiks) instead of copying Raven items.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "cfit",
+      "name": "Cattell Culture Fair Intelligence Test (CFIT / IPAT)",
+      "provider": "R.B. Cattell / IPAT; now Hogrefe",
+      "category": "classic-instrument",
+      "urls": [
+        "https://en.wikipedia.org/wiki/Cattell_Culture_Fair_Intelligence_Test",
+        "https://americanhistory.si.edu/collections/object/nmah_692452"
+      ],
+      "access_class": [
+        "interactive-only",
+        "site-scrape"
+      ],
+      "formats": [
+        "pdf",
+        "jpg",
+        "html"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "Current CFIT copyrighted (Hogrefe/IPAT); floating manuals likely unauthorized",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4"
+      ],
+      "item_count": "~46 items/form; very few visible",
+      "answer_keys": "partial",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "high",
+      "extraction": {
+        "method": "none",
+        "auth": "n/a",
+        "items_as": "images",
+        "notes": "No clean legal item download. Smithsonian leaflet + Wikipedia describe the 4 subtests (Series/Classification/Matrices/Conditions)."
+      },
+      "notes": "Format reference only (Series/Classification/Matrices/Conditions). Regenerate original items; don't copy circulating scans.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "wonderlic-samples",
+      "name": "Wonderlic (WPT) - third-party sample sets",
+      "provider": "Various prep sites (not Wonderlic Inc.)",
+      "category": "classic-instrument",
+      "urls": [
+        "https://uniontestprep.com/wonderlic-personnel-test",
+        "https://www.iprep.online/courses/wonderlic-test/"
+      ],
+      "access_class": [
+        "downloadable-artifact",
+        "site-scrape"
+      ],
+      "formats": [
+        "pdf",
+        "html"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "Third-party imitations; real WPT is copyrighted by Wonderlic Inc.",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "B2",
+        "B3",
+        "C2",
+        "C3",
+        "C4",
+        "A5",
+        "D1"
+      ],
+      "item_count": "~50 per PDF (mixed-family)",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "text",
+        "notes": "50-question PDFs with explanations; text, easy to parse. Look-alikes of uncertain provenance."
+      },
+      "notes": "Format template only for a fast 50-item / 12-min mixed speeded section. Low priority for a logic-first bank.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "shl",
+      "name": "SHL - example questions + Verify practice tests",
+      "provider": "SHL Group",
+      "category": "branded-vendor",
+      "urls": [
+        "https://www.shl.com/shldirect/en/example-questions/",
+        "https://www.shl.com/shldirect/en/practice-tests/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png",
+        "svg"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) SHL; ToS threatens legal action for sharing results",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "E1"
+      ],
+      "item_count": "~3-8 examples per type + full practice players",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "high",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Items load via /htmlLightbox/view/{id} JS + TalentCentral players - need Playwright/Puppeteer + screenshots."
+      },
+      "notes": "Inductive = complete-the-5-box-sequence; verbal = T/F/cannot-say; Verify G+ = 24 items/36min tri-ability. FORMAT reference only - do not copy items.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "speed",
+        "verbal"
+      ]
+    },
+    {
+      "id": "aon-cute",
+      "name": "Aon / cut-e - official practice-task PDFs",
+      "provider": "Aon's Assessment Solutions (ex cut-e)",
+      "category": "branded-vendor",
+      "urls": [
+        "https://www.aon.com/en/capabilities/talent-and-rewards/prepare-for-your-online-assessment"
+      ],
+      "access_class": [
+        "downloadable-artifact",
+        "interactive-only"
+      ],
+      "formats": [
+        "pdf",
+        "html"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) Aon",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4",
+        "B1",
+        "B2",
+        "B4",
+        "B5",
+        "C1",
+        "E2"
+      ],
+      "item_count": "~50-80 items across ~10 PDFs",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "~10 public PDFs on assets.aon.com (inductive scales, gapChallenge matrix, switchChallenge, numerical, verbal). Figure-heavy - render pages to images."
+      },
+      "notes": "Best free/legit vendor source: Aon's OWN candidate materials, worked answers, covers A/B/C/E. Mirror formats; don't redistribute PDFs/figures.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "speed",
+        "verbal"
+      ]
+    },
+    {
+      "id": "thomas-gia",
+      "name": "Thomas GIA - example booklet PDF",
+      "provider": "Thomas International",
+      "category": "branded-vendor",
+      "urls": [
+        "https://www.thomas.co/sites/default/files/2019-08/GIA-Example-Booklet-2018.pdf"
+      ],
+      "access_class": [
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "pdf"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) Thomas; must be reproduced in its entirety (no carving out items)",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "E1",
+        "E2",
+        "B5",
+        "C3",
+        "D1"
+      ],
+      "item_count": "~15-20 worked examples across 5 subtests",
+      "answer_keys": "partial",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Direct GET, no auth. Text extracts cleanly; spatial R-symbols + letter grids need image extraction."
+      },
+      "notes": "Best direct-download in the vendor batch. Reusable = subtest MECHANICS (furthest-from-middle number, odd-word-out, rotate-symbol-vs-mirror).",
+      "generator": false,
+      "families": [
+        "numerical",
+        "spatial",
+        "speed",
+        "verbal"
+      ]
+    },
+    {
+      "id": "ace-master",
+      "name": "ACE Cognitive Test (Master International)",
+      "provider": "Master International A/S",
+      "category": "branded-vendor",
+      "urls": [
+        "https://www.master-hr.com/solutions/ace-cognitive-test/",
+        "https://www.master-hr.com/media/gydfxugj/ace-brochure.pdf"
+      ],
+      "access_class": [
+        "downloadable-artifact",
+        "interactive-only"
+      ],
+      "formats": [
+        "pdf",
+        "html"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) Master; brochure/fact-sheet free to read",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "C2",
+        "A5"
+      ],
+      "item_count": "A few illustrative items; bank proprietary",
+      "answer_keys": "partial",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en",
+        "da",
+        "de",
+        "sv"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "GET brochure + fact-sheet PDFs (format + published norms). Live CAT demo email-gated + adaptive (no fixed item set)."
+      },
+      "notes": "3x3 matrix format matches the A2/A3 focus; adaptive CAT correlates Raven's APM ~0.7. FORMAT + psychometric-design reference.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "cubiks-logiks",
+      "name": "Cubiks / Talogy - Logiks practice",
+      "provider": "Talogy (formerly Cubiks)",
+      "category": "branded-vendor",
+      "urls": [
+        "https://practicetests.cubiks.com/"
+      ],
+      "access_class": [
+        "interactive-only",
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) Talogy/Cubiks",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "C2",
+        "C3",
+        "A5",
+        "A4",
+        "B2",
+        "B3",
+        "A1"
+      ],
+      "item_count": "~10 example questions; full structure public",
+      "answer_keys": "partial",
+      "norms_difficulty": "no",
+      "languages": [
+        "en",
+        "de",
+        "fr",
+        "nl",
+        "no",
+        "fi",
+        "sv"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Examples in a Drupal JS widget; scrape embedded PNGs or render. Logiks General Intermediate = 50Q (V24/N16/A10) in 12 min."
+      },
+      "notes": "Low yield (~10 items). Reusable = the three-section 12-min speeded General Ability format.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "saville",
+      "name": "Saville - Swift Analysis / Executive Aptitude practice",
+      "provider": "Saville Assessment (WTW)",
+      "category": "branded-vendor",
+      "urls": [
+        "https://www.savilleassessment.com/practice-tests/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) Saville Assessment",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "C1",
+        "C3",
+        "B1",
+        "A1",
+        "A2"
+      ],
+      "item_count": "A handful per section; Swift Analysis = 24 items",
+      "answer_keys": "partial",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "JS Oasys engine, desktop-only, no publisher PDF. Diagrammatic/abstract need screenshot capture."
+      },
+      "notes": "Reusable = speeded 3-section 24-item structure; diagrammatic 'missing figure in sequence' is most on-mission but hardest to capture.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "eligo-perls",
+      "name": "Eligo (PERLS) - practice-exercise demos",
+      "provider": "ELIGO Psychologische Personalsoftware GmbH",
+      "category": "branded-vendor",
+      "urls": [
+        "https://eligo.de/en/support/",
+        "https://www.perls-testing.de/demo/mltests/start.php?iIID=27883"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png",
+        "svg"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) ELIGO",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A5",
+        "B1",
+        "B3",
+        "C1",
+        "C2",
+        "E1"
+      ],
+      "item_count": "A few items per demo",
+      "answer_keys": "no",
+      "norms_difficulty": "no",
+      "languages": [
+        "en",
+        "de"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "start.php returns empty to plain HTTP - JS/AJAX engine. Render + screenshot; no answer key served. EXCLUDE the personality demo (iIID=27942)."
+      },
+      "notes": "Official vendor demos, cognitive subtests only. Higher engineering cost (JS, no keys) than Aon.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "speed",
+        "verbal"
+      ]
+    },
+    {
+      "id": "pi-cognitive",
+      "name": "PI Cognitive Assessment (PICA / PLI)",
+      "provider": "The Predictive Index",
+      "category": "branded-vendor",
+      "urls": [
+        "https://www.predictiveindex.com/",
+        "https://www.jobtestprep.com/predictive-index-test-free"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "(c) PI; no official free items - third-party samples only",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "B2",
+        "B3",
+        "C2",
+        "C3",
+        "A5"
+      ],
+      "item_count": "0 official free; third-party ~9-30",
+      "answer_keys": "partial",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "No official artifact. Third-party HTML samples are vendors' own copyrighted re-creations (ToS forbids scraping)."
+      },
+      "notes": "Mirror only the FORMAT: 50 items / 12 min, mixed numerical+verbal+abstract, increasing difficulty (PLI heritage).",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "people-test-logic",
+      "name": "People Test Logic",
+      "provider": "People Test Systems A/S (Denmark)",
+      "category": "branded-vendor",
+      "urls": [
+        "https://peopletest.com/",
+        "https://www.practice4me.com/people-test-logic/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "(c) PTS; no official free items",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "B1",
+        "B3",
+        "C1"
+      ],
+      "item_count": "0 official free; third-party ~5-20",
+      "answer_keys": "partial",
+      "norms_difficulty": "no",
+      "languages": [
+        "da",
+        "en",
+        "sv",
+        "no"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Only third-party re-creations exist (copyrighted, ToS forbids scraping)."
+      },
+      "notes": "Mirror only the FORMAT: 80 items / 30 min, three sections (logical/numerical/verbal), speeded.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "matrigma",
+      "name": "Matrigma (Assessio / Hogan) - Classic + Adaptive",
+      "provider": "Assessio (Hogan-owned)",
+      "category": "branded-vendor",
+      "urls": [
+        "https://www.assessio.com/matrigma",
+        "https://www.12minprep.com/knowledge-hub/matrigma-test-practice/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png",
+        "svg"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "(c) Assessio/Hogan; no official free items",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A2",
+        "A3"
+      ],
+      "item_count": "Classic 35/40min; Adaptive ~40/12min (60s/item). 0 official free",
+      "answer_keys": "partial",
+      "norms_difficulty": "no",
+      "languages": [
+        "en",
+        "sv"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "No official artifact; third-party samples copyrighted. FORMAT is the value - not the items."
+      },
+      "notes": "Single most on-mission FORMAT: pure 3x3 one-missing-tile matrices, Classic-fixed vs Adaptive-branching. Mirror the transformation rules + adaptive delivery.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "garuda-logic",
+      "name": "Garuda Logic (cognitive part only)",
+      "provider": "Garuda AS (Denmark)",
+      "category": "branded-vendor",
+      "urls": [
+        "https://garudahr.com/we-offer/profiling-tools/garuda-logic/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "(c) Garuda; nothing free/scrapable",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A2",
+        "B1",
+        "B3",
+        "C1",
+        "C2"
+      ],
+      "item_count": "0 accessible (real test = 30 items)",
+      "answer_keys": "no",
+      "norms_difficulty": "no",
+      "languages": [
+        "da",
+        "sv",
+        "no",
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "none",
+        "auth": "n/a",
+        "items_as": "interactive",
+        "notes": "No free sample, demo, or PDF. Only marketing pages document the 3x10 / 20-min format."
+      },
+      "notes": "Only the FORMAT is documented (30-item, 3-domain, 20-min). Ignore Garuda's personality profiles (out of scope).",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "ist-2000r",
+      "name": "IST 2000-R (Intelligence Structure Test)",
+      "provider": "Hogrefe (Amthauer et al.)",
+      "category": "branded-vendor",
+      "urls": [
+        "https://www.hogrefe.com/uk/shop/intelligence-structure-test-ist.html"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html"
+      ],
+      "license": {
+        "category": "academic-restricted",
+        "detail": "(c) Hogrefe + qualified-user gate (strictest); ~GBP 9-12/report",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "C4",
+        "C2",
+        "C3",
+        "B2",
+        "B3",
+        "B4",
+        "A1",
+        "A2",
+        "D2",
+        "E2"
+      ],
+      "item_count": "~180 items; ZERO published free",
+      "answer_keys": "no",
+      "norms_difficulty": "yes",
+      "languages": [
+        "de",
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "high",
+      "extraction": {
+        "method": "none",
+        "auth": "yes",
+        "items_as": "interactive",
+        "notes": "No free samples; purchase requires proof of eligibility. Item-type descriptions only in academic papers."
+      },
+      "notes": "Best FORMAT/taxonomy map to the project (maps ~1:1 to targeted test types incl. arithmetic-signs, cubes, matrices, memory). Architecture reference for composite speeded batteries.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "speed",
+        "verbal"
+      ]
+    },
+    {
+      "id": "mensa-workout",
+      "name": "British Mensa Online Workout (official free practice)",
+      "provider": "British Mensa",
+      "category": "mensa-society",
+      "urls": [
+        "https://mensa.org.uk/online-workout/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "Mensa(R) trademark; items copyrighted",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "C2",
+        "C3",
+        "B3"
+      ],
+      "item_count": "UK 18Q/15min; US ~30Q/30min",
+      "answer_keys": "partial",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "high",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "yes",
+        "items_as": "images",
+        "notes": "Registration-gated JS quiz; page HTML has only the form. Drive headless browser to capture image items + end answers."
+      },
+      "notes": "Flagship reference FORMAT for the A3 Mensa-style focus (~45 items/20 min speeded homogeneous figure reasoning for the real supervised test). Mirror, don't copy.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "assessmentday",
+      "name": "AssessmentDay",
+      "provider": "AssessmentDay Ltd (UK)",
+      "category": "prep-site",
+      "urls": [
+        "https://www.assessmentday.co.uk/",
+        "https://www.assessmentday.co.uk/diagrammatic/free/DiagrammaticTest1/DiagrammaticReasoningTest1-Questions.pdf"
+      ],
+      "access_class": [
+        "downloadable-artifact",
+        "interactive-only"
+      ],
+      "formats": [
+        "pdf"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) AssessmentDay; older numerical PDF = share-with-attribution/non-commercial; newer PDFs = no redistribution",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "B1",
+        "C1",
+        "D2",
+        "D3"
+      ],
+      "item_count": "~90-140 free items across the set",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Un-gated PDFs; each test has a matching Solutions booklet with WORKED explanations. Stems = text; figures/graphs = embedded images (render + OCR/vision). Scrape topic .htm pages to enumerate current links."
+      },
+      "notes": "HIGHEST-VALUE prep source: free PDFs WITH worked-solution booklets, no signup. Gold-standard template for logic-first families. Format reference (items copyrighted).",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "psychometric-success",
+      "name": "Psychometric Success",
+      "provider": "Newton & Bristoll (WikiJob Ltd)",
+      "category": "prep-site",
+      "urls": [
+        "https://psychometric-success.com/free-practice-tests"
+      ],
+      "access_class": [
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "pdf"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) psychometric-success.com",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C3",
+        "D1",
+        "E1"
+      ],
+      "item_count": "~250-350 free items (~25/paper x 10-15 papers)",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Un-gated PDFs at /test-pdfs/ with printed answer keys (letters only). Filenames: PsychometricSuccess<Type>-PracticeTest1.pdf. Numerical/verbal text extracts; abstract/spatial figures need OCR. Also mirrored on Scribd."
+      },
+      "notes": "Easiest bulk grab: clean filenames, ~25 items/paper, printed keys. Pairs with AssessmentDay (which adds worked explanations).",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "speed",
+        "verbal"
+      ]
+    },
+    {
+      "id": "practice4me",
+      "name": "Practice4Me",
+      "provider": "Practice4Me (US/UK)",
+      "category": "prep-site",
+      "urls": [
+        "https://www.practice4me.com/free-aptitude-tests-practice/"
+      ],
+      "access_class": [
+        "downloadable-artifact",
+        "site-scrape"
+      ],
+      "formats": [
+        "pdf",
+        "html"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) Practice4Me",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "B1",
+        "B2",
+        "B3",
+        "C2",
+        "C3",
+        "A2",
+        "A4",
+        "E1"
+      ],
+      "item_count": "~100-200 items (PDFs + on-page)",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Free CCAT + numerical PDFs on /wp-content/uploads/ with EXPLAINED answers. Numerical PDF has a no-spaces text quirk (handle run-together tokens)."
+      },
+      "notes": "Free CCAT + numerical PDFs with explanations. Good for CCAT-style speeded mixed-ability items.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "speed",
+        "verbal"
+      ]
+    },
+    {
+      "id": "123test",
+      "name": "123test - IQ + Culture-Fair tests",
+      "provider": "123test BV (Netherlands)",
+      "category": "prep-site",
+      "urls": [
+        "https://www.123test.com/iq-test/",
+        "https://www.123test.com/culture-fair-intelligence-test/"
+      ],
+      "access_class": [
+        "interactive-only",
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "gif",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) 123test",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A5",
+        "B2",
+        "B3",
+        "C2",
+        "C3",
+        "D2",
+        "D3"
+      ],
+      "item_count": "~18 free demo items (10 classical + 8 culture-fair)",
+      "answer_keys": "no",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en",
+        "de",
+        "es",
+        "fr",
+        "it",
+        "nl",
+        "no",
+        "pl",
+        "pt",
+        "sv",
+        "da"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Figure/cube/matrix items are individual .gif assets at predictable paths; correct answer is server-side (no key). Full HTML exposes all stems."
+      },
+      "notes": "Best free example of a full mixed-family IQ test with real IQ scoring + norms + 11 languages. No answer key is the limitation.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "fibonicci",
+      "name": "Fibonicci",
+      "provider": "Fibonicci (Netherlands)",
+      "category": "prep-site",
+      "urls": [
+        "https://www.fibonicci.com/numerical-reasoning/number-sequences-test/",
+        "https://www.fibonicci.com/logical-reasoning/syllogisms-test/"
+      ],
+      "access_class": [
+        "site-scrape",
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) Fibonicci",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "B3",
+        "A5",
+        "C2",
+        "A1",
+        "A4"
+      ],
+      "item_count": "~150-250 free items (syllogisms alone = 42)",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en",
+        "de",
+        "nl",
+        "es",
+        "fr"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "text",
+        "notes": "JS-rendered (plain fetch empty); number-series & syllogisms are TEXT (no OCR). Answers/explanations after submit. Scribd mirrors are a static fallback."
+      },
+      "notes": "EXCELLENT for number-series (B3) + syllogisms (A5) as pure TEXT with graded answers + easy/medium/hard tiers - avoids the OCR problem.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "practiceaptitudetests",
+      "name": "Practice Aptitude Tests",
+      "provider": "Practice Aptitude Tests / Neuroworx (UK)",
+      "category": "prep-site",
+      "urls": [
+        "https://www.practiceaptitudetests.com/",
+        "https://www.practiceaptitudetests.com/aptitude-test-sample-questions-and-answers/"
+      ],
+      "access_class": [
+        "interactive-only",
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "pdf"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) PAT",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "B1",
+        "C1",
+        "A2",
+        "A1",
+        "A5",
+        "D1"
+      ],
+      "item_count": "Large catalog but free tier = 1 test/type behind free account",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "yes",
+        "items_as": "mixed",
+        "notes": "Free interactive tests need signup; solutions render client-side. Best scraped via the public sample-Q&A article (answers inline)."
+      },
+      "notes": "Big catalog but mostly gated; only thin free samples openly scrapable.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "jobtestprep",
+      "name": "JobTestPrep",
+      "provider": "JobTestPrep / TestPrep-Online",
+      "category": "prep-site",
+      "urls": [
+        "https://www.jobtestprep.co.uk/free-pdf-guides",
+        "https://www.jobtestprep.co.uk/free-aptitude-test"
+      ],
+      "access_class": [
+        "interactive-only",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "pdf",
+        "html",
+        "svg"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) JobTestPrep",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A3",
+        "B1",
+        "C1",
+        "D1"
+      ],
+      "item_count": "A few free sample items/topic; PDFs are guides not banks",
+      "answer_keys": "partial",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Items paywalled; 3 free guide PDFs (incl. SHL scoring guide). Free sample items are interactive HTML."
+      },
+      "notes": "Not a good item source (paywalled). Value = the free SHL Results/scoring guide for the percentile/IQ-band scoring feature.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "iprep",
+      "name": "iPREP",
+      "provider": "iPREP",
+      "category": "prep-site",
+      "urls": [
+        "https://www.iprep.online/",
+        "https://www.iprep.online/courses/criteria-cognitive-aptitude-test-ccat-free/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) iPREP",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3",
+        "A1",
+        "A2",
+        "A4",
+        "D1"
+      ],
+      "item_count": "~10-25 sample items per course x 30+ courses",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Free samples on each /courses/<test>/ page with worked explanations + videos. Full sims paid."
+      },
+      "notes": "Strong for branded-test FORMAT reference (CCAT, PI Cognitive, Wonderlic, Thomas GIA) with explanations; weak for bulk extraction.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "wikijob",
+      "name": "WikiJob free tests",
+      "provider": "WikiJob Ltd (UK; owns Psychometric Success)",
+      "category": "prep-site",
+      "urls": [
+        "https://www.wikijob.co.uk/aptitude-tests-home"
+      ],
+      "access_class": [
+        "interactive-only",
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "png",
+        "gif"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) WikiJob",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "B1",
+        "C1",
+        "A2",
+        "A5",
+        "A1",
+        "D1"
+      ],
+      "item_count": "~150-200 free items (~10/test x 19 types)",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Free, no signup; answers+explanations appended after 10 items. Numerical/verbal = text; diagrammatic/abstract = images. Overlaps Psychometric Success (same owner)."
+      },
+      "notes": "Decent free interactive bank with end-of-test explanations; best for numerical/verbal text items.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "assessment-training",
+      "name": "Assessment-Training.com",
+      "provider": "Making Moves B.V. (Netherlands)",
+      "category": "prep-site",
+      "urls": [
+        "https://www.assessment-training.com/free-tests"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png",
+        "svg"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) Making Moves B.V.",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "B3",
+        "A1",
+        "A3",
+        "B1",
+        "A2",
+        "A4",
+        "A5",
+        "C2",
+        "C3",
+        "D1"
+      ],
+      "item_count": "3 free tests (~40-50 items); 206 tests / 3,281 Q behind paywall",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en",
+        "nl",
+        "de",
+        "es"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Free tests launch via JS widget loading from an internal API (inspect XHR/JSON). Only 3 free tests extractable."
+      },
+      "notes": "Rich topic taxonomy (syllogisms, odd-one-out, Venn, Raven's) useful as a category map; almost everything paywalled.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "graduatemonkey",
+      "name": "GraduateMonkey",
+      "provider": "Graduate Monkey (UK)",
+      "category": "prep-site",
+      "urls": [
+        "https://www.graduatemonkey.com/"
+      ],
+      "access_class": [
+        "interactive-only",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "html",
+        "pdf"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "(c) Graduate Monkey; minimal free",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A3",
+        "A2",
+        "B1"
+      ],
+      "item_count": "Minimal free; core = paid tutorial packs",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "none",
+        "auth": "yes",
+        "items_as": "mixed",
+        "notes": "No free item PDF; packs are paid."
+      },
+      "notes": "High-quality SHL/Saville-style inductive + diagrammatic FORMAT, but paywalled - format reference only.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical"
+      ]
+    },
+    {
+      "id": "graduatesfirst",
+      "name": "Graduates First",
+      "provider": "Graduates First (UK; ex-SHL/Kenexa psychologists)",
+      "category": "prep-site",
+      "urls": [
+        "https://www.graduatesfirst.com/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png",
+        "svg"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "Free via university SSO; else paid",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "B1",
+        "C1",
+        "A5",
+        "A1",
+        "A2",
+        "D1"
+      ],
+      "item_count": "150+ tests but gated behind university email",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "yes",
+        "items_as": "mixed",
+        "notes": "Free access needs an institutional email; not openly scrapable at scale."
+      },
+      "notes": "High-quality (SHL-lineage) but effectively gated; not a practical open source.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "testhq-testgorilla",
+      "name": "TestHQ / TestGorilla / adjacent",
+      "provider": "TestHQ (UK) + TestGorilla (NL)",
+      "category": "prep-site",
+      "urls": [
+        "https://www.testhq.com/uk/practice-aptitude-tests",
+        "https://aptitude-test.com/"
+      ],
+      "access_class": [
+        "interactive-only",
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) respective vendors",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "B1",
+        "C1",
+        "A2",
+        "A1",
+        "A5",
+        "D1"
+      ],
+      "item_count": "Scattered free samples in study guides",
+      "answer_keys": "partial",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Thin free layers; scrape sample questions embedded in guides. TestGorilla has no public free bank."
+      },
+      "notes": "Round out branded-format coverage only; low yield.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "mensa-norway",
+      "name": "Mensa Norway IQ Test (test.mensa.no)",
+      "provider": "Mensa Norway (Olav Hoel Dorum)",
+      "category": "mensa-society",
+      "urls": [
+        "https://test.mensa.no/"
+      ],
+      "access_class": [
+        "interactive-only",
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "Mensa(R) trademark; (c) 2023 author - free to take, NOT to redistribute",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A2",
+        "A3"
+      ],
+      "item_count": "Exactly 35 (q0-q34, 6 options each)",
+      "answer_keys": "no",
+      "norms_difficulty": "yes",
+      "languages": [
+        "no",
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "high",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "35 question + 210 answer PNGs are individually addressable on static.mensa.no. Key is NOT in the DOM (server-scored) - solve manually or leave blank."
+      },
+      "notes": "The most-cloned free figural IQ test online; canonical Matrigma/Raven-style specimen for the PRIMARY family. Format/style reference only.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "mensa-intl-challenge",
+      "name": "Mensa International IQ Challenge",
+      "provider": "Mensa International",
+      "category": "mensa-society",
+      "urls": [
+        "https://www.mensa.org/mensa-iq-challenge/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "Mensa(R) trademark; entertainment only",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A2",
+        "A3"
+      ],
+      "item_count": "35 (same items as Mensa Norway)",
+      "answer_keys": "no",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en",
+        "zh",
+        "fr",
+        "de",
+        "hu",
+        "is",
+        "it",
+        "mk",
+        "no",
+        "pl",
+        "es"
+      ],
+      "priority": "low",
+      "ip_risk": "high",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Redirects to the Mensa Norway engine - extract from test.mensa.no instead."
+      },
+      "notes": "Duplicate of Mensa Norway under the international brand (multilingual). Cross-reference only.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "mensa-denmark-iqtest",
+      "name": "Mensa Denmark / iqtest.dk Culture-Fair Test",
+      "provider": "Mensa Denmark (Anders Ditlev Jensen)",
+      "category": "mensa-society",
+      "urls": [
+        "https://mensa.dk/iqtest/"
+      ],
+      "access_class": [
+        "interactive-only",
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "Mensa(R) + author copyright; answers explicitly NOT permitted to publish",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A2",
+        "A3"
+      ],
+      "item_count": "~39 (q1.png ...)",
+      "answer_keys": "no",
+      "norms_difficulty": "yes",
+      "languages": [
+        "da",
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "high",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Shape PNGs directly addressable at /iqtest/shapes/qN.png; answers deliberately withheld + legally protected from republication."
+      },
+      "notes": "Second canonical culture-fair figural matrix set; historically one of the most-taken free IQ tests. Format reference only.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "american-mensa-mht",
+      "name": "American Mensa Home Test (MHT)",
+      "provider": "American Mensa Ltd.",
+      "category": "mensa-society",
+      "urls": [
+        "https://www.us.mensa.org/join/mht/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "Mensa(R); paid ($18)",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "C2",
+        "B3",
+        "D1"
+      ],
+      "item_count": "~30-min proctored test; no scrapable items",
+      "answer_keys": "no",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "high",
+      "extraction": {
+        "method": "none",
+        "auth": "yes",
+        "items_as": "interactive",
+        "notes": "Paywalled; no scrapable items."
+      },
+      "notes": "Cataloged for completeness; not usable as an item source.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "cooijmans",
+      "name": "Paul Cooijmans - High-Range IQ Tests (GliaWeb / Giga Society)",
+      "provider": "Paul Cooijmans (Netherlands)",
+      "category": "mensa-society",
+      "urls": [
+        "https://iq-tests-for-the-high-range.com/tests.html",
+        "https://gigasociety.com/iqsocieties/"
+      ],
+      "access_class": [
+        "interactive-only",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "html",
+        "pdf"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "Original author IP; free to take, contribution-based scoring, answers must NOT be shared",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "C2",
+        "C3",
+        "B2",
+        "B3",
+        "D2",
+        "D3",
+        "A5"
+      ],
+      "item_count": "~25+ tests, each ~30-50 items",
+      "answer_keys": "no",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en",
+        "nl"
+      ],
+      "priority": "medium",
+      "ip_risk": "high",
+      "extraction": {
+        "method": "order-required",
+        "auth": "yes",
+        "items_as": "mixed",
+        "notes": "Test pages return near-empty HTML - items are order-gated. Register + order (voluntary contribution) to receive the paper; redistribution prohibited."
+      },
+      "notes": "Notable free-ORIGINAL-IP case, but mostly verbal/numerical/spatial (little pure figural-matrix); items not cleanly downloadable. Style/norms reference. Cite only the authentic domains (impostor 'Giga Society' clones exist).",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "jouve-cogniq",
+      "name": "Xavier Jouve - Cogn-IQ JCTI / JCFS",
+      "provider": "Xavier Jouve, PhD (Cogn-IQ.org)",
+      "category": "mensa-society",
+      "urls": [
+        "https://www.cogn-iq.org/jcti-iq-inductive-reasoning-test.php"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) Jouve/Cogn-IQ; free to take",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "item_count": "Adaptive ~30 items from a calibrated pool",
+      "answer_keys": "no",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Adaptive CAT - item shown depends on prior answers, so no single-pass static bank. Free, no signup, instant results."
+      },
+      "notes": "High-quality, genuinely figural/inductive, strong psychometrics (alpha .96). Adaptive delivery limits bulk extraction. Sibling JCFS = grid figural sequences.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "iqcomparison",
+      "name": "IQ Comparison Site - Advanced Culture Fair IQ Test",
+      "provider": "Rodrigo de la Jara",
+      "category": "mensa-society",
+      "urls": [
+        "https://iqcomparisonsite.com/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "gif"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "EXTREMELY aggressive IP terms ($1000/item republish penalty)",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A2"
+      ],
+      "item_count": "36 items (only 1 sample public)",
+      "answer_keys": "partial",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "high",
+      "extraction": {
+        "method": "none",
+        "auth": "yes",
+        "items_as": "images",
+        "notes": "Only 1 sample GIF scrapable; 36 scored items behind signup+payment. DO NOT scrape/republish."
+      },
+      "notes": "Avoid for items (hostile IP). The site's IQ-tables/percentile/norms reference pages are useful free non-item content.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "free-iq-sites",
+      "name": "Free figural IQ sites (iqtestfree.org etc.)",
+      "provider": "Various independent sites",
+      "category": "mensa-society",
+      "urls": [
+        "https://iqtestfree.org/"
+      ],
+      "access_class": [
+        "interactive-only",
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "png",
+        "jpg"
+      ],
+      "license": {
+        "category": "unknown",
+        "detail": "No stated license; assume site copyright",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2"
+      ],
+      "item_count": "~20 items",
+      "answer_keys": "no",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Client-side rendered; results in localStorage, keys not exposed. LOW quality."
+      },
+      "notes": "Entertainment-grade, optimized for ads not psychometrics. Extra style examples only - not for a serious bank.",
+      "generator": false,
+      "families": [
+        "logical"
+      ]
+    },
+    {
+      "id": "indiabix",
+      "name": "IndiaBIX",
+      "provider": "IndiaBIX Technologies (India)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.indiabix.com/logical-reasoning/questions-and-answers/",
+        "https://www.indiabix.com/non-verbal-reasoning/questions-and-answers/"
+      ],
+      "access_class": [
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "png",
+        "jpg"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "(c) IndiaBIX; free to view, not open-licensed",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4",
+        "A5",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "D1",
+        "D2",
+        "D3",
+        "E1"
+      ],
+      "item_count": "Thousands across ~50 sub-topics",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Predictable URL pagination /{section}/{topic}/{NNNNNN}. Plain fetch returns Q+options+answer+explanation as TEXT (no JS/auth). Non-verbal items are figure images (need OCR/labeling); text families scrape cleanly."
+      },
+      "notes": "HIGHEST-VOLUME scrapable bank: every item has answer + explanation, clean pagination, covers ALL families. (c) IndiaBIX - internal research / seed original items, don't redistribute verbatim.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "speed",
+        "verbal"
+      ]
+    },
+    {
+      "id": "sawaal",
+      "name": "Sawaal",
+      "provider": "Sawaal.com (India)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.sawaal.com/aptitude-reasoning-questions-and-answers.html"
+      ],
+      "access_class": [
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "png",
+        "jpg"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "(c) Sawaal; free to view",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4",
+        "A5",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3",
+        "D1",
+        "D3",
+        "E1"
+      ],
+      "item_count": "5,555+ items advertised",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Topic pages with count in slug; pagination via ?page=. Text families scrape as text; figural = images. Dedupe against IndiaBIX."
+      },
+      "notes": "Second big free bank with answers+explanations; cross-fill topics IndiaBIX is thin on.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "speed",
+        "verbal"
+      ]
+    },
+    {
+      "id": "geeksforgeeks",
+      "name": "GeeksforGeeks - Aptitude & Reasoning",
+      "provider": "GeeksforGeeks (India)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.geeksforgeeks.org/aptitude/logical-reasoning/"
+      ],
+      "access_class": [
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "png",
+        "svg"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "(c) GeeksforGeeks; free to view",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4",
+        "A5",
+        "B2",
+        "B3",
+        "C2",
+        "C3",
+        "D1",
+        "D3"
+      ],
+      "item_count": "Hundreds of solved items",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Article-per-topic; clean static HTML, scrapes as text. Figures embedded."
+      },
+      "notes": "Third India-style bank; smaller/less systematic but well-explained. Supplementary cross-fill.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "india-aggregators",
+      "name": "Hitbullseye / Smartkeeda / Testbook (India aptitude aggregators)",
+      "provider": "Various commercial prep sites (India)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.hitbullseye.com/Reasoning",
+        "https://www.smartkeeda.com/reasoning-aptitude",
+        "https://testbook.com/objective-questions/mcq-on-logical-reasoning--5eea6a0e39140f30f369e41d"
+      ],
+      "access_class": [
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "pdf"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) respective sites; some behind free signup",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A4",
+        "A5",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3"
+      ],
+      "item_count": "Medium each; aggregate large",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Mostly static topic pages; Testbook gates full sets behind free account + per-topic PDF downloads."
+      },
+      "notes": "Redundant with IndiaBIX/Sawaal; useful to diversify item phrasing.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "asvab-official",
+      "name": "ASVAB - Official Sample Questions",
+      "provider": "US Department of Defense (DMDC)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.officialasvab.com/applicants/sample-questions/"
+      ],
+      "access_class": [
+        "site-scrape"
+      ],
+      "formats": [
+        "html",
+        "png"
+      ],
+      "license": {
+        "category": "public-domain",
+        "detail": "US federal government work - public domain (despite site footer)",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "B2",
+        "C1",
+        "C3",
+        "D3"
+      ],
+      "item_count": "A handful per subtest (~10 subtests)",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Per-subtest slugs; JS 'select the answer' widget but Q+options+key are in delivered HTML. Also grab /researchers/norming-information/ for the AFQT percentile model."
+      },
+      "notes": "GENUINELY PUBLIC DOMAIN. Low volume - value = authoritative reference items + a PD scoring/norming (AFQT percentile) model you can legally mirror.",
+      "generator": false,
+      "families": [
+        "numerical",
+        "spatial",
+        "verbal"
+      ]
+    },
+    {
+      "id": "afoqt-pamphlet",
+      "name": "AFOQT - Official Information Pamphlet",
+      "provider": "US Air Force (airforce.com)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.airforce.com/content/dam/airforce/en/pdf/AFOQT_PracticePamphlet.pdf"
+      ],
+      "access_class": [
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "pdf"
+      ],
+      "license": {
+        "category": "public-domain",
+        "detail": "US federal government work - public domain",
+        "redistributable": "yes"
+      },
+      "test_types": [
+        "C2",
+        "C3",
+        "B2",
+        "D1",
+        "D2",
+        "D3",
+        "E1"
+      ],
+      "item_count": "~55 items (5 per subtest x 12) + full key",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Single direct PDF. Verbal/math subtests extract as text; spatial (Rotated Blocks, Block Counting, Hidden Figures) are figure images. Answer key = plain text (p.27)."
+      },
+      "notes": "HIGH VALUE among gov sources: PUBLIC DOMAIN and covers the hard-to-source SPATIAL families (mental rotation, 3-D counting, hidden figures, perceptual speed) WITH a key.",
+      "generator": false,
+      "families": [
+        "numerical",
+        "spatial",
+        "speed",
+        "verbal"
+      ]
+    },
+    {
+      "id": "uk-civil-service",
+      "name": "UK Civil Service - official practice questions",
+      "provider": "UK Civil Service / Cabinet Office (gov.uk)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.gov.uk/guidance/preparing-for-the-civil-service-verbal-and-numerical-tests",
+        "https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/503118/Practice_exercise_numerical_and_verbal_questions.pdf"
+      ],
+      "access_class": [
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "pdf"
+      ],
+      "license": {
+        "category": "gov-public",
+        "detail": "UK Crown copyright - reusable under Open Government Licence v3 (attribution)",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "B3",
+        "B2",
+        "B4",
+        "A5",
+        "A4",
+        "C2",
+        "C3",
+        "C1"
+      ],
+      "item_count": "4 numerical + 4 verbal worked; guides add more",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "text",
+        "notes": "Direct PDF, pure text, trivial to extract Q+options+answer+explanation. Candidate-guide PDFs add examples."
+      },
+      "notes": "Low volume but genuinely reusable (OGL v3, attribution). Items on-mission: number series, arithmetic signs, syllogism, analogies, antonyms, T/F/cannot-say.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "epso",
+      "name": "EPSO / EU Careers - official sample reasoning tests",
+      "provider": "European Personnel Selection Office (EU)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://eu-careers.europa.eu/en/selection-procedure/epso-tests"
+      ],
+      "access_class": [
+        "interactive-only",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "html",
+        "pdf",
+        "png"
+      ],
+      "license": {
+        "category": "gov-public",
+        "detail": "EU institutional material - reuse generally permitted with attribution; Scribd mirrors are third-party",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A3",
+        "C1",
+        "B1"
+      ],
+      "item_count": "~5 samples/type official; legacy 'volumes' larger",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en",
+        "fr",
+        "de"
+      ],
+      "priority": "high",
+      "ip_risk": "low",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Official samples JS-driven (headless browser). Easier bulk = legacy 'Abstract/Numerical/Verbal Reasoning Sample Tests - EU EPSO' PDFs mirrored on SlideShare/Scribd (figural items + answers)."
+      },
+      "notes": "On-mission figural ABSTRACT reasoning (A1/A2/A3) PLUS non-English (FR/DE) items - rare. High strategic value for figural + multilingual.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "gre-official",
+      "name": "GRE - Official Sample Questions & Practice",
+      "provider": "ETS (Educational Testing Service)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.ets.org/pdfs/gre/gre-sample-questions.pdf",
+        "https://www.ets.org/gre/test-takers/general-test/prepare/powerprep.html"
+      ],
+      "access_class": [
+        "downloadable-artifact",
+        "interactive-only"
+      ],
+      "formats": [
+        "pdf",
+        "html"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "(c) ETS; free to download for personal practice, not open-licensed",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "C1",
+        "C2",
+        "C3",
+        "B1",
+        "B2",
+        "B3"
+      ],
+      "item_count": "~dozen worked/type + full practice book + 2 POWERPREP tests",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "text",
+        "notes": "Direct PDFs, text-extractable with explanations. POWERPREP is proprietary software (not scrapable)."
+      },
+      "notes": "Authoritative verbal + quantitative items with rich explanations + a documented 130-170 scaled-score/percentile model to emulate. Copyrighted - internal reference/format only.",
+      "generator": false,
+      "families": [
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "gmat-official",
+      "name": "GMAT - Official Starter Kit",
+      "provider": "GMAC (mba.com)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.mba.com/exam-prep/gmat-official-starter-kit-practice-exams-1-and-2-free"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "(c) GMAC; free tier account-gated",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2"
+      ],
+      "item_count": "~70 sample Q + 2 full adaptive exams (free tier)",
+      "answer_keys": "yes",
+      "norms_difficulty": "yes",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "yes",
+        "items_as": "interactive",
+        "notes": "Account-gated proprietary adaptive software; needs authenticated session. Not a bulk pull."
+      },
+      "notes": "Best ADAPTIVE-delivery + percentile-scoring reference (directly relevant to the adaptive/scoring requirements). Architectural reference, not item harvesting.",
+      "generator": false,
+      "families": [
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "ucat",
+      "name": "UCAT - Official Practice Tests",
+      "provider": "UCAT Consortium (UK)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.ucat.ac.uk/prepare/practice-tests/"
+      ],
+      "access_class": [
+        "interactive-only"
+      ],
+      "formats": [
+        "html",
+        "pdf"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "(c) UCAT Consortium; free for candidates",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A5",
+        "C1",
+        "B1"
+      ],
+      "item_count": "Official banks + 4 full mock tests (interactive)",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "medium",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "headless-browser",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "JS single-page app (plain fetch returns empty) - needs browser automation. Decision Making (logic/syllogism) is most on-mission."
+      },
+      "notes": "CORRECTION: UCAT REMOVED Abstract Reasoning (figural) in 2025 - no longer a figural source. Still good for Decision-Making logic + T/F/cannot-say verbal. Legacy AR banks circulate on third-party mirrors.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "uk-11plus-nvr",
+      "name": "UK 11+ Non-Verbal Reasoning - free practice papers",
+      "provider": "Aggregators + publishers (CGP, Bond, Collins, GL Assessment)",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.11plusguide.com/11-plus-papers-books/free-11-plus-papers/free-sample-11-plus-non-verbal-reasoning-papers/",
+        "https://collins.co.uk/pages/revision-collins-11-free-samples"
+      ],
+      "access_class": [
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "pdf",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-free-sample",
+        "detail": "Mixed: publisher samples (c) CGP/Bond/Collins/GL; aggregator rehosts murky. Treat as copyrighted",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4",
+        "D1",
+        "D3"
+      ],
+      "item_count": "Large in aggregate (dozens of NVR full papers)",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "images",
+        "notes": "Direct PDFs (mostly no login); figures = images needing page-extraction + rule labeling. Answer sheets separate. Harvest links then fetch each."
+      },
+      "notes": "HIGH VALUE for the PRIMARY figural focus at scale (figure series, matrices, odd-one-out, mirror/rotation, paper-folding). Reverse-engineer transformation rules; avoid verbatim reuse.",
+      "generator": false,
+      "families": [
+        "logical",
+        "spatial"
+      ]
+    },
+    {
+      "id": "ssc-papers",
+      "name": "SSC (CGL/CHSL) Reasoning - previous-year papers",
+      "provider": "Staff Selection Commission (Govt of India) + aggregators",
+      "category": "gov-standardized",
+      "urls": [
+        "https://sscportal.in/cgl/papers",
+        "https://exampapers247.com/ssc-reasoning-topic-wise-previous-year-solved-papers/"
+      ],
+      "access_class": [
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "pdf",
+        "png"
+      ],
+      "license": {
+        "category": "gov-public",
+        "detail": "Govt-of-India exam questions + aggregator-added solutions (c) aggregator",
+        "redistributable": "conditional"
+      },
+      "test_types": [
+        "A1",
+        "A4",
+        "A5",
+        "B3",
+        "C2"
+      ],
+      "item_count": "Hundreds of papers (~25 reasoning Q each), 2010-2025",
+      "answer_keys": "yes",
+      "norms_difficulty": "no",
+      "languages": [
+        "en",
+        "hi"
+      ],
+      "priority": "high",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "direct-download",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Bulk free PDFs (bilingual en/hi). Topic-wise solved compilations are most data-friendly. Text extracts; figural = images."
+      },
+      "notes": "Very large bank of REAL standardized-government reasoning items with keys, bilingual. Questions from an official body; PDFs aggregator-hosted with proprietary solutions - reference/format source.",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    },
+    {
+      "id": "ccat-samples",
+      "name": "CCAT (Criteria Cognitive Aptitude Test) - free prep samples",
+      "provider": "Criteria Corp + third-party prep vendors",
+      "category": "gov-standardized",
+      "urls": [
+        "https://www.criteriacorp.com/candidates/ccat-prep",
+        "https://www.jobtestprep.com/free-ccat-practice-test"
+      ],
+      "access_class": [
+        "interactive-only",
+        "downloadable-artifact"
+      ],
+      "formats": [
+        "html",
+        "pdf",
+        "png"
+      ],
+      "license": {
+        "category": "commercial-paid",
+        "detail": "Real CCAT (c) Criteria Corp; vendor samples (c) vendor",
+        "redistributable": "no"
+      },
+      "test_types": [
+        "A1",
+        "A2",
+        "A4",
+        "B2",
+        "B3",
+        "C2",
+        "C3"
+      ],
+      "item_count": "Official ~dozen; vendor mocks 30-50",
+      "answer_keys": "yes",
+      "norms_difficulty": "partial",
+      "languages": [
+        "en"
+      ],
+      "priority": "low",
+      "ip_risk": "medium",
+      "extraction": {
+        "method": "scrape-html",
+        "auth": "no",
+        "items_as": "mixed",
+        "notes": "Official interactive-only; vendors offer free 30-50-item mocks (some printable PDFs). Items are vendor-created CCAT-style."
+      },
+      "notes": "Speeded mixed-family model (50Q/15min, verbal+math/logic+spatial/abstract) - useful mechanics reference. Same pattern as Wonderlic (proprietary; only imitations free).",
+      "generator": false,
+      "families": [
+        "logical",
+        "numerical",
+        "verbal"
+      ]
+    }
+  ]
+}

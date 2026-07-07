@@ -1,0 +1,126 @@
+version: "2"
+
+# Standard static-analysis config (golangci-lint v2).
+# Companion to .go-arch-lint.yml: go-arch-lint enforces the layer graph at the
+# package level; the depguard rules below mirror the load-bearing edges at the
+# file level so the IDE flags a boundary violation without a full arch-lint run.
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - depguard          # file-level mirror of the architecture layering
+    - forbidigo         # ban unabstracted wall-clock/time usage in production
+    - gochecknoglobals
+    - gochecknoinits
+    - interfacebloat    # keep port interfaces small (ISP)
+    - ireturn           # accept interfaces, return concrete types
+    - revive
+    - wrapcheck         # wrap errors crossing a boundary
+
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Print
+        - fmt.Printf
+        - fmt.Println
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+
+    depguard:
+      rules:
+        domain:
+          list-mode: lax
+          files:
+            - "**/domain/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/mariotoffia/testmaker/ports
+              desc: "domain is the innermost ring; it must not import ports"
+            - pkg: github.com/mariotoffia/testmaker/app
+              desc: "domain must not import app (dependencies point inward)"
+            - pkg: github.com/mariotoffia/testmaker/adapters
+              desc: "domain must not import adapters"
+        ports:
+          list-mode: lax
+          files:
+            - "**/ports/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/mariotoffia/testmaker/app
+              desc: "ports (interfaces) may import domain only, never app"
+            - pkg: github.com/mariotoffia/testmaker/adapters
+              desc: "ports must not import adapters"
+        app:
+          list-mode: lax
+          files:
+            - "**/app/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/mariotoffia/testmaker/adapters
+              desc: "app orchestrates through ports; it must not import adapters"
+
+    forbidigo:
+      forbid:
+        - pattern: "^time\\.(Now|Sleep|After|Tick|NewTimer|NewTicker|Since|Until)$"
+          msg: "inject a clock (domain/clock) instead of calling the wall clock directly"
+
+    interfacebloat:
+      max: 6
+
+    ireturn:
+      allow:
+        - error
+        - empty
+        - anon
+        - stdlib
+        - generic
+
+    revive:
+      rules:
+        - name: empty-block
+        - name: max-public-structs
+          arguments: [25]
+        - name: cognitive-complexity
+          arguments: [150]
+        - name: cyclomatic
+          arguments: [150]
+
+    wrapcheck:
+      ignore-package-globs:
+        - github.com/mariotoffia/testmaker/**
+      ignore-interface-regexps:
+        - "^ports\\."
+
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go
+        linters:
+          - revive
+          - wrapcheck
+          - ireturn
+          - forbidigo
+          - gochecknoglobals
+          - gochecknoinits
+      # conformance suites are libraries that take *testing.T but are not tests
+      - path: ports/.*test/.*\.go
+        linters:
+          - ireturn
+      # the domain uses package-level error sentinels and closed-set validation
+      # lookup tables — both are idiomatic and intentional
+      - path: domain/
+        linters:
+          - gochecknoglobals
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/mariotoffia/testmaker

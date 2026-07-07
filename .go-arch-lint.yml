@@ -1,0 +1,83 @@
+version: 3
+workdir: .
+
+# ---------------------------------------------------------------------------
+# Architecture linter — the SINGLE SOURCE OF TRUTH for layering.
+# ARCHITECTURE.md narrates these rules; this file enforces them.
+#
+# Dependency rule (Clean Architecture): dependencies point INWARD only.
+#
+#   domain  <-  ports  <-  app  <-  adapters  <-  cmd
+#
+#   * domain   : pure, stdlib-only, no project deps
+#   * ports    : may import domain only (the hexagon boundary = interfaces)
+#   * app      : use-cases; may import domain + ports
+#   * adapters : implement ports; may import domain + ports (+ their own vendor)
+#               each adapter is its OWN component so siblings cannot couple
+#   * cmd      : composition root; the only place allowed to import everything
+# ---------------------------------------------------------------------------
+
+allow:
+  depOnAnyVendor: false      # every external dep must be opted-in via canUse
+  deepScan: true             # catch structural/method-call leaks, not just imports
+  ignoreNotFoundComponents: false
+
+exclude:
+  - .git
+  - .github
+  - .vscode
+  - .claude
+  - bin
+  - reports
+  - docs
+  - data
+
+excludeFiles:
+  - "^.*_test\\.go$"         # tests live outside the arch scope
+
+components:
+  domain: { in: [domain, domain/**] }
+  ports: { in: [ports, ports/**] }
+  app: { in: [app, app/**] }
+
+  # --- adapters (one component per technology; siblings stay isolated) ---
+  adapter_source_memorycatalog: { in: [adapters/native/source/memorycatalog, adapters/native/source/memorycatalog/**] }
+  adapter_source_filecatalog: { in: [adapters/native/source/filecatalog, adapters/native/source/filecatalog/**] }
+  adapter_fetch_stubfetcher: { in: [adapters/native/fetch/stubfetcher, adapters/native/fetch/stubfetcher/**] }
+
+  # --- composition root ---
+  cmd: { in: [cmd, cmd/**] }
+
+vendors:
+  # Sentinel that matches no real path; assigning it via canUse makes
+  # "this component has zero external deps" a machine-checked claim.
+  _no_external_deps_: { in: __no_external_deps_sentinel__ }
+  yaml: { in: ["gopkg.in/yaml.v3"] }
+
+deps:
+  domain:
+    canUse: [_no_external_deps_]
+
+  ports:
+    mayDependOn: [domain]
+    canUse: [_no_external_deps_]
+
+  app:
+    mayDependOn: [domain, ports]
+    canUse: [_no_external_deps_]
+
+  adapter_source_memorycatalog:
+    mayDependOn: [domain, ports]
+    canUse: [_no_external_deps_]
+
+  adapter_source_filecatalog:
+    mayDependOn: [domain, ports]
+    canUse: [yaml]
+
+  adapter_fetch_stubfetcher:
+    mayDependOn: [domain, ports]
+    canUse: [_no_external_deps_]
+
+  cmd:
+    anyProjectDeps: true
+    anyVendorDeps: true

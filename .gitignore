@@ -20,12 +20,16 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
-go.work
+# Go workspace file — tracked on purpose (multi-module workspace is part of the
+# project structure). Only the generated checksum file is ignored.
 go.work.sum
 
 # env file
 .env
+
+# Build / report output
+/bin/
+/reports/
 
 # Editor/IDE
 # .idea/

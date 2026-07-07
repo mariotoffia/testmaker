@@ -1,0 +1,13 @@
+go 1.25.0
+
+// Multi-module workspace. The root module (github.com/mariotoffia/testmaker)
+// holds the pure inner rings (domain, ports, app) and pulls only the stdlib.
+// Each adapter is its own module so technology-specific dependencies (yaml,
+// sqlite driver, AWS SDK v2, ...) never leak into the core.
+use (
+	.
+	./adapters/native/fetch/stubfetcher
+	./adapters/native/source/filecatalog
+	./adapters/native/source/memorycatalog
+	./cmd/testmaker
+)
