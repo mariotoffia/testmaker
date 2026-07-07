@@ -37,8 +37,8 @@ Testmaker fuses three disciplines and makes their central rule mechanical:
   invariants. Terms come from [UBIQUITOUS.md](UBIQUITOUS.md).
 - **Hexagonal (ports & adapters)** — the application core talks to the outside
   world only through **ports** (interfaces in `ports/`). **Driven** ports are
-  called by the core (repositories, fetcher, generator, scorer); **driving**
-  ports drive the core (catalogue loader, executor). **Adapters** implement
+  called by the core (repositories, catalogue loader, fetcher, generator,
+  scorer); **driving** ports drive the core (executor). **Adapters** implement
   ports and live at the edge.
 - **Clean Architecture** — dependencies point **inward only**. Concentric rings,
   innermost first: domain → ports → app → adapters → cmd.
@@ -138,9 +138,11 @@ aggregates.
 
 | Port | Kind | Consumed/served by | Status |
 | --- | --- | --- | --- |
-| `SourceCatalog` / `SourceRepository` | driven | catalogue app service | ✅ |
-| `CatalogLoader` | driving | ingest a catalogue file | ✅ |
+| `SourceRepository` | driven | catalogue app service | ✅ |
+| `CatalogLoader` | driven | ingest a catalogue file | ✅ |
 | `Fetcher` | driven | pull raw items from a source | ✅ (stub) |
+| `LLM` | driven | extraction / translation / derivation steps | ✅ (port; backends 🚧) |
+| `PromptRepository` | driven | versioned prompt store for the LLM service | ✅ (port; adapters 🚧) |
 | `ItemRepository` | driven | item bank | 🚧 |
 | `TestRepository` | driven | "TestDb" — composed tests | 🚧 |
 | `SessionRepository` | driven | execution | 🚧 |
@@ -148,8 +150,19 @@ aggregates.
 | `Executor` | driving | administer a test | 🚧 |
 | `Scorer` | driven | score a session | 🚧 |
 
-Ports are kept small (`interfacebloat max: 6`) and split read/write where useful
-(`SourceCatalog` is the read half of `SourceRepository`).
+Ports are kept small (`interfacebloat max: 6`) and split read/write when a
+read-only consumer actually exists (YAGNI — the split is reintroduced with the
+first query-only surface, e.g. Block 10).
+
+LLM access is a **service, not a bare client**: `app/llm.Service` wraps a
+`ports.LLM` backend and a `ports.PromptRepository`, automatically applying the
+stored prompt for a step's `Purpose` and running registered
+BeforeGenerate/AfterGenerate hooks around every call. The service itself
+satisfies `ports.LLM`, so any consumer written against the port (ingestion
+extraction, item translation, run-time item derivation) gets prompts + hooks
+transparently via constructor injection from the composition root. See
+[DESIGN.md](DESIGN.md#6-llm-support) §6 for hook
+points, the prompt model and persistence tiers.
 
 ---
 
@@ -168,6 +181,18 @@ one shared conformance suite (see [TESTS.md](TESTS.md)).
 | testdb | sqlite | `adapters/native/testdb/sqlitetestdb` | `TestRepository` | 🚧 |
 | fetch | download/scrape/headless/generate | `adapters/native/fetch/*` | `Fetcher` | 🚧 |
 | generate | sandia / raven / matriks | `adapters/native/generate/*` | `Generator` | 🚧 |
+| llm | openaicompat | `adapters/native/llm/openaicompat` | `LLM` | 🚧 |
+| llm | bedrock | `adapters/aws/llm/bedrock` | `LLM` | 🚧 (optional) |
+| llm | memory | `adapters/native/llm/memoryprompts` | `PromptRepository` | 🚧 |
+| llm | file | `adapters/native/llm/fileprompts` | `PromptRepository` (default) | 🚧 |
+
+One OpenAI-compatible HTTP adapter (stdlib `net/http` + `encoding/json`, no
+vendor SDK) covers both cloud and local backends: OpenAI/Azure, and locally
+Ollama (`/v1`), vLLM, LM Studio, llama.cpp server — they all speak the same
+chat-completions API; only the base URL and key differ, which is composition-root
+config. A native Ollama or Bedrock adapter is added only if a capability the
+compat API lacks is actually needed (model pull management, AWS-credentialed
+hosting).
 
 Future cloud persistence (e.g. AWS DynamoDB via the AWS SDK v2) slots in as
 `adapters/aws/testdb/...` — its own module, its own vendor allow-list.
@@ -253,9 +278,9 @@ edge.
 testmaker/
   go.work                       workspace (lists every module)
   go.mod                        github.com/mariotoffia/testmaker (domain, ports, app)
-  domain/{shared,source,item,testset,session,scoring}/
+  domain/{shared,source,prompt,item,testset,session,scoring}/
   ports/            + ports/sourcetest/        (conformance suites)
-  app/catalog/
+  app/{catalog,llm}/
   adapters/native/source/{memorycatalog,filecatalog}/   (own go.mod each)
   adapters/native/fetch/stubfetcher/                     (own go.mod)
   cmd/testmaker/                                          (own go.mod)
@@ -292,7 +317,8 @@ implementations (implementation blocks 1–3).
 
 ## 12. Build, lint & CI
 
-`make check` = `build` + `lint` + `test` (the CI aggregate). `lint` runs
+`make check` = `build` + `lint` + `test` (the CI aggregate), run in CI by
+`.github/workflows/check.yml` on every push/PR. `lint` runs
 `gofmt`, `go vet`, **`go-arch-lint`** (layer graph) and **`golangci-lint`** (v2).
 See [DEVELOPMENT.md](DEVELOPMENT.md) and [LINT.md](LINT.md).
 

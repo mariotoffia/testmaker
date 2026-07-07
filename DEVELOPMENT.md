@@ -132,7 +132,7 @@ Every adapter is a separate module. To add one (example: a sqlite-backed
        in: [adapters/native/source/sqlitecatalog, adapters/native/source/sqlitecatalog/**]
    deps:
      adapter_source_sqlitecatalog:
-       mayDependOn: [domain, ports]
+       mayDependOn: [domain, domain_shared, ports]
        canUse: [sqlite]        # declare each vendor under `vendors:` and opt in here
    ```
    Adapters with no external dependency use `canUse: [_no_external_deps_]`.
@@ -153,8 +153,8 @@ Every adapter is a separate module. To add one (example: a sqlite-backed
   only the `Snapshot` crosses a port. `RehydrateFromSnapshot` rebuilds from a
   trusted snapshot without re-validating. See `domain/source/source.go`.
 - **Ports are small interfaces** — keep them within the interface-size budget
-  (ISP; `interfacebloat` caps at 6 methods). Compose read/write splits like
-  `SourceCatalog` ⊂ `SourceRepository` rather than one fat interface.
+  (ISP; `interfacebloat` caps at 6 methods). Split read/write only when a
+  read-only consumer exists — don't pre-split on speculation.
 - **Functional options** — if a constructor grows optional parameters, use the
   `WithXxx(value)` functional-options pattern rather than a config struct or
   positional booleans.

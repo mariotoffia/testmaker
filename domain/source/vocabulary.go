@@ -134,6 +134,27 @@ var validMethods = map[ExtractionMethod]struct{}{
 // Valid reports whether the extraction method is known.
 func (m ExtractionMethod) Valid() bool { _, ok := validMethods[m]; return ok }
 
+// ItemsAs is the shape items arrive in from a source; it routes fetched
+// material to the right normalization path (e.g. image items vs text items).
+type ItemsAs string
+
+const (
+	ItemsGrids       ItemsAs = "grids"
+	ItemsImages      ItemsAs = "images"
+	ItemsInteractive ItemsAs = "interactive"
+	ItemsMixed       ItemsAs = "mixed"
+	ItemsText        ItemsAs = "text"
+	ItemsVectors     ItemsAs = "vectors"
+)
+
+var validItemsAs = map[ItemsAs]struct{}{
+	ItemsGrids: {}, ItemsImages: {}, ItemsInteractive: {}, ItemsMixed: {},
+	ItemsText: {}, ItemsVectors: {},
+}
+
+// Valid reports whether the item shape is known.
+func (i ItemsAs) Valid() bool { _, ok := validItemsAs[i]; return ok }
+
 // Priority ranks a source's value for a logic-first bank.
 type Priority string
 

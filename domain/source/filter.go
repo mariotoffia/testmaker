@@ -1,5 +1,7 @@
 package source
 
+import "slices"
+
 // SourceFilter is a value object expressing catalogue query criteria. An empty
 // filter matches everything; each populated field narrows the result set (AND
 // across fields, OR within a field).
@@ -17,69 +19,25 @@ func (f SourceFilter) Matches(s Snapshot) bool {
 	if f.GeneratorsOnly && !s.Generator {
 		return false
 	}
-	if len(f.Categories) > 0 && !containsCategory(f.Categories, s.Category) {
+	if len(f.Categories) > 0 && !slices.Contains(f.Categories, s.Category) {
 		return false
 	}
-	if len(f.Redistributable) > 0 && !containsRedist(f.Redistributable, s.License.Redistributable) {
+	if len(f.Redistributable) > 0 && !slices.Contains(f.Redistributable, s.License.Redistributable) {
 		return false
 	}
-	if len(f.Priorities) > 0 && !containsPriority(f.Priorities, s.Priority) {
+	if len(f.Priorities) > 0 && !slices.Contains(f.Priorities, s.Priority) {
 		return false
 	}
-	if len(f.Families) > 0 && !anyFamily(f.Families, s.Families) {
+	if len(f.Families) > 0 && !overlaps(f.Families, s.Families) {
 		return false
 	}
-	if len(f.TestTypes) > 0 && !anyTestType(f.TestTypes, s.TestTypes) {
+	if len(f.TestTypes) > 0 && !overlaps(f.TestTypes, s.TestTypes) {
 		return false
 	}
 	return true
 }
 
-func containsCategory(set []Category, v Category) bool {
-	for _, x := range set {
-		if x == v {
-			return true
-		}
-	}
-	return false
-}
-
-func containsRedist(set []Redistributable, v Redistributable) bool {
-	for _, x := range set {
-		if x == v {
-			return true
-		}
-	}
-	return false
-}
-
-func containsPriority(set []Priority, v Priority) bool {
-	for _, x := range set {
-		if x == v {
-			return true
-		}
-	}
-	return false
-}
-
-func anyFamily(want, have []AbilityFamily) bool {
-	for _, w := range want {
-		for _, h := range have {
-			if w == h {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func anyTestType(want, have []TestTypeCode) bool {
-	for _, w := range want {
-		for _, h := range have {
-			if w == h {
-				return true
-			}
-		}
-	}
-	return false
+// overlaps reports whether want and have share at least one element.
+func overlaps[T comparable](want, have []T) bool {
+	return slices.ContainsFunc(want, func(w T) bool { return slices.Contains(have, w) })
 }

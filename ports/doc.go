@@ -3,16 +3,18 @@
 // (driving ports). It imports the domain only — never app or adapters.
 //
 // Driven ports (core calls out):
-//   - SourceCatalog / SourceRepository : read / read-write source catalogue
+//   - SourceRepository                  : read/write source catalogue
+//   - CatalogLoader                    : ingest a catalogue file
 //   - Fetcher                          : pull raw items from a source
 //   - ItemRepository                   : persist item-bank items          (scaffold)
 //   - TestRepository                   : persist composed tests           (scaffold)
 //   - SessionRepository                : persist test-taking sessions     (scaffold)
 //   - Generator                        : procedurally generate items      (scaffold)
 //   - Scorer                           : score a completed session        (scaffold)
+//   - LLM                              : language-model completion for extraction / translation / derivation steps
+//   - PromptRepository                 : versioned prompt templates the LLM service auto-applies
 //
 // Driving ports (drive the core):
-//   - CatalogLoader                    : ingest a catalogue file
 //   - Executor                         : administer a test                (scaffold)
 //
 // DTOs cross these ports as domain Snapshots, never as aggregates.

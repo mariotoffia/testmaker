@@ -24,9 +24,31 @@ workspace to compile until their block lands.
 | Understanding bounded contexts and their relationships | [DDD.md](DDD.md) |
 | Naming a type, field, constant, enum value, or concept | [UBIQUITOUS.md](UBIQUITOUS.md) |
 | What is built vs. what comes next, and in what order | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) |
+| Implementing one design item / plan block end-to-end | [§ Implementing a design item](#implementing-a-design-item) below |
 
 `ARCHITECTURE.md`, `DDD.md`, `UBIQUITOUS.md`, and `IMPLEMENTATION_PLAN.md` are
 the design docs at the repo root (present or added as the project fills in).
+
+## Implementing a design item
+
+When building one component/block from the design, read in this order before
+writing code:
+
+1. This file — layering, conventions, definition of done.
+2. The item's spec: its section in [DESIGN.md](DESIGN.md) and its block in
+   [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) (scope + "done when").
+3. [DEVELOPMENT.md](DEVELOPMENT.md) — the adapter-module checklist when the
+   item is a new module.
+4. [TESTS.md](TESTS.md) — every rule applies, including conformance suites
+   and the real-backend rules.
+5. The port it implements or consumes (read every field comment) and one
+   existing sibling as the pattern (`stubfetcher` = simple adapter,
+   `filecatalog` = file-backed adapter).
+
+Documentation is part of the item, in the same change: flip the item's
+status markers (🚧 → ✅) in DESIGN.md / ARCHITECTURE.md /
+IMPLEMENTATION_PLAN.md, write the package `doc.go`, and update any table row
+the item completes. Docs trailing code = not done.
 
 ## Layer cheat-sheet
 

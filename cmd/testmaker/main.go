@@ -54,14 +54,19 @@ func run(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
+	cond, err := svc.Conditional(ctx)
+	if err != nil {
+		return err
+	}
 	gens, err := svc.Generators(ctx)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("\nReusable (yes/conditional): %d\nGenerators: %d\n", len(reusable), len(gens))
+	fmt.Printf("\nReusable: %d\nConditional (license terms apply): %d\nGenerators: %d\n",
+		len(reusable), len(cond), len(gens))
 
 	// Exercise the fetch boundary (stub) against one generator source.
-	if len(gens) > 0 {
+	if len(gens) > 0 && fetcher.Supports(gens[0]) {
 		res, ferr := fetcher.Fetch(ctx, ports.FetchRequest{Source: gens[0], Limit: 5})
 		if ferr != nil {
 			return ferr

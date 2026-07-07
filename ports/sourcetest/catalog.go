@@ -86,7 +86,7 @@ func RunSourceRepositoryTests(t *testing.T, newRepo func() ports.SourceRepositor
 
 	t.Run("ListFilterByFamily", func(t *testing.T) {
 		repo := newRepo()
-		mustPut(t, repo, sampleSnapshot(t, "omib", source.CategoryOpenData, "A2"))       // logical
+		mustPut(t, repo, sampleSnapshot(t, "omib", source.CategoryOpenData, "A2"))            // logical
 		mustPut(t, repo, sampleSnapshot(t, "indiabix", source.CategoryGovStandardized, "B3")) // numerical
 		got, err := repo.List(ctx, source.SourceFilter{Families: []source.AbilityFamily{source.FamilyNumerical}})
 		if err != nil {

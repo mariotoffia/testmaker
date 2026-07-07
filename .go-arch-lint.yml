@@ -36,8 +36,16 @@ excludeFiles:
   - "^.*_test\\.go$"         # tests live outside the arch scope
 
 components:
+  # The shared kernel is its own component so the DDD rule "bounded contexts
+  # talk to each other only through domain/shared" is machine-checked: contexts
+  # (the `domain` component) may depend on `domain_shared` but not on `domain`
+  # itself, so a cross-context import (source -> item, ...) fails lint.
+  domain_shared: { in: [domain/shared] }
   domain: { in: [domain, domain/**] }
-  ports: { in: [ports, ports/**] }
+  ports: { in: [ports] }
+  # Conformance suites (ports/<x>test) are libraries that exercise the port
+  # interfaces, so they depend on `ports` itself.
+  ports_conformance: { in: [ports/**] }
   app: { in: [app, app/**] }
 
   # --- adapters (one component per technology; siblings stay isolated) ---
@@ -55,27 +63,35 @@ vendors:
   yaml: { in: ["gopkg.in/yaml.v3"] }
 
 deps:
+  domain_shared:
+    canUse: [_no_external_deps_]
+
   domain:
+    mayDependOn: [domain_shared]
     canUse: [_no_external_deps_]
 
   ports:
-    mayDependOn: [domain]
+    mayDependOn: [domain, domain_shared]
+    canUse: [_no_external_deps_]
+
+  ports_conformance:
+    mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
 
   app:
-    mayDependOn: [domain, ports]
+    mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
 
   adapter_source_memorycatalog:
-    mayDependOn: [domain, ports]
+    mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
 
   adapter_source_filecatalog:
-    mayDependOn: [domain, ports]
+    mayDependOn: [domain, domain_shared, ports]
     canUse: [yaml]
 
   adapter_fetch_stubfetcher:
-    mayDependOn: [domain, ports]
+    mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
 
   cmd:

@@ -13,12 +13,22 @@ context is its `domain/<context>/doc.go`.**
 | --- | --- | --- | --- |
 | Shared kernel | `domain/shared` | generic | error type, sentinels, cross-context vocabulary |
 | Source catalogue | `domain/source` | supporting | where items come from; license & extraction |
+| LLM prompts | `domain/prompt` | generic | stored, versioned Go-template prompts for LLM steps |
 | Item bank | `domain/item` | **core** | the scored items |
 | Test authoring | `domain/testset` | **core** | composed, timed, adaptive tests |
 | Test execution | `domain/session` | **core** | a test-taking attempt |
 | Scoring | `domain/scoring` | supporting | raw → band → IQ-scaled + feedback |
 
-Only **source** and **shared** are implemented; the rest are scaffold shells.
+Only **source**, **prompt** and **shared** are implemented; the rest are
+scaffold shells.
+
+**LLM assistance is a generic subdomain, not a core context.** The backend is
+reached through the single driven port `ports.LLM`; the small `domain/prompt`
+context owns the stored prompt templates (parse/render invariants only); the
+`app/llm` service ties them together and runs hooks. Steps in any context
+(ingestion extraction, translation, item derivation) receive the service by
+injection; its output enters a context only through that context's
+constructors (e.g. `item.NewItem`), like any other untrusted input.
 
 ---
 
@@ -32,16 +42,19 @@ flowchart LR
 
   shared[[shared kernel]]:::ker
   source[source catalogue]:::sup
+  prompt[LLM prompts]:::sup
   item[item bank]:::core
   testset[test authoring]:::core
   session[execution]:::core
   scoring[scoring]:::sup
 
   source -->|provenance id| item
+  prompt -->|prompt id + version| item
   item -->|composed into| testset
   testset -->|instantiated as| session
   session -->|scored by| scoring
   source -.-> shared
+  prompt -.-> shared
   item -.-> shared
   testset -.-> shared
   session -.-> shared
@@ -115,6 +128,16 @@ delivered item; timing monotonic under the injected clock.
 `Score` value object: `Raw`, `Percentile`/band, `ScaledIQ`, plus per-item
 feedback. Produced by a `Scorer`; carries no identity.
 
+### 3.6 Prompt (`domain/prompt`) ✅ — aggregate root
+
+Root `Prompt{ID, Version, Purpose, Template, Params, Notes}` — a stored,
+versioned Go `text/template` that the `app/llm` service auto-applies to the
+step matching its `Purpose` (closed set: `extraction`, `translation`,
+`derivation`, `generation`). Invariants: template parses on construction;
+`Render(values)` fails on unresolved placeholders. Crosses ports as
+`prompt.Snapshot` via `ports.PromptRepository`; `ID` + `Version` travel as
+provenance on every LLM result.
+
 ---
 
 ## 4. Shared kernel (`domain/shared`)
@@ -132,6 +155,7 @@ promoted here (or to `domain/taxonomy`) with the item-bank block.
 | --- | --- | --- |
 | Valid, closed-set source vocabulary | `source` | `NewSource` + `*.Valid()` |
 | Families derived from test types | `source` | `DeriveFamilies` |
+| Prompt templates parse; placeholders resolve | `prompt` | `NewPrompt` + `Render` (`missingkey=error`) |
 | Redistributability preserved to items | `item` (planned) | `item.NewItem` provenance |
 | MC items have 4–6 keyed options | `item` (planned) | `item.NewItem` |
 | Legal session transitions | `session` (planned) | state-machine methods |

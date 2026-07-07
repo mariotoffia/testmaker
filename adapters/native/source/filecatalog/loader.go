@@ -114,7 +114,7 @@ func (ws wireSource) toSpec() source.SourceSpec {
 		Extraction: source.Extraction{
 			Method:  source.ExtractionMethod(ws.Extraction.Method),
 			Auth:    ws.Extraction.Auth,
-			ItemsAs: ws.Extraction.ItemsAs,
+			ItemsAs: source.ItemsAs(ws.Extraction.ItemsAs),
 			Notes:   ws.Extraction.Notes,
 		},
 		Generator: ws.Generator,

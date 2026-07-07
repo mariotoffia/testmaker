@@ -26,7 +26,8 @@ context. Terms marked 🚧 are designed but not yet implemented.
 | **License** | Value object `{Category, Detail, Redistributable}` describing reuse terms. |
 | **Redistributable** | The reuse gate: `yes` (ship items), `conditional` (strings attached), `no` (format-reference only). The single most load-bearing source field. |
 | **Extraction** | Value object `{Method, Auth, ItemsAs, Notes}` telling the Fetcher how to obtain items. |
-| **Extraction method** | Concrete fetch mechanism: `direct-download`, `scrape-html`, `headless-browser`, `git-clone`, `api`, `generate`, `order-required`, `none`. |
+| **Extraction method** | Concrete fetch mechanism: `direct-download`, `scrape-html`, `headless-browser`, `git-clone`, `api`, `generate`, `order-required`, `none` (empty input normalizes to `none`). |
+| **Items as** | The shape fetched items arrive in — `grids`, `images`, `interactive`, `mixed`, `text`, `vectors` — routing them to the right normalization path. |
 | **Generator (source)** | A source whose `Generator` flag is true: emits unlimited items + documented rules; IP-free backbone of the designer. |
 | **Priority / IP risk / Category** | Curation metadata: value for a logic-first bank; verbatim-reuse risk; catalogue grouping (`open-data`, `ml-dataset`, `branded-vendor`, …). |
 
@@ -70,11 +71,27 @@ context. Terms marked 🚧 are designed but not yet implemented.
 | **Scaled IQ** | Raw score mapped to an IQ-style scale (mean 100, SD 15 by convention). |
 | **Scorer** | The driven port that turns a completed session into a Score. |
 
+## LLM prompts (`domain/prompt`) ✅
+
+| Term | Meaning |
+|---|---|
+| **Prompt** | Aggregate root: a stored, versioned prompt template. The template is a Go `text/template` (`{{.name}}` placeholders); it must parse on construction. |
+| **Purpose** | The LLM step a prompt auto-applies to — closed set: `extraction`, `translation`, `derivation`, `generation`. |
+| **Render** | Fills the template with caller values; a missing placeholder is an error (`missingkey=error`), never silent. |
+| **Prompt application** | The built-in first step of `GenerateFor`: look up the purpose's prompt, render it, prepend it as the system message. |
+| **PromptRepository** | Driven port storing prompts. `ByPurpose` = highest `Version`, ties by smallest ID — deterministic across adapters (memory, file, sqlite, …). |
+
 ## Cross-cutting
 
 | Term | Meaning |
 |---|---|
 | **Port** | An interface in `ports/` — the hexagon boundary. **Driven** = core calls out; **driving** = drives the core. |
 | **Adapter** | A concrete port implementation at the edge; one Go module + one arch-lint component per technology. |
+| **LLM (port)** | The one driven port for language-model completion (`ports.LLM.Generate`). Used by extraction, translation and derivation steps; backends (OpenAI-compatible HTTP, Ollama, Bedrock) are adapters. |
+| **LLM service** | `app/llm.Service` — wraps a backend + `PromptRepository`; applies the stored prompt per Purpose and runs hooks around every call. Satisfies `ports.LLM` itself. |
+| **Hook** | A function the composition root registers on the LLM service: **BeforeGenerate** (mutate the request — model defaults, caps, redaction) or **AfterGenerate** (inspect/mutate the `Result` — provenance, validation, metering). Runs in registration order; an error aborts the call. |
+| **Result (LLM)** | `LLMResponse` + `PromptID`/`PromptVersion` provenance of the applied prompt. |
+| **Effort** | Backend-neutral reasoning-effort hint on an `LLMRequest` (`low` / `medium` / `high`); adapters map or ignore it. |
+| **LLM-derived item** | An item produced or translated by an LLM. Untrusted until it passes `item.NewItem`; carries provenance (model, prompt hash) and counts as unnormed until calibrated. |
 | **Conformance suite** | A reusable `Run…Tests(t, …)` function that every adapter for a port runs, guaranteeing behavioural parity. |
 | **Composition root** | `cmd/testmaker` — the only place adapters are chosen and wired. |

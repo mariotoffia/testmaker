@@ -43,10 +43,18 @@ Two settings make it strict:
 - **`depOnAnyVendor: false`** — every external dependency must be opted into
   explicitly via `canUse`. A component with none uses the `_no_external_deps_`
   sentinel, which turns "this component has zero vendors" into a machine-checked
-  claim. `domain`, `ports`, and `app` all carry it; `adapter_source_filecatalog`
-  is the only component allowed a vendor (`gopkg.in/yaml.v3`).
+  claim. `domain_shared`, `domain`, `ports`, `ports_conformance`, and `app` all
+  carry it; `adapter_source_filecatalog` is the only component allowed a vendor
+  (`gopkg.in/yaml.v3`).
 - **`deepScan: true`** — catches structural / method-call leaks where a type
   from one component flows into another even without a direct import.
+
+The domain is split into two components — `domain_shared` (the shared kernel,
+`domain/shared`) and `domain` (every bounded context). Contexts may depend on
+the kernel but not on each other, so the DDD rule "contexts talk only through
+`domain/shared`" is machine-checked, not just narrated. Conformance suites
+(`ports/<x>test`) are their own component (`ports_conformance`) because they
+exercise the port interfaces and so depend on `ports` itself.
 
 Each adapter is its **own** component (`adapter_source_memorycatalog`,
 `adapter_source_filecatalog`, `adapter_fetch_stubfetcher`, …), so cross-adapter

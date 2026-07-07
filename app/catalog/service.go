@@ -1,6 +1,6 @@
 // Package catalog is the application service (use-case layer) for the source
-// catalogue. It orchestrates the CatalogLoader (driving) and SourceRepository
-// (driven) ports; it holds no wire-format or storage knowledge of its own.
+// catalogue. It orchestrates the CatalogLoader and SourceRepository driven
+// ports; it holds no wire-format or storage knowledge of its own.
 package catalog
 
 import (
@@ -51,11 +51,20 @@ func (s *Service) Count(ctx context.Context) (int, error) {
 	return s.repo.Count(ctx)
 }
 
-// Reusable returns sources whose items may be reused (redistributable yes or
-// conditional) — the safe set to ingest into the item bank.
+// Reusable returns sources whose items may be reused without further terms
+// (redistributable = yes) — safe to ingest into the item bank as-is.
 func (s *Service) Reusable(ctx context.Context) ([]source.Snapshot, error) {
 	return s.repo.List(ctx, source.SourceFilter{
-		Redistributable: []source.Redistributable{source.RedistYes, source.RedistConditional},
+		Redistributable: []source.Redistributable{source.RedistYes},
+	})
+}
+
+// Conditional returns sources whose items are redistributable only under
+// conditions (e.g. GPLv3 share-alike, attribution). Ingest must record and
+// honour the license terms per source before reuse.
+func (s *Service) Conditional(ctx context.Context) ([]source.Snapshot, error) {
+	return s.repo.List(ctx, source.SourceFilter{
+		Redistributable: []source.Redistributable{source.RedistConditional},
 	})
 }
 

@@ -25,6 +25,22 @@ a machine without the backing dependency. Do not add a fast pure-fake test to
 that category; a test that "feels integration-y" but uses only fakes is a
 **unit** test.
 
+## Real-Backend Rules
+
+For an adapter over a real backend (HTTP API, sqlite file, live LLM):
+
+- **Unit tests fake the backend in-process** — `httptest.Server` for HTTP
+  (assert the exact wire request the adapter sends, and drive every response
+  branch: success, usage/fields absent, non-2xx, malformed body, cancelled
+  context), a temp dir/file for file stores. No network, no external
+  process; these run under `-short`.
+- **Integration tests are env-gated**: skip under `testing.Short()` **and**
+  when the backend's `TESTMAKER_*` env var is unset (e.g.
+  `TESTMAKER_LLM_BASE_URL`), so `make test` stays green on any machine.
+- **Assert shape, not content** — a real backend's output is
+  nondeterministic; check "non-empty content, model reported", never the
+  generated text itself.
+
 ## Style
 
 - **Standard `testing` only.** Table-driven cases with `t.Run(name, …)`
@@ -124,4 +140,6 @@ external services.
 - [ ] Compile-time `var _ ports.X = (*T)(nil)` assertion present in the
       adapter's `_test.go`.
 - [ ] Runs green under `-race`; every resource cleaned up with `t.Cleanup`.
+- [ ] Real backend touched? Unit path fully faked in-process; integration
+      test env-gated + `testing.Short()`-skipped, asserting shape not content.
 - [ ] No imports of a sibling adapter or another module's unexported types.

@@ -16,7 +16,7 @@ CLAUDE.md mission calls out and are the natural next step.**
 ## Block 0 — Source catalogue ✅ (done)
 
 **Goal:** catalogue external sources and load the research catalogue.
-**Touches:** `domain/source`, `ports.SourceCatalog/SourceRepository/CatalogLoader/Fetcher`, `app/catalog`, `adapters/native/source/{memorycatalog,filecatalog}`, `adapters/native/fetch/stubfetcher`, `cmd/testmaker`.
+**Touches:** `domain/source`, `ports.SourceRepository/CatalogLoader/Fetcher`, `app/catalog`, `adapters/native/source/{memorycatalog,filecatalog}`, `adapters/native/fetch/stubfetcher`, `cmd/testmaker`.
 **Done:** implemented end-to-end with the 81-source seed catalogue, conformance suite, and a CLI that loads and reports. Fetcher is a stub (real fetchers = Block 5).
 
 ---
@@ -62,7 +62,8 @@ shared package; back it with the memory + sqlite `ItemRepository`.
 
 **Goal:** replace the stub with real `Fetcher` adapters routed by
 `source.Extraction.Method` (direct-download, scrape-html, api first; headless
-later) and an ingestion use-case that normalizes `RawItem` → `item.Item`.
+later) and an ingestion use-case that normalizes `RawItem` → `item.Item` —
+optionally via an LLM extraction step (Block 12) for unstructured payloads.
 **Touches:** `adapters/native/fetch/*`, `app/ingest`, `domain/item`.
 **Depends on:** Blocks 0, 4.
 **Done when:** at least one real source (a redistributable open dataset, e.g. OMIB) is fetched and ingested into the bank with keys and difficulty.
@@ -120,6 +121,24 @@ figural item media referenced by `Stimulus`.
 **Depends on:** Block 4.
 **Done when:** figural items resolve their media through the port in the renderer.
 
+## Block 12 — LLM library 🚧 (port + prompts + service ✅)
+
+**Goal:** back the LLM stack with working adapters and the first consuming
+step. Already in place: `ports.LLM`, `domain/prompt` (versioned Go-template
+prompts), `ports.PromptRepository`, and the hook-running `app/llm.Service`
+(prompt auto-application per Purpose, BeforeGenerate/AfterGenerate hooks).
+Remaining: `adapters/native/llm/openaicompat` — plain `net/http` +
+`encoding/json` against the OpenAI-compatible chat API, covering cloud
+(OpenAI/Azure) and local (Ollama `/v1`, vLLM, LM Studio, llama.cpp) via
+base-URL config; the prompt stores `memoryprompts` (tests) + `fileprompts`
+(default, `data/prompts/*.yaml`) validated by a `ports/prompttest` conformance
+suite; then the LLM extraction step in `app/ingest` (structured `JSONSchema`
+output). Translation and run-time derivation follow inside Blocks 5–8 as
+consumers. Design rules in [DESIGN.md](DESIGN.md#6-llm-support) §6.
+**Touches:** `adapters/native/llm/{openaicompat,memoryprompts,fileprompts}`, `ports/prompttest`, `app/ingest`, later an LLM-backed `Generator` adapter (optional `adapters/aws/llm/bedrock`).
+**Depends on:** Block 5 (first consumer); port, prompt domain and service already in place.
+**Done when:** an unstructured fetched payload is lifted into valid, provenance-tagged item candidates through a local (Ollama) and a cloud backend using the same adapter, with the prompt loaded from the file store.
+
 ---
 
 ## Cross-cutting (fold into blocks as needed)
@@ -134,7 +153,7 @@ figural item media referenced by `Stimulus`.
 
 ```
 0 ✅ ──► 1 ──► 2 ──► 3
-             │      └─► 4 ──► 5
+             │      └─► 4 ──► 5 ──► 12
              │           ├──► 6
              │           └──► 7 ──► 8 ──► 9 ──► 10
                                      11 ◄─ 4
