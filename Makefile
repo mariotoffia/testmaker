@@ -72,11 +72,17 @@ tidy:
 	@$(GO) work sync
 	@for m in $(MODULES); do echo "== tidy $$m =="; (cd $$m && $(GO) mod tidy) || exit 1; done
 
-## install: install pinned dev/CI tools
+## install: install pinned dev/CI tools and enable git hooks
 .PHONY: install
-install:
+install: hooks
 	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 	$(GO) install github.com/fe3dback/go-arch-lint@$(ARCHLINT_VERSION)
+
+## hooks: enable the repo's git hooks (pre-commit rejects binary files)
+.PHONY: hooks
+hooks:
+	@git config core.hooksPath .githooks
+	@echo "git hooks enabled (core.hooksPath=.githooks)"
 
 ## check: the CI aggregate — build, lint, unit-test
 .PHONY: check

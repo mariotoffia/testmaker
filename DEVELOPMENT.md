@@ -61,10 +61,16 @@ that keeps the workspace compiling until its implementation block lands.
 ```bash
 git clone https://github.com/mariotoffia/testmaker.git
 cd testmaker
-make install          # pinned golangci-lint + go-arch-lint
+make install          # pinned golangci-lint + go-arch-lint, and enables git hooks
 go work sync
 make tidy
 ```
+
+`make install` also runs `make hooks`, which sets `core.hooksPath=.githooks`. The
+`pre-commit` hook rejects any staged binary file (git-detected) so build outputs
+like `cmd/testmaker/testmaker` never get committed; `git commit --no-verify`
+overrides it for a genuine asset. Run `make hooks` on its own if you cloned
+before this existed.
 
 ### Build and test
 

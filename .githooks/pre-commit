@@ -1,0 +1,16 @@
+#!/bin/sh
+# Reject staged binary files. Git reports "-\t-" (instead of line counts) in
+# --numstat for binary blobs; --diff-filter=AM looks only at Added/Modified
+# files, so deleting or renaming a binary (e.g. removing a stray build output)
+# is still allowed.
+binaries=$(git diff --cached --numstat --diff-filter=AM |
+	awk -F'\t' '$1 == "-" && $2 == "-" { print $3 }')
+
+if [ -n "$binaries" ]; then
+	echo "pre-commit: refusing to commit binary file(s):" >&2
+	echo "$binaries" | sed 's/^/  /' >&2
+	echo >&2
+	echo "Binaries do not belong in git. Add them to .gitignore (build output)" >&2
+	echo "or use Git LFS for genuine assets. To override once: git commit --no-verify" >&2
+	exit 1
+fi
