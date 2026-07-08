@@ -88,10 +88,17 @@ type Executor interface {
 	Complete(ctx context.Context, id session.SessionID) (session.SessionSnapshot, error)
 }
 
-// Scorer turns a completed session into a raw score, percentile band and
-// IQ-style scaled score (driven port).
+// Scorer turns a completed session snapshot into a raw score, a norm-derived
+// percentile band and IQ-style scaled score, a speed reading and per-item
+// feedback (driving port).
 //
-// SCAFFOLD: firms up in the Scoring & Feedback block.
+// Backed by app/scoring, which injects the item bank (read, to render the
+// correct answer and explanation for each item) and the norm book (test id →
+// norm table). Like Executor it orchestrates a driven port, so it is a
+// use-case, not a pure driven adapter. It scores from the FROZEN grades in the
+// snapshot (session.Response.Correct), never re-grading against the live bank,
+// so a score is reproducible and immune to later bank drift. It rejects a
+// session that is not completed with scoring.ErrNotScorable.
 type Scorer interface {
 	Score(ctx context.Context, snap session.SessionSnapshot) (scoring.Score, error)
 }

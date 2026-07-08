@@ -20,8 +20,8 @@ context is its `domain/<context>/doc.go`.**
 | Scoring | `domain/scoring` | supporting | raw → band → IQ-scaled + feedback |
 
 Implemented: **shared**, **clock**, **source**, **prompt**, **item**,
-**testset** and **session**. The remaining supporting context (**scoring**) is a
-scaffold shell until its block lands.
+**testset**, **session** and **scoring**. Every bounded context now has a
+working vertical slice.
 
 **LLM assistance is a generic subdomain, not a core context.** The backend is
 reached through the single driven port `ports.LLM`; the small `domain/prompt`
@@ -144,10 +144,18 @@ every transition, and grades answers against the item key before calling
 the rich `SessionSnapshot` DTO, with every `time.Time` UTC-normalized so a memory
 clone and a sqlite JSON round-trip are `reflect.DeepEqual`-identical.
 
-### 3.5 Score (`domain/scoring`) 🚧 — value result (designed)
+### 3.5 Score (`domain/scoring`) ✅ — value result
 
-`Score` value object: `Raw`, `Percentile`/band, `ScaledIQ`, plus per-item
-feedback. Produced by a `Scorer`; carries no identity.
+`Score` value object: `Raw`/`Max`, `Ability` (adaptive), `Normed`,
+`Percentile`, `ScaledIQ`, `Band`, `Speed`, and per-item `ItemFeedback`. Carries
+no identity — produced by a `Scorer` from a completed `SessionSnapshot`. The
+context also owns the norm model (`NormTable{Mean, SD}` normal norm + `NormBook`
+by test id), the qualitative `Band` classification of a scaled IQ, and the
+`AbilityFromStaircase` reversal-mean estimator that turns an adaptive outcome
+sequence into an ability. It cannot import `session` or `item` (contexts meet
+only through the shared kernel), so the application layer maps a
+`session.Response` onto the context's `Outcome` value. Sentinel:
+`ErrNotScorable` (session not completed).
 
 ### 3.6 Prompt (`domain/prompt`) ✅ — aggregate root
 

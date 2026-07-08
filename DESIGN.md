@@ -104,7 +104,7 @@ satisfies its non-decreasing-difficulty invariant by construction.
 
 ---
 
-## 4. Execution & scoring — execution ✅ · scoring 🚧
+## 4. Execution & scoring — execution ✅ · scoring ✅
 
 **Aggregate `session.Session`** ✅ — one attempt, a small clock-free state machine:
 
@@ -132,16 +132,40 @@ scoring). It abandons the attempt when the global budget is exhausted.
 `SessionSnapshot` (a rich JSON blob in both testdb backends), so the service is
 stateless and resumable.
 
-**Scoring** (`scoring` context + `Scorer` port) 🚧 turns a completed session into:
+**Scoring** (`scoring` context + `Scorer` **driving** port, backed by
+`app/scoring.Service`) ✅ turns a completed session into:
 
-- **Raw score** (count / weighted correct),
-- **Percentile / normal-distribution band** (from norm tables per test),
-- **IQ-style scaled score** (mean 100, SD 15 by convention),
-- **Per-item feedback** (correct answer + explanation).
+- **Raw score** — the count of correct responses, read from the **frozen** grades
+  captured at administration (`Response.Correct`), never re-graded against the
+  live bank, so a score is reproducible and immune to later bank drift/deletion.
+  An attempt that answered nothing (a completed session with zero responses) has
+  no data to norm and is rejected with `ErrNotScorable` rather than stamped with a
+  confident low IQ. The raw denominator is the *answered* count; a norm-derived
+  score therefore assumes a full administration.
+- **Percentile / normal-distribution band** — from a per-test **norm table**, a
+  parametric normal model (`NormTable{Mean, SD}` of the scored dimension). The
+  `NormBook` (test id → table) is provided at the composition root. A test with
+  no norm scores raw-only (`Normed == false`, `Band == unnormed`).
+- **IQ-style scaled score** (mean 100, SD 15): `IQ = round(100 + 15·z)`,
+  `percentile = 100·Φ(z)` with `Φ` via `math.Erfc`.
+- **Per-item feedback** (correct answer + explanation), read from the item bank
+  in delivery order. An item removed since the attempt is not an error — the
+  frozen grade already scored it, so its feedback text just degrades to blank.
 
-Design decision: speed contributes to scoring where the test defines it (e.g.
-number-speed, perceptual-speed families), because response time is captured per
-item in the session.
+The **scored dimension** is the raw count for a fixed-increasing attempt and the
+**staircase ability estimate** for an adaptive one, so an adaptive score reflects
+the delivery *path* taken, not just the count correct. Ability is the classical
+transformed up/down estimator — the mean difficulty band at the **reversal
+points** (direction changes correct↔wrong), which consumes the delivery order.
+
+`Scorer` is a **driving** port (not driven): like `Executor` it orchestrates a
+driven port — it reads the item bank to render feedback and resolves the norm
+book — so it is a use-case, not a pure adapter. The psychometric math lives in
+`domain/scoring`; the service only maps a `SessionSnapshot` onto that model.
+
+Design decision: speed is reported as a first-class dimension (`Speed{Total,
+Mean, CorrectPerMinute}`) but is not folded into the scaled IQ — a speed-weighted
+composite needs a per-family speed norm no test carries yet.
 
 ---
 
@@ -321,8 +345,17 @@ Design rules:
 - Taxonomy home: **resolved (Block 4)** — promoted to `domain/shared`, not a
   dedicated `domain/taxonomy` package.
 - Blob/media storage port shape (local FS vs S3) and item media addressing.
-- IRT vs classical difficulty for the first adaptive implementation.
-- Norm-table representation and where population norms are sourced/stored.
+- IRT vs classical difficulty for the first adaptive implementation —
+  **resolved (Block 9)**: classical staircase for both delivery (Block 8) and
+  scoring. The adaptive ability estimate is the transformed up/down (reversal-mean)
+  estimator over `Difficulty.Band`; IRT/MLE theta is the upgrade path once the
+  bank is calibrated with item parameters.
+- Norm-table representation and where population norms are sourced/stored —
+  **resolved (Block 9)**: a parametric normal model `NormTable{Mean, SD}` of the
+  scored dimension, keyed per test in a `NormBook` provided at the composition
+  root. Percentile = `100·Φ(z)`, IQ = `round(100 + 15·z)`; no per-point table is
+  needed. Durable norm persistence (a repository/adapter) and empirical/piecewise
+  tables are deferred until a test ships published norms.
 - Generator integration: shell out to external engines vs port Go rule logic —
   **resolved (Block 6)**: native Go rule logic (`adapters/native/generate/rulegen`).
   No external engine earned its IP and process overhead for the figural families;

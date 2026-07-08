@@ -1,16 +1,19 @@
 // Package scoring is the "scoring" bounded context — turning a completed
 // session into a raw score, a percentile / normal-distribution band and an
-// IQ-style scaled score, plus per-item explanations.
+// IQ-style scaled score (mean 100, SD 15 by convention), plus per-item
+// explanations and a speed reading.
 //
-// SCAFFOLD: only the DTO shell referenced by ports is present so the workspace
-// compiles. ScoringPolicy, norm tables and the scaled-score model land in the
-// "Scoring & Feedback" block.
+// It is pure and stdlib-only: the model (Score, NormTable, Band, Outcome) and
+// the psychometric math (normal normalization, the staircase ability estimator)
+// live here; the app/scoring use-case maps a session snapshot onto these types
+// and resolves norms, because this context cannot import the session or item
+// contexts (bounded contexts meet only through the shared kernel).
 package scoring
 
-// Score is a placeholder result DTO. Fields will expand (band, per-item
-// breakdown, explanations) in the Scoring block.
-type Score struct {
-	Raw        int
-	Percentile float64
-	ScaledIQ   int
+import "github.com/mariotoffia/testmaker/domain/shared"
+
+// ErrNotScorable is returned when a session is not in a scorable state — scoring
+// requires a completed attempt.
+var ErrNotScorable = &shared.TestmakerError{
+	Code: "scoring.not_scorable", Class: shared.ClassInvalid, Message: "session is not scorable",
 }

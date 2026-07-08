@@ -10,12 +10,12 @@
 //   - TestRepository                   : persist composed tests           (scaffold)
 //   - SessionRepository                : persist test-taking sessions     (scaffold)
 //   - Generator                        : procedurally generate items      (scaffold)
-//   - Scorer                           : score a completed session        (scaffold)
 //   - LLM                              : language-model completion for extraction / translation / derivation steps
 //   - PromptRepository                 : versioned prompt templates the LLM service auto-applies
 //
 // Driving ports (drive the core):
 //   - Executor                         : administer a test                (scaffold)
+//   - Scorer                           : score a completed session
 //
 // DTOs cross these ports as domain Snapshots, never as aggregates.
 package ports

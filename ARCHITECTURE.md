@@ -37,8 +37,8 @@ Testmaker fuses three disciplines and makes their central rule mechanical:
   invariants. Terms come from [UBIQUITOUS.md](UBIQUITOUS.md).
 - **Hexagonal (ports & adapters)** — the application core talks to the outside
   world only through **ports** (interfaces in `ports/`). **Driven** ports are
-  called by the core (repositories, catalogue loader, fetcher, generator,
-  scorer); **driving** ports drive the core (executor). **Adapters** implement
+  called by the core (repositories, catalogue loader, fetcher, generator);
+  **driving** ports drive the core (executor, scorer). **Adapters** implement
   ports and live at the edge.
 - **Clean Architecture** — dependencies point **inward only**. Concentric rings,
   innermost first: domain → ports → app → adapters → cmd.
@@ -98,7 +98,7 @@ IDE flags a violation before `make arch-lint` runs.
 | Item bank | `domain/item` | **core** | the scored items themselves (stem, options, key, difficulty, provenance) | ✅ implemented |
 | Test authoring | `domain/testset` | core | composed tests: sections, timing, delivery policy | ✅ implemented |
 | Test execution | `domain/session` | core | a live/completed attempt: navigation, timing, responses | ✅ implemented |
-| Scoring | `domain/scoring` | supporting | raw → percentile band → IQ-scaled + feedback | 🚧 scaffold |
+| Scoring | `domain/scoring` | supporting | raw → percentile band → IQ-scaled + feedback | ✅ implemented |
 
 ### Context map
 
@@ -150,7 +150,7 @@ aggregates.
 | `SessionRepository` | driven | execution | ✅ (memory + sqlite; rich JSON snapshot) |
 | `Generator` | driven | procedural item generation | ✅ (port; `rulegen` figural backend ✅) |
 | `Executor` | driving | administer a test | ✅ (`app/execution.Service`) |
-| `Scorer` | driven | score a session | 🚧 |
+| `Scorer` | driving | score a completed session | ✅ (`app/scoring.Service`) |
 
 Ports are kept small (`interfacebloat max: 6`) and split read/write when a
 read-only consumer actually exists (YAGNI — the split is reintroduced with the
@@ -261,8 +261,8 @@ From [CLAUDE.md](CLAUDE.md), the mechanics the model must support:
 | Timing: strict global + per-item (e.g. 60 s/item, 6 min/section) | `testset` Section timing + `session` deadlines off an injected `domain/clock` |
 | Difficulty: fixed increasing **and** adaptive | `testset.DeliveryPolicy`; `session` selects the next item, `app/execution` grades and drives |
 | Composite tests (multi-family timed sections) | `testset` Sections |
-| Scoring: raw, percentile/normal band, IQ-scaled | `scoring` context + `Scorer` port |
-| Speed as a first-class scoring dimension | timing captured per item in `session`, consumed by `scoring` |
+| Scoring: raw, percentile/normal band, IQ-scaled | `scoring` context + `Scorer` driving port (`app/scoring.Service`) |
+| Speed as a first-class scoring dimension | timing captured per item in `session`, consumed by `scoring` (`Speed` dimension) |
 | Per-item explanations after completion | `item` explanation + `scoring` feedback |
 
 Timing and adaptivity depend on a **clock** injected through `domain/clock`
@@ -285,7 +285,7 @@ testmaker/
   go.mod                        github.com/mariotoffia/testmaker (domain, ports, app)
   domain/{shared,clock,source,prompt,item,testset,session,scoring}/
   ports/            + ports/{sourcetest,testdbtest,generatortest}/   (conformance suites)
-  app/{catalog,ingest,llm,authoring,execution}/
+  app/{catalog,ingest,llm,authoring,execution,scoring}/
   adapters/native/source/{memorycatalog,filecatalog}/   (own go.mod each)
   adapters/native/testdb/{memorytestdb,sqlitetestdb}/     (own go.mod each)
   adapters/native/fetch/{stubfetcher,httpfetch}/          (own go.mod each)
