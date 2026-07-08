@@ -54,7 +54,7 @@ Seed data: the 81-source research catalogue at `data/catalog/sources.json`
 | `TestType` | A1..E2 taxonomy code (→ family) |
 | `Stimulus` | ordered parts: text and/or media refs (image, SVG, matrix grid, figure) |
 | `AnswerFormat` | `multiple-choice` (4–6 `Option`s) · `open-numeric` · `true-false-cannotsay` |
-| `AnswerKey` | correct option id / numeric value / verdict |
+| `AnswerKey` | correct option id / numeric value (+ optional grading `Tolerance`) / verdict |
 | `Explanation` | shown after completion |
 | `Difficulty` | integer band (1..N); IRT `a/b/c` params deferred to adaptive delivery (Block 8) |
 | `Norms` | item p-value / response-time baseline deferred to scoring (Block 9) |
@@ -130,7 +130,11 @@ one per wrong (a classical up/down staircase; IRT selection is deferred to
 scoring). It abandons the attempt when the global budget is exhausted.
 `Complete` finalizes. Attempt state lives only in the persisted
 `SessionSnapshot` (a rich JSON blob in both testdb backends), so the service is
-stateless and resumable.
+stateless and resumable. Grading is by answer format: option-id or verdict
+equality, and for open-numeric `|answer − key| ≤ AnswerKey.Tolerance` (an
+absolute epsilon, default 0 = exact); answer *presence* needs no flag because an
+unanswered item is never recorded and `AnswerFormat` is the key's presence
+discriminator.
 
 **Scoring** (`scoring` context + `Scorer` **driving** port, backed by
 `app/scoring.Service`) ✅ turns a completed session into:
@@ -138,10 +142,15 @@ stateless and resumable.
 - **Raw score** — the count of correct responses, read from the **frozen** grades
   captured at administration (`Response.Correct`), never re-graded against the
   live bank, so a score is reproducible and immune to later bank drift/deletion.
+  The tradeoff is deliberate: a grade fixed at administration is *not* retroactively
+  correctable — fixing a bad answer key means re-administering, not re-scoring — in
+  exchange for a score that never silently changes under a taker after the fact.
   An attempt that answered nothing (a completed session with zero responses) has
   no data to norm and is rejected with `ErrNotScorable` rather than stamped with a
-  confident low IQ. The raw denominator is the *answered* count; a norm-derived
-  score therefore assumes a full administration.
+  confident low IQ. The raw denominator is the *answered* count (a power-test
+  convention: unanswered = wrong is not assumed); a norm-derived score therefore
+  assumes a full administration, which the executor always produces — it answers
+  every planned item, so answered == planned on the normal path.
 - **Percentile / normal-distribution band** — from a per-test **norm table**, a
   parametric normal model (`NormTable{Mean, SD}` of the scored dimension). The
   `NormBook` (test id → table) is provided at the composition root. A test with
@@ -164,8 +173,14 @@ book — so it is a use-case, not a pure adapter. The psychometric math lives in
 `domain/scoring`; the service only maps a `SessionSnapshot` onto that model.
 
 Design decision: speed is reported as a first-class dimension (`Speed{Total,
-Mean, CorrectPerMinute}`) but is not folded into the scaled IQ — a speed-weighted
-composite needs a per-family speed norm no test carries yet.
+Mean, CorrectPerMinute}`, exercised end-to-end by
+`TestScoreFixedNormedWithFeedback`) but is not folded into the scaled IQ — a
+speed-weighted composite needs a per-family speed norm no test carries yet.
+
+The reported IQ and percentile are **clamped** to a defensible range
+(`[40, 160]` and `[0.1, 99.9]`): a thin parametric norm extrapolated past ~±4 SD
+produces figures ("IQ 210", "percentile 100.0") no fixed-form test can support,
+so the tails are pinned rather than reported literally.
 
 ---
 

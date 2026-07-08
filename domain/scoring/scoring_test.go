@@ -36,6 +36,24 @@ func TestNormTableNormalization(t *testing.T) {
 	}
 }
 
+func TestNormTableClampsExtremes(t *testing.T) {
+	// Far out in the tails the raw normal blows past any plausible IQ/percentile;
+	// the reported figures clamp to the defensible band a norm this thin can carry.
+	n := scoring.NormTable{Mean: 0, SD: 1}
+	if iq := n.ScaledIQ(100); iq != 160 {
+		t.Fatalf("ScaledIQ(+100 SD) = %d, want 160 (clamped)", iq)
+	}
+	if iq := n.ScaledIQ(-100); iq != 40 {
+		t.Fatalf("ScaledIQ(-100 SD) = %d, want 40 (clamped)", iq)
+	}
+	if pct := n.Percentile(100); pct != 99.9 {
+		t.Fatalf("Percentile(+100 SD) = %.4f, want 99.9 (clamped)", pct)
+	}
+	if pct := n.Percentile(-100); pct != 0.1 {
+		t.Fatalf("Percentile(-100 SD) = %.4f, want 0.1 (clamped)", pct)
+	}
+}
+
 func TestNormTableValidAndLookup(t *testing.T) {
 	if (scoring.NormTable{Mean: 5, SD: 0}).Valid() {
 		t.Fatal("SD 0 must be invalid")

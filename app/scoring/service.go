@@ -93,11 +93,12 @@ func (s *Service) Score(ctx context.Context, snap session.SessionSnapshot) (mode
 		score.Band = model.BandUnnormed
 	}
 
-	feedback, err := s.feedback(ctx, snap.Responses)
+	feedback, degraded, err := s.feedback(ctx, snap.Responses)
 	if err != nil {
 		return model.Score{}, err
 	}
 	score.Items = feedback
+	score.DegradedFeedback = degraded
 	return score, nil
 }
 
@@ -113,8 +114,14 @@ func countCorrect(responses []session.Response) int {
 }
 
 // abilityOf estimates ability from an adaptive attempt: the reversal-mean per
-// section (each section runs its own staircase), averaged over the sections that
-// were answered. Responses carry their section index, so no plan is needed.
+// section (each section runs its own staircase), combined across sections as a
+// response-count-weighted mean so a longer section counts proportionally.
+// Responses carry their section index, so no plan is needed.
+//
+// ponytail: response-weighted mean assumes the sections' bands are on a
+// comparable scale (they are, today: one ordinal band axis across families). A
+// per-family ability vector — not a single scalar — is the upgrade path if
+// families ever need separate norming.
 func abilityOf(responses []session.Response) float64 {
 	bySection := map[int][]model.Outcome{}
 	var order []int
@@ -127,11 +134,13 @@ func abilityOf(responses []session.Response) float64 {
 	if len(order) == 0 {
 		return 0
 	}
-	var sum float64
+	var weighted, total float64
 	for _, si := range order {
-		sum += model.AbilityFromStaircase(bySection[si])
+		outcomes := bySection[si]
+		weighted += model.AbilityFromStaircase(outcomes) * float64(len(outcomes))
+		total += float64(len(outcomes))
 	}
-	return sum / float64(len(order))
+	return weighted / total
 }
 
 // speedOf reduces the response elapsed times to the speed dimension.
@@ -157,9 +166,11 @@ func speedOf(responses []session.Response) model.Speed {
 // feedback renders per-item feedback in delivery order, reading the correct
 // answer and explanation from the bank. An item removed since administration is
 // not an error: the frozen r.Correct already scored it, so its feedback text
-// just degrades to blank (see the package doc on drift-immunity).
-func (s *Service) feedback(ctx context.Context, responses []session.Response) ([]model.ItemFeedback, error) {
+// just degrades to blank (see the package doc on drift-immunity) and is counted
+// in the returned degraded tally.
+func (s *Service) feedback(ctx context.Context, responses []session.Response) ([]model.ItemFeedback, int, error) {
 	out := make([]model.ItemFeedback, len(responses))
+	degraded := 0
 	for i, r := range responses {
 		fb := model.ItemFeedback{
 			ItemID:  r.ItemID,
@@ -176,24 +187,28 @@ func (s *Service) feedback(ctx context.Context, responses []session.Response) ([
 			// ponytail: item gone since administration; frozen r.Correct still
 			// scores, feedback text degrades to blank. Upgrade path = freeze the
 			// key/explanation into the plan (Block 10 execution hardening).
+			degraded++
 		default:
-			return nil, err
+			return nil, 0, err
 		}
 		out[i] = fb
 	}
-	return out, nil
+	return out, degraded, nil
 }
 
 // givenAnswer renders the taker's answer for display, picking the field the
-// answer format populated (the session stored the answer verbatim).
+// answer format populated (the session stored the answer verbatim). A wholly
+// empty answer renders as the empty string, not a spurious "0".
 func givenAnswer(ans session.Answer) string {
 	switch {
 	case ans.OptionID != "":
 		return ans.OptionID
 	case ans.Verdict != "":
 		return ans.Verdict
-	default:
+	case ans.Numeric != 0:
 		return strconv.FormatFloat(ans.Numeric, 'g', -1, 64)
+	default:
+		return ""
 	}
 }
 

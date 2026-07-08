@@ -274,4 +274,7 @@ func TestScoreFeedbackDegradesForMissingItem(t *testing.T) {
 	if gone.Given != "a" {
 		t.Fatalf("feedback[1] given = %q, want a (from the frozen response)", gone.Given)
 	}
+	if score.DegradedFeedback != 1 {
+		t.Fatalf("degraded feedback = %d, want 1 (one item removed)", score.DegradedFeedback)
+	}
 }

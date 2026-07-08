@@ -357,8 +357,8 @@ func driveAttempt(ctx context.Context, exec *execution.Service, scorer ports.Sco
 
 // formatScore renders a scoring.Score for the CLI demo: the raw count, the
 // norm-derived band / scaled IQ / percentile (or a raw-only note when the test
-// is unnormed), the speed dimension, and how many per-item explanations are
-// available.
+// is unnormed), the speed dimension, how many per-item explanations are
+// available and — if any — how many degraded because their item was removed.
 func formatScore(s scoring.Score) string {
 	norm := "unnormed (raw only)"
 	if s.Normed {
@@ -368,8 +368,12 @@ func formatScore(s scoring.Score) string {
 	if s.Ability != 0 {
 		ability = fmt.Sprintf(", ability %.2f", s.Ability)
 	}
-	return fmt.Sprintf("  score: %d/%d correct%s\n  norm:  %s\n  speed: %v total, %v/item, %.1f correct/min\n  feedback: %d item explanation(s)\n",
-		s.Raw, s.Max, ability, norm, s.Speed.Total, s.Speed.Mean, s.Speed.CorrectPerMinute, len(s.Items))
+	degraded := ""
+	if s.DegradedFeedback > 0 {
+		degraded = fmt.Sprintf(" (%d degraded: item removed)", s.DegradedFeedback)
+	}
+	return fmt.Sprintf("  score: %d/%d correct%s\n  norm:  %s\n  speed: %v total, %v/item, %.1f correct/min\n  feedback: %d item explanation(s)%s\n",
+		s.Raw, s.Max, ability, norm, s.Speed.Total, s.Speed.Mean, s.Speed.CorrectPerMinute, len(s.Items), degraded)
 }
 
 // itemBankDemo exercises the ItemRepository: it builds a validated multiple-choice

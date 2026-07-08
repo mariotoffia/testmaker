@@ -33,6 +33,11 @@ type Score struct {
 	Speed Speed
 	// Items is per-item feedback (the correct answer and its explanation).
 	Items []ItemFeedback
+	// DegradedFeedback counts items whose feedback text could not be resolved
+	// because the item is no longer in the bank. It distinguishes one deleted
+	// item (a small count) from a misconfigured/empty bank (== len(Items)); the
+	// grades are still frozen and correct either way.
+	DegradedFeedback int
 }
 
 // Speed is the response-time scoring dimension. Speed contributes to the scaled
@@ -93,12 +98,33 @@ func (n NormTable) Valid() bool { return n.SD > 0 }
 // z is the standard score of x under the norm.
 func (n NormTable) z(x float64) float64 { return (x - n.Mean) / n.SD }
 
-// Percentile returns the percentile rank (0..100) of x under the normal model.
-func (n NormTable) Percentile(x float64) float64 { return 100 * phi(n.z(x)) }
+// Percentile returns the percentile rank of x under the normal model, clamped to
+// the meaningful open interval: a continuous norm never ranks a taker above or
+// below literally everyone, so it stays inside (minPercentile, maxPercentile).
+func (n NormTable) Percentile(x float64) float64 {
+	return min(max(100*phi(n.z(x)), minPercentile), maxPercentile)
+}
 
 // ScaledIQ maps x onto the mean-100, SD-15 IQ scale, rounded to the nearest
-// integer.
-func (n NormTable) ScaledIQ(x float64) int { return int(math.Round(100 + 15*n.z(x))) }
+// integer and clamped to [minScaledIQ, maxScaledIQ]. Beyond ~±4 SD the
+// parametric normal tail is not psychometrically valid, so an extreme raw/ability
+// value reports the floor/ceiling instead of an absurd IQ (e.g. −50 or 370).
+func (n NormTable) ScaledIQ(x float64) int {
+	return min(max(int(math.Round(100+15*n.z(x))), minScaledIQ), maxScaledIQ)
+}
+
+// Reporting bounds for a normal norm. The IQ range is the conventional Wechsler
+// floor/ceiling; the percentile range keeps the rank strictly inside 0..100.
+//
+// ponytail: clamp to the range the model is valid over, do not extrapolate the
+// tail. Empirical extreme-score norms are the upgrade path if a test publishes
+// them.
+const (
+	minScaledIQ   = 40
+	maxScaledIQ   = 160
+	minPercentile = 0.1
+	maxPercentile = 99.9
+)
 
 // NormBook resolves a test's norm table by test id; a test with no entry (or an
 // invalid one) is scored raw-only (Score.Normed == false).
@@ -164,6 +190,14 @@ func Classify(iq int) Band {
 // ponytail: reversal-mean, the standard staircase estimator, is the honest
 // ceiling while Difficulty.Band is the only calibration signal. IRT/MLE theta
 // (a/b/c item parameters) is the upgrade path once the bank is calibrated.
+//
+// Two known biases of the plain reversal-mean, both accepted at this ceiling:
+// it counts every reversal including the initial pre-convergence transient
+// (classical up/down discards the first one or two), and it counts a
+// correctness flip while the staircase is pinned at the easiest/hardest band
+// (the item pool is exhausted) as a real reversal. Both bias short or saturated
+// staircases; discarding the transient lands with IRT calibration, when the
+// estimator is replaced rather than tuned.
 func AbilityFromStaircase(outcomes []Outcome) float64 {
 	if len(outcomes) == 0 {
 		return 0

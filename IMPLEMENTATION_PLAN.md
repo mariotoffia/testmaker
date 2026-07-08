@@ -162,9 +162,14 @@ representation.
   for feedback text, which degrades to blank if an item was deleted. Freezing the
   key into the *execution plan* (so live grading is also reproducible) remains a
   Block-10 execution-hardening concern.
-- **Numeric answer presence / tolerance** — deferred (YAGNI): no open-numeric item
-  is administered anywhere yet; the `app/execution.graded` ponytail comment names
-  the ceiling. Lands with the first open-numeric item type.
+- **Numeric answer tolerance** — RESOLVED: `item.AnswerKey.Tolerance` (an absolute
+  epsilon, default 0 = exact) is validated for open-numeric keys and honoured by
+  `app/execution.graded` (`|answer − key| ≤ tolerance`), proven by
+  `TestAnswerGradesNumericWithinTolerance`. Existing keys keep exact equality.
+- **Numeric answer presence** — RESOLVED by decision (no bit): `AnswerFormat` is the
+  presence discriminator (0 is a valid open-numeric answer, e.g. "5 − 5"), and the
+  session never records an unanswered item, so a matched zero is a real answer, not a
+  skip. Documented on `item.AnswerKey` and `execution.graded`.
 - **Consume adaptive delivery order** — RESOLVED: `AbilityFromStaircase` is the
   reversal-mean estimator, which consumes the *order* of correct/wrong outcomes.
   Two attempts with the same items and the same count correct but a different
