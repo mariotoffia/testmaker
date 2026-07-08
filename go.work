@@ -11,6 +11,7 @@ use (
 	./adapters/native/source/filecatalog
 	./adapters/native/source/memorycatalog
 	./adapters/native/testdb/memorytestdb
+	./adapters/native/testdb/sqlitetestdb
 	./cmd/testmaker
 	./testutil/ollamalocal
 )

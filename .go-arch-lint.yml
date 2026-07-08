@@ -53,6 +53,7 @@ components:
   adapter_source_memorycatalog: { in: [adapters/native/source/memorycatalog, adapters/native/source/memorycatalog/**] }
   adapter_source_filecatalog: { in: [adapters/native/source/filecatalog, adapters/native/source/filecatalog/**] }
   adapter_testdb_memorytestdb: { in: [adapters/native/testdb/memorytestdb, adapters/native/testdb/memorytestdb/**] }
+  adapter_testdb_sqlitetestdb: { in: [adapters/native/testdb/sqlitetestdb, adapters/native/testdb/sqlitetestdb/**] }
   adapter_fetch_stubfetcher: { in: [adapters/native/fetch/stubfetcher, adapters/native/fetch/stubfetcher/**] }
   adapter_llm_openaicompat: { in: [adapters/native/llm/openaicompat, adapters/native/llm/openaicompat/**] }
 
@@ -64,6 +65,7 @@ vendors:
   # "this component has zero external deps" a machine-checked claim.
   _no_external_deps_: { in: __no_external_deps_sentinel__ }
   yaml: { in: ["gopkg.in/yaml.v3"] }
+  sqlite: { in: ["modernc.org/sqlite"] }
 
 deps:
   domain_shared:
@@ -96,6 +98,11 @@ deps:
   adapter_testdb_memorytestdb:
     mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
+
+  # SQLite TestDb: pure-Go modernc.org/sqlite driver, isolated to acl_*.go.
+  adapter_testdb_sqlitetestdb:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [sqlite]
 
   adapter_fetch_stubfetcher:
     mayDependOn: [domain, domain_shared, ports]

@@ -74,7 +74,9 @@ func RunTestRepositoryTests(t *testing.T, newRepo func() ports.TestRepository) {
 		if err != nil || len(empty) != 0 {
 			t.Fatalf("list empty = %d, %v", len(empty), err)
 		}
-		// insert out of id order; List must return them sorted by id
+		// insert out of id order; List must return them sorted by id, and every
+		// non-id field must survive the round-trip (a column dropped in the list
+		// query would pass an id-only check).
 		mustSaveTest(t, repo, testset.TestSnapshot{ID: "ravens", Title: "Raven"})
 		mustSaveTest(t, repo, testset.TestSnapshot{ID: "gia", Title: "GIA"})
 		mustSaveTest(t, repo, testset.TestSnapshot{ID: "matrigma", Title: "Matrigma"})
@@ -82,17 +84,17 @@ func RunTestRepositoryTests(t *testing.T, newRepo func() ports.TestRepository) {
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
-		ids := make([]testset.TestID, len(got))
-		for i, s := range got {
-			ids[i] = s.ID
+		want := []testset.TestSnapshot{
+			{ID: "gia", Title: "GIA"},
+			{ID: "matrigma", Title: "Matrigma"},
+			{ID: "ravens", Title: "Raven"},
 		}
-		want := []testset.TestID{"gia", "matrigma", "ravens"}
-		if len(ids) != len(want) {
-			t.Fatalf("got %v, want %v", ids, want)
+		if len(got) != len(want) {
+			t.Fatalf("got %+v, want %+v", got, want)
 		}
 		for i := range want {
-			if ids[i] != want[i] {
-				t.Fatalf("unsorted list: got %v, want %v", ids, want)
+			if got[i] != want[i] {
+				t.Fatalf("list mismatch at %d: got %+v, want %+v", i, got[i], want[i])
 			}
 		}
 	})
@@ -163,8 +165,8 @@ func RunItemRepositoryTests(t *testing.T, newRepo func() ports.ItemRepository) {
 
 	t.Run("SaveReplacesSameID", func(t *testing.T) {
 		repo := newRepo()
-		mustSaveItem(t, repo, item.ItemSnapshot{ID: "omib-1", Stem: "v1"})
-		mustSaveItem(t, repo, item.ItemSnapshot{ID: "omib-1", Stem: "v2"})
+		mustSaveItem(t, repo, item.ItemSnapshot{ID: "omib-1", SourceID: "omib", Stem: "v1"})
+		mustSaveItem(t, repo, item.ItemSnapshot{ID: "omib-1", SourceID: "ravens", Stem: "v2"})
 		all, err := repo.ListItems(ctx, item.ItemFilter{})
 		if err != nil {
 			t.Fatalf("list: %v", err)
@@ -172,9 +174,11 @@ func RunItemRepositoryTests(t *testing.T, newRepo func() ports.ItemRepository) {
 		if len(all) != 1 {
 			t.Fatalf("expected 1 after replace, got %d", len(all))
 		}
+		// every mutable field must be replaced, not just stem: an ON CONFLICT that
+		// forgets a column would leave a stale source_id here.
 		got, _ := repo.GetItem(ctx, "omib-1")
-		if got.Stem != "v2" {
-			t.Fatalf("replace failed: %q", got.Stem)
+		if got.SourceID != "ravens" || got.Stem != "v2" {
+			t.Fatalf("replace failed: %+v", got)
 		}
 	})
 
@@ -184,20 +188,26 @@ func RunItemRepositoryTests(t *testing.T, newRepo func() ports.ItemRepository) {
 		if err != nil || len(empty) != 0 {
 			t.Fatalf("list empty = %d, %v", len(empty), err)
 		}
-		mustSaveItem(t, repo, item.ItemSnapshot{ID: "c"})
-		mustSaveItem(t, repo, item.ItemSnapshot{ID: "a"})
-		mustSaveItem(t, repo, item.ItemSnapshot{ID: "b"})
+		// full snapshots inserted out of order; List must sort by id and preserve
+		// every field (a dropped source_id/stem would pass an id-only check).
+		mustSaveItem(t, repo, item.ItemSnapshot{ID: "c", SourceID: "sc", Stem: "stem-c"})
+		mustSaveItem(t, repo, item.ItemSnapshot{ID: "a", SourceID: "sa", Stem: "stem-a"})
+		mustSaveItem(t, repo, item.ItemSnapshot{ID: "b", SourceID: "sb", Stem: "stem-b"})
 		got, err := repo.ListItems(ctx, item.ItemFilter{})
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
-		want := []item.ItemID{"a", "b", "c"}
+		want := []item.ItemSnapshot{
+			{ID: "a", SourceID: "sa", Stem: "stem-a"},
+			{ID: "b", SourceID: "sb", Stem: "stem-b"},
+			{ID: "c", SourceID: "sc", Stem: "stem-c"},
+		}
 		if len(got) != len(want) {
-			t.Fatalf("got %d items, want %d", len(got), len(want))
+			t.Fatalf("got %+v, want %+v", got, want)
 		}
 		for i := range want {
-			if got[i].ID != want[i] {
-				t.Fatalf("unsorted list: got %+v, want %v", got, want)
+			if got[i] != want[i] {
+				t.Fatalf("list mismatch at %d: got %+v, want %+v", i, got[i], want[i])
 			}
 		}
 	})
@@ -273,6 +283,57 @@ func RunSessionRepositoryTests(t *testing.T, newRepo func() ports.SessionReposit
 			t.Fatalf("store aliased caller input: %q", got.TestID)
 		}
 	})
+}
+
+// TestDB is the whole "TestDb" surface: one store serving all three
+// repositories. RunSharedKeyspaceTests exercises the guarantee that they keep
+// independent keyspaces, which a single-port suite cannot see.
+type TestDB interface {
+	ports.TestRepository
+	ports.ItemRepository
+	ports.SessionRepository
+}
+
+// RunSharedKeyspaceTests proves the three repositories backed by one store keep
+// independent keyspaces: the same id in each repo does not collide, and deleting
+// a test leaves an item/session with the same id untouched. It guards a wrong
+// table name, a shared keyspace, or a cross-repo Delete in any implementation.
+func RunSharedKeyspaceTests(t *testing.T, newStore func() TestDB) {
+	t.Helper()
+
+	ctx := context.Background()
+	s := newStore()
+
+	if err := s.SaveTest(ctx, testset.TestSnapshot{ID: "x", Title: "T"}); err != nil {
+		t.Fatalf("save test: %v", err)
+	}
+	if err := s.SaveItem(ctx, item.ItemSnapshot{ID: "x", Stem: "I"}); err != nil {
+		t.Fatalf("save item: %v", err)
+	}
+	if err := s.SaveSession(ctx, session.SessionSnapshot{ID: "x", TestID: "T"}); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+
+	if got, err := s.GetTest(ctx, "x"); err != nil || got.Title != "T" {
+		t.Fatalf("test keyspace: got %+v, err %v", got, err)
+	}
+	if got, err := s.GetItem(ctx, "x"); err != nil || got.Stem != "I" {
+		t.Fatalf("item keyspace: got %+v, err %v", got, err)
+	}
+	if got, err := s.GetSession(ctx, "x"); err != nil || got.TestID != "T" {
+		t.Fatalf("session keyspace: got %+v, err %v", got, err)
+	}
+
+	// deleting the test must not touch the item/session with the same id
+	if err := s.DeleteTest(ctx, "x"); err != nil {
+		t.Fatalf("delete test: %v", err)
+	}
+	if _, err := s.GetItem(ctx, "x"); err != nil {
+		t.Fatalf("item removed by test delete: %v", err)
+	}
+	if _, err := s.GetSession(ctx, "x"); err != nil {
+		t.Fatalf("session removed by test delete: %v", err)
+	}
 }
 
 func mustSaveTest(t *testing.T, repo ports.TestRepository, snap testset.TestSnapshot) {

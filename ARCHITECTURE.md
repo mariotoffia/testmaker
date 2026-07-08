@@ -145,7 +145,7 @@ aggregates.
 | `LLM` | driven | extraction / translation / derivation steps | ✅ (port; backends 🚧) |
 | `PromptRepository` | driven | versioned prompt store for the LLM service | ✅ (port; adapters 🚧) |
 | `ItemRepository` | driven | item bank | ✅ (memory; DTO refines in Block 4) |
-| `TestRepository` | driven | "TestDb" — composed tests | ✅ (memory; sqlite = Block 3) |
+| `TestRepository` | driven | "TestDb" — composed tests | ✅ (memory + sqlite) |
 | `SessionRepository` | driven | execution | ✅ (memory; DTO refines in Block 8) |
 | `Generator` | driven | procedural item generation | 🚧 |
 | `Executor` | driving | administer a test | 🚧 |
@@ -179,7 +179,7 @@ one shared conformance suite (see [TESTS.md](TESTS.md)).
 | source | file | `adapters/native/source/filecatalog` | `CatalogLoader` (JSON/YAML) | ✅ |
 | fetch | stub | `adapters/native/fetch/stubfetcher` | `Fetcher` | ✅ |
 | testdb | memory | `adapters/native/testdb/memorytestdb` | `TestRepository` + `ItemRepository` + `SessionRepository` | ✅ |
-| testdb | sqlite | `adapters/native/testdb/sqlitetestdb` | `TestRepository` | 🚧 |
+| testdb | sqlite | `adapters/native/testdb/sqlitetestdb` | `TestRepository` + `ItemRepository` + `SessionRepository` | ✅ |
 | fetch | download/scrape/headless/generate | `adapters/native/fetch/*` | `Fetcher` | 🚧 |
 | generate | sandia / raven / matriks | `adapters/native/generate/*` | `Generator` | 🚧 |
 | llm | openaicompat | `adapters/native/llm/openaicompat` | `LLM` | ✅ |
@@ -283,7 +283,7 @@ testmaker/
   ports/            + ports/{sourcetest,testdbtest}/   (conformance suites)
   app/{catalog,llm}/
   adapters/native/source/{memorycatalog,filecatalog}/   (own go.mod each)
-  adapters/native/testdb/memorytestdb/                   (own go.mod)
+  adapters/native/testdb/{memorytestdb,sqlitetestdb}/     (own go.mod each)
   adapters/native/fetch/stubfetcher/                     (own go.mod)
   adapters/native/llm/openaicompat/                      (own go.mod)
   cmd/testmaker/                                          (own go.mod)

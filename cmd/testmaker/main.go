@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"github.com/mariotoffia/testmaker/adapters/native/source/filecatalog"
 	"github.com/mariotoffia/testmaker/adapters/native/source/memorycatalog"
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/memorytestdb"
+	"github.com/mariotoffia/testmaker/adapters/native/testdb/sqlitetestdb"
 	"github.com/mariotoffia/testmaker/app/catalog"
 	"github.com/mariotoffia/testmaker/domain/source"
 	"github.com/mariotoffia/testmaker/domain/testset"
@@ -24,16 +26,17 @@ import (
 
 func main() {
 	path := flag.String("catalog", "data/catalog/sources.json", "path to the source catalogue (json or yaml)")
+	testdbDSN := flag.String("testdb", "memory", `TestDb backend: "memory" or a sqlite DSN (a file path or ":memory:")`)
 	llmPrompt := flag.String("llm-prompt", "", "if set (and TESTMAKER_LLM_BASE_URL is configured), send this prompt to the LLM backend")
 	flag.Parse()
 
-	if err := run(context.Background(), *path, *llmPrompt); err != nil {
+	if err := run(context.Background(), *path, *testdbDSN, *llmPrompt); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, path, llmPrompt string) error {
+func run(ctx context.Context, path, testdbDSN, llmPrompt string) (err error) {
 	// --- composition root: choose adapters, wire the service ---
 	var (
 		repo    ports.SourceRepository = memorycatalog.NewStore()
@@ -41,6 +44,25 @@ func run(ctx context.Context, path, llmPrompt string) error {
 		fetcher ports.Fetcher          = stubfetcher.NewFetcher()
 		testdb  ports.TestRepository   = memorytestdb.NewStore()
 	)
+	// The default is the dependency-free in-memory store; a sqlite DSN swaps in
+	// the durable adapter. Both satisfy ports.TestRepository, so nothing below
+	// changes — the only place that knows the concrete backend is right here.
+	closeTestDB := func() error { return nil }
+	if testdbDSN != "" && testdbDSN != "memory" {
+		store, oerr := sqlitetestdb.Open(testdbDSN)
+		if oerr != nil {
+			return oerr
+		}
+		testdb, closeTestDB = store, store.Close
+	}
+	// Surface a close failure (a file-backed store may have unflushed writes)
+	// alongside the real error rather than instead of it.
+	defer func() {
+		if cerr := closeTestDB(); cerr != nil {
+			err = errors.Join(err, cerr)
+		}
+	}()
+
 	svc := catalog.NewService(repo, loader)
 
 	n, err := svc.Sync(ctx)

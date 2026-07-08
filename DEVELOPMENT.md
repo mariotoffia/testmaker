@@ -47,7 +47,8 @@ testmaker/
 │       │   ├── memorycatalog/   # in-memory SourceRepository
 │       │   └── filecatalog/     # JSON/YAML CatalogLoader (yaml vendor)
 │       ├── testdb/
-│       │   └── memorytestdb/    # in-memory Test/Item/SessionRepository
+│       │   ├── memorytestdb/    # in-memory Test/Item/SessionRepository
+│       │   └── sqlitetestdb/    # sqlite Test/Item/SessionRepository (modernc.org/sqlite)
 │       └── fetch/
 │           └── stubfetcher/     # no-op Fetcher (wires the fetch boundary)
 │

@@ -43,7 +43,8 @@ writing code:
    and the real-backend rules.
 5. The port it implements or consumes (read every field comment) and one
    existing sibling as the pattern (`stubfetcher` = simple adapter,
-   `filecatalog` = file-backed adapter).
+   `filecatalog` = file-backed adapter, `sqlitetestdb` = SQL-backed adapter with
+   the driver isolated in `acl_*.go`).
 
 Documentation is part of the item, in the same change: flip the item's
 status markers (🚧 → ✅) in DESIGN.md / ARCHITECTURE.md /
