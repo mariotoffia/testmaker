@@ -69,7 +69,7 @@ shared package; back it with the memory + sqlite `ItemRepository`.
 **Depends on:** Blocks 1–3.
 **Done when:** items can be created (validated), stored, queried by family/type/difficulty, and carry provenance + redistributability.
 
-## Block 5 — Fetch pipeline + ingestion 🚧
+## Block 5 — Fetch pipeline + ingestion ✅ (`direct-download` + `app/ingest` ✅; scrape-html / api / headless / generate 🚧)
 
 **Goal:** replace the stub with real `Fetcher` adapters routed by
 `source.Extraction.Method` (direct-download, scrape-html, api first; headless
@@ -78,6 +78,16 @@ optionally via an LLM extraction step (Block 12) for unstructured payloads.
 **Touches:** `adapters/native/fetch/*`, `app/ingest`, `domain/item`.
 **Depends on:** Blocks 0, 4.
 **Done when:** at least one real source (a redistributable open dataset, e.g. OMIB) is fetched and ingested into the bank with keys and difficulty.
+**Done:** `adapters/native/fetch/httpfetch` implements the `direct-download`
+`Fetcher` (stdlib `net/http` + `archive/zip`, size-capped, ctx-honoured);
+`app/ingest` routes a source to its fetcher and normalizes `RawItem` →
+`item.Item` via a source-keyed registry. The **openpsych-viqt** public-domain
+vocabulary set (45 items) is fetched from its data zip and ingested as
+synonym multiple-choice items with keys (from the codebook) and difficulty
+bands (p-values from the 12k-row response CSV). `go run ./cmd/testmaker
+-ingest openpsych-viqt` runs it. The `scrape-html`, `api`, `headless-browser`,
+`git-clone`, and `generate` branches remain 🚧 (no ingested source needs them
+yet); `stubfetcher` stays as the unsupported-method fallback.
 
 ## Block 6 — Designer / generator 🚧
 

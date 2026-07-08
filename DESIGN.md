@@ -127,26 +127,31 @@ item in the session.
 
 ---
 
-## 5. Fetch & generation pipeline 🚧 (Fetcher stub ✅)
+## 5. Fetch & generation pipeline 🚧 (`direct-download` fetcher + `app/ingest` ✅)
 
 The `Fetcher` port pulls `RawItem`s from a source; a **router** selects the
 concrete fetcher by `source.Extraction.Method` / `AccessClass`:
 
 | Method / access | Fetcher adapter | Items arrive as |
 | --- | --- | --- |
-| `direct-download` | download fetcher (HTTP GET; PDF/zip) | mixed (text + page images) |
-| `scrape-html` | HTML scraper | text (figural = image refs) |
-| `headless-browser` | browser driver (JS/interactive) | images / interactive |
-| `api` | API client (OSF, Wikimedia, HF) | mixed |
-| `git-clone` / `generate` | repo runner / **Generator** | images / grids / vectors |
+| `direct-download` | `adapters/native/fetch/httpfetch` (HTTP GET; zip/text) ✅ | one `RawItem` per file/zip member (text inlined, binary as media ref) |
+| `scrape-html` | HTML scraper 🚧 | text (figural = image refs) |
+| `headless-browser` | browser driver (JS/interactive) 🚧 | images / interactive |
+| `api` | API client (OSF, Wikimedia, HF) 🚧 | mixed |
+| `git-clone` / `generate` | repo runner / **Generator** 🚧 | images / grids / vectors |
 | `order-required` / `none` | not fetchable — catalogue only | — |
 
 Fetched `RawItem`s are normalized into `item.Item`s (family, format, key,
-difficulty, provenance) by an ingestion use-case. The **`Generator`** port is the
-generate branch: rule engines (Sandia SGMT, matRiks, RAVEN-family, Bongard-LOGO)
-emit unlimited items with ground-truth keys and rule metadata — the IP-free
-backbone of the designer/generator subsystem. Today only `stubfetcher` exists,
-wiring the boundary end-to-end.
+difficulty, provenance) by the **`app/ingest`** use-case: it routes a source
+`Snapshot` to the first `Fetcher` that `Supports` it, then hands the raw
+material to a source-keyed **Normalizer** that emits `item.NewItem` specs.
+The **openpsych-viqt** normalizer is the first real one — it parses the
+codebook for keys and the response CSV for p-value difficulty bands, turning a
+"pick the 2 synonyms among 5 words" vocabulary set into 4-option synonym
+multiple-choice items. The **`Generator`** port is the generate branch: rule
+engines (Sandia SGMT, matRiks, RAVEN-family, Bongard-LOGO) emit unlimited
+items with ground-truth keys and rule metadata — the IP-free backbone of the
+designer/generator subsystem, still 🚧.
 
 Design decision: fetchers return a loose `RawItem` (id, stem, media refs, raw
 map) rather than a validated `Item`, keeping the messy edge out of the domain;

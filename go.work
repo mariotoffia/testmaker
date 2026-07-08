@@ -6,6 +6,7 @@ go 1.25.0
 // sqlite driver, AWS SDK v2, ...) never leak into the core.
 use (
 	.
+	./adapters/native/fetch/httpfetch
 	./adapters/native/fetch/stubfetcher
 	./adapters/native/llm/openaicompat
 	./adapters/native/source/filecatalog

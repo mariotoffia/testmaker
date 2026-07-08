@@ -468,10 +468,12 @@
       "provider": "Open-Source Psychometrics Project",
       "category": "open-data",
       "urls": [
+        "https://openpsychometrics.org/_rawdata/VIQT_data.zip",
         "https://openpsychometrics.org/tests/VIQT/",
         "https://openpsych.net/paper/62/"
       ],
       "access_class": [
+        "downloadable-artifact",
         "dataset-repo",
         "site-scrape"
       ],
@@ -497,10 +499,10 @@
       "priority": "medium",
       "ip_risk": "low",
       "extraction": {
-        "method": "scrape-html",
+        "method": "direct-download",
         "auth": "no",
         "items_as": "text",
-        "notes": "Items are text; scrape VIQT page or pull response dataset. OpenPsych paper flags weak items to drop."
+        "notes": "Codebook (codebook.txt) + response dataset (VIQT_data.csv) ship in VIQT_data.zip; the httpfetch adapter downloads and unzips it, the VIQT normalizer maps codebook synonyms to items and CSV p-values to difficulty. OpenPsych paper flags weak items to drop."
       },
       "notes": "High-quality, truly public-domain verbal filler for the C family.",
       "generator": false,
