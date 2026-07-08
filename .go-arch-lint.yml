@@ -57,6 +57,7 @@ components:
   adapter_fetch_stubfetcher: { in: [adapters/native/fetch/stubfetcher, adapters/native/fetch/stubfetcher/**] }
   adapter_fetch_httpfetch: { in: [adapters/native/fetch/httpfetch, adapters/native/fetch/httpfetch/**] }
   adapter_llm_openaicompat: { in: [adapters/native/llm/openaicompat, adapters/native/llm/openaicompat/**] }
+  adapter_generate_rulegen: { in: [adapters/native/generate/rulegen, adapters/native/generate/rulegen/**] }
 
   # --- composition root ---
   cmd: { in: [cmd, cmd/**] }
@@ -116,6 +117,12 @@ deps:
 
   # OpenAI-compatible LLM backend: stdlib net/http + encoding/json only.
   adapter_llm_openaicompat:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [_no_external_deps_]
+
+  # Procedural figural generator: stdlib math/rand + encoding/base64 only, no
+  # external rule engine (resolves DESIGN Q#299 toward native Go rules).
+  adapter_generate_rulegen:
     mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
 

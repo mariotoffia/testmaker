@@ -127,7 +127,7 @@ item in the session.
 
 ---
 
-## 5. Fetch & generation pipeline 🚧 (`direct-download` fetcher + `app/ingest` ✅)
+## 5. Fetch & generation pipeline 🚧 (`direct-download` fetcher + `app/ingest` ✅; `generate` via `rulegen` + `app/authoring` ✅)
 
 The `Fetcher` port pulls `RawItem`s from a source; a **router** selects the
 concrete fetcher by `source.Extraction.Method` / `AccessClass`:
@@ -138,7 +138,7 @@ concrete fetcher by `source.Extraction.Method` / `AccessClass`:
 | `scrape-html` | HTML scraper 🚧 | text (figural = image refs) |
 | `headless-browser` | browser driver (JS/interactive) 🚧 | images / interactive |
 | `api` | API client (OSF, Wikimedia, HF) 🚧 | mixed |
-| `git-clone` / `generate` | repo runner / **Generator** 🚧 | images / grids / vectors |
+| `git-clone` / `generate` | repo runner / **Generator** ✅ (`generate` via `rulegen`) | images / grids / vectors |
 | `order-required` / `none` | not fetchable — catalogue only | — |
 
 Fetched `RawItem`s are normalized into `item.Item`s (family, format, key,
@@ -148,10 +148,19 @@ material to a source-keyed **Normalizer** that emits `item.NewItem` specs.
 The **openpsych-viqt** normalizer is the first real one — it parses the
 codebook for keys and the response CSV for p-value difficulty bands, turning a
 "pick the 2 synonyms among 5 words" vocabulary set into 4-option synonym
-multiple-choice items. The **`Generator`** port is the generate branch: rule
-engines (Sandia SGMT, matRiks, RAVEN-family, Bongard-LOGO) emit unlimited
-items with ground-truth keys and rule metadata — the IP-free backbone of the
-designer/generator subsystem, still 🚧.
+multiple-choice items. The **`Generator`** port is the generate branch, now
+implemented by **`adapters/native/generate/rulegen`** ✅: a native Go rule
+engine that emits figural items on demand (A1 figure-series, A2 matrix, A3 →
+series, A4 odd-one-out) with ground-truth keys derived from the same rules that
+build each stimulus, an honest effective difficulty band, and rule metadata in
+the item `Explanation`. Figures render to self-contained SVG data-URIs — a
+deliberate temporary bridge so a generated item needs no external engine and no
+blob store; when the Block 11 blob store lands, the composition root swaps the
+data-URI for a blob key and the item shape (`MediaKind` + `MediaRef`) is
+unchanged. This resolves open question #299 toward native rules rather than
+shelling out to Sandia SGMT / matRiks / RAVEN-family / Bongard-LOGO. The
+**`app/authoring`** use-case stores a generated batch and also exposes a manual
+`Author` path onto the same item bank.
 
 Design decision: fetchers return a loose `RawItem` (id, stem, media refs, raw
 map) rather than a validated `Item`, keeping the messy edge out of the domain;
@@ -296,7 +305,10 @@ Design rules:
 - Blob/media storage port shape (local FS vs S3) and item media addressing.
 - IRT vs classical difficulty for the first adaptive implementation.
 - Norm-table representation and where population norms are sourced/stored.
-- Generator integration: shell out to external engines vs port Go rule logic.
+- Generator integration: shell out to external engines vs port Go rule logic —
+  **resolved (Block 6)**: native Go rule logic (`adapters/native/generate/rulegen`).
+  No external engine earned its IP and process overhead for the figural families;
+  keys are ground-truth by construction and figures render to SVG data-URIs.
 - LLM: response caching/cost budget, prompt versioning, and an eval harness for
   derived-item quality — settle when the first real LLM step lands (Block 12).
 

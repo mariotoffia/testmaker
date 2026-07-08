@@ -7,11 +7,14 @@ architected as Clean Architecture + Hexagonal + DDD. Layering, vocabulary, and
 lint rules are machine-enforced — this file routes you to the authoritative
 doc, it does not restate the rules.
 
-Only the **source catalogue** vertical slice is implemented end-to-end today
+Two vertical slices are implemented end-to-end today: the **source catalogue**
 (`domain/source` → `ports` → `app/catalog` → `memorycatalog` / `filecatalog` /
-`stubfetcher` → `cmd/testmaker`). The other bounded contexts (`item`,
-`testset`, `session`, `scoring`) are `SCAFFOLD` — just enough types for the
-workspace to compile until their block lands.
+`stubfetcher` → `cmd/testmaker`) and the **designer / generator** (`domain/item`
+→ `ports` → `app/authoring` → `rulegen` → `cmd/testmaker`). The remaining
+bounded contexts (`testset`, `session`, `scoring`) are `SCAFFOLD` — just enough
+types for the workspace to compile until their block lands.
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) is the authoritative per-block
+status.
 
 ## Where to look — task → doc
 

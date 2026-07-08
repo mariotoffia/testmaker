@@ -6,6 +6,7 @@ require (
 	github.com/mariotoffia/testmaker v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher v0.0.0
+	github.com/mariotoffia/testmaker/adapters/native/generate/rulegen v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/llm/openaicompat v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/source/filecatalog v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/source/memorycatalog v0.0.0
@@ -32,6 +33,8 @@ replace github.com/mariotoffia/testmaker => ../..
 replace github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch => ../../adapters/native/fetch/httpfetch
 
 replace github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher => ../../adapters/native/fetch/stubfetcher
+
+replace github.com/mariotoffia/testmaker/adapters/native/generate/rulegen => ../../adapters/native/generate/rulegen
 
 replace github.com/mariotoffia/testmaker/adapters/native/llm/openaicompat => ../../adapters/native/llm/openaicompat
 

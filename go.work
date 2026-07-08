@@ -8,6 +8,7 @@ use (
 	.
 	./adapters/native/fetch/httpfetch
 	./adapters/native/fetch/stubfetcher
+	./adapters/native/generate/rulegen
 	./adapters/native/llm/openaicompat
 	./adapters/native/source/filecatalog
 	./adapters/native/source/memorycatalog
