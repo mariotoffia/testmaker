@@ -8,6 +8,20 @@
 // and delivery-policy modeling land in the "Test Authoring" block.
 package testset
 
+import "github.com/mariotoffia/testmaker/domain/shared"
+
+// Test-context sentinels.
+var (
+	// ErrInvalidTest is returned when a test snapshot violates an invariant.
+	ErrInvalidTest = &shared.TestmakerError{
+		Code: "testset.invalid", Class: shared.ClassInvalid, Message: "invalid test",
+	}
+	// ErrUnknownTest is returned when a test id is not in the repository.
+	ErrUnknownTest = &shared.TestmakerError{
+		Code: "testset.unknown", Class: shared.ClassNotFound, Message: "unknown test",
+	}
+)
+
 // TestID uniquely identifies a composed test.
 type TestID string
 

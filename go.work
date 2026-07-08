@@ -10,6 +10,7 @@ use (
 	./adapters/native/llm/openaicompat
 	./adapters/native/source/filecatalog
 	./adapters/native/source/memorycatalog
+	./adapters/native/testdb/memorytestdb
 	./cmd/testmaker
 	./testutil/ollamalocal
 )

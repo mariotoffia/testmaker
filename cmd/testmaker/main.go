@@ -15,8 +15,10 @@ import (
 	"github.com/mariotoffia/testmaker/adapters/native/llm/openaicompat"
 	"github.com/mariotoffia/testmaker/adapters/native/source/filecatalog"
 	"github.com/mariotoffia/testmaker/adapters/native/source/memorycatalog"
+	"github.com/mariotoffia/testmaker/adapters/native/testdb/memorytestdb"
 	"github.com/mariotoffia/testmaker/app/catalog"
 	"github.com/mariotoffia/testmaker/domain/source"
+	"github.com/mariotoffia/testmaker/domain/testset"
 	"github.com/mariotoffia/testmaker/ports"
 )
 
@@ -37,6 +39,7 @@ func run(ctx context.Context, path, llmPrompt string) error {
 		repo    ports.SourceRepository = memorycatalog.NewStore()
 		loader  ports.CatalogLoader    = filecatalog.NewLoader(path)
 		fetcher ports.Fetcher          = stubfetcher.NewFetcher()
+		testdb  ports.TestRepository   = memorytestdb.NewStore()
 	)
 	svc := catalog.NewService(repo, loader)
 
@@ -75,7 +78,26 @@ func run(ctx context.Context, path, llmPrompt string) error {
 		}
 		fmt.Printf("\nFetch demo (%s): %s\n", res.SourceID, res.Note)
 	}
+
+	if err := testDbDemo(ctx, testdb); err != nil {
+		return err
+	}
 	return llmDemo(ctx, llmPrompt)
+}
+
+// testDbDemo exercises the in-memory TestDb (the default ports.TestRepository)
+// with a save/reload round-trip. Test authoring proper arrives in a later block;
+// this just proves the store is wired at the composition root.
+func testDbDemo(ctx context.Context, testdb ports.TestRepository) error {
+	if err := testdb.SaveTest(ctx, testset.TestSnapshot{ID: "demo", Title: "Demo Test"}); err != nil {
+		return err
+	}
+	got, err := testdb.GetTest(ctx, "demo")
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\nTestDb demo: stored and reloaded %q (%s)\n", got.Title, got.ID)
+	return nil
 }
 
 // llmDemo wires the OpenAI-compatible LLM adapter behind config: with no

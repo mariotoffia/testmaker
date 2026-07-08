@@ -144,9 +144,9 @@ aggregates.
 | `Fetcher` | driven | pull raw items from a source | ✅ (stub) |
 | `LLM` | driven | extraction / translation / derivation steps | ✅ (port; backends 🚧) |
 | `PromptRepository` | driven | versioned prompt store for the LLM service | ✅ (port; adapters 🚧) |
-| `ItemRepository` | driven | item bank | 🚧 |
-| `TestRepository` | driven | "TestDb" — composed tests | 🚧 |
-| `SessionRepository` | driven | execution | 🚧 |
+| `ItemRepository` | driven | item bank | ✅ (memory; DTO refines in Block 4) |
+| `TestRepository` | driven | "TestDb" — composed tests | ✅ (memory; sqlite = Block 3) |
+| `SessionRepository` | driven | execution | ✅ (memory; DTO refines in Block 8) |
 | `Generator` | driven | procedural item generation | 🚧 |
 | `Executor` | driving | administer a test | 🚧 |
 | `Scorer` | driven | score a session | 🚧 |
@@ -178,7 +178,7 @@ one shared conformance suite (see [TESTS.md](TESTS.md)).
 | source | memory | `adapters/native/source/memorycatalog` | `SourceRepository` | ✅ |
 | source | file | `adapters/native/source/filecatalog` | `CatalogLoader` (JSON/YAML) | ✅ |
 | fetch | stub | `adapters/native/fetch/stubfetcher` | `Fetcher` | ✅ |
-| testdb | memory | `adapters/native/testdb/memorytestdb` | `TestRepository` | 🚧 |
+| testdb | memory | `adapters/native/testdb/memorytestdb` | `TestRepository` + `ItemRepository` + `SessionRepository` | ✅ |
 | testdb | sqlite | `adapters/native/testdb/sqlitetestdb` | `TestRepository` | 🚧 |
 | fetch | download/scrape/headless/generate | `adapters/native/fetch/*` | `Fetcher` | 🚧 |
 | generate | sandia / raven / matriks | `adapters/native/generate/*` | `Generator` | 🚧 |
@@ -280,9 +280,10 @@ testmaker/
   go.work                       workspace (lists every module)
   go.mod                        github.com/mariotoffia/testmaker (domain, ports, app)
   domain/{shared,source,prompt,item,testset,session,scoring}/
-  ports/            + ports/sourcetest/        (conformance suites)
+  ports/            + ports/{sourcetest,testdbtest}/   (conformance suites)
   app/{catalog,llm}/
   adapters/native/source/{memorycatalog,filecatalog}/   (own go.mod each)
+  adapters/native/testdb/memorytestdb/                   (own go.mod)
   adapters/native/fetch/stubfetcher/                     (own go.mod)
   adapters/native/llm/openaicompat/                      (own go.mod)
   cmd/testmaker/                                          (own go.mod)

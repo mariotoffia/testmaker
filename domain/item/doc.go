@@ -9,6 +9,20 @@
 // promoted to a shared taxonomy package during that block.
 package item
 
+import "github.com/mariotoffia/testmaker/domain/shared"
+
+// Item-context sentinels.
+var (
+	// ErrInvalidItem is returned when an item snapshot violates an invariant.
+	ErrInvalidItem = &shared.TestmakerError{
+		Code: "item.invalid", Class: shared.ClassInvalid, Message: "invalid item",
+	}
+	// ErrUnknownItem is returned when an item id is not in the bank.
+	ErrUnknownItem = &shared.TestmakerError{
+		Code: "item.unknown", Class: shared.ClassNotFound, Message: "unknown item",
+	}
+)
+
 // ItemID uniquely identifies a bank item.
 type ItemID string
 
