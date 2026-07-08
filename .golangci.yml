@@ -62,6 +62,18 @@ linters:
           deny:
             - pkg: github.com/mariotoffia/testmaker/adapters
               desc: "app orchestrates through ports; it must not import adapters"
+        # Machine-enforce the Block 3 rule "all driver code isolated in acl_*.go":
+        # the modernc.org/sqlite driver may be imported only from acl_*.go, never
+        # from store.go or any other file of the adapter.
+        sqlitetestdb-driver-isolation:
+          list-mode: lax
+          files:
+            - "**/adapters/native/testdb/sqlitetestdb/**"
+            - "!**/adapters/native/testdb/sqlitetestdb/acl_*.go"
+            - "!$test"
+          deny:
+            - pkg: modernc.org/sqlite
+              desc: "the sqlite driver is isolated to acl_*.go (Block 3 rule)"
 
     forbidigo:
       forbid:

@@ -45,14 +45,20 @@ map-backed, deep-copy on read, concurrency-safe.
 `RunTestRepositoryTests` / `RunItemRepositoryTests` / `RunSessionRepositoryTests`
 under `-race`; it is the default store wired into the CLI composition root.
 
-## Block 3 — SQLite TestDb ▶
+## Block 3 — SQLite TestDb ✅ (done)
 
 **Goal:** `adapters/native/testdb/sqlitetestdb` implementing the **same**
 repositories against `modernc.org/sqlite` (pure-Go, no cgo), with all driver
 code isolated in `acl_*.go` files and schema migrations.
 **Touches:** new adapter module (vendor `sqlite` in `.go-arch-lint.yml`).
 **Depends on:** Blocks 1–2 (runs the identical conformance suite).
-**Done when:** the same `Run…Tests` suite passes against sqlite `:memory:` and a file DB — proving memory and sqlite are interchangeable.
+**Done:** one `sqlitetestdb.Store` (`Open(dsn)` / `Close`) satisfies all three
+TestDb ports from a single database and passes `RunTestRepositoryTests` /
+`RunItemRepositoryTests` / `RunSessionRepositoryTests` under `-race` against both
+`:memory:` and a file DB — proving memory and sqlite are interchangeable. Driver
+and SQL live in `acl_sqlite.go`; a `PRAGMA user_version` migration runner is the
+upgrade path for the snapshot fields Blocks 4/7/8 add. Wired into the CLI behind
+`-testdb`.
 
 ## Block 4 — Item bank domain + repository 🚧
 
@@ -158,7 +164,7 @@ consumers. Design rules in [DESIGN.md](DESIGN.md#6-llm-support) §6.
 ## Dependency sketch
 
 ```
-0 ✅ ──► 1 ✅ ──► 2 ✅ ──► 3
+0 ✅ ──► 1 ✅ ──► 2 ✅ ──► 3 ✅
               │      └─► 4 ──► 5 ──► 12
               │           ├──► 6
               │           └──► 7 ──► 8 ──► 9 ──► 10
