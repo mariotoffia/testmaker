@@ -21,7 +21,7 @@ CLAUDE.md mission calls out and are the natural next step.**
 
 ---
 
-## Block 1 — TestDb repository port interfaces ▶
+## Block 1 — TestDb repository port interfaces ✅ (done)
 
 **Goal:** firm up the persistence contracts that later blocks depend on:
 `TestRepository` (composed tests), `ItemRepository` (bank items), and
@@ -29,18 +29,23 @@ CLAUDE.md mission calls out and are the natural next step.**
 that cross them (today these are scaffold shells).
 **Touches:** `ports/repositories.go`, the DTO shells in `domain/{item,testset,session}`.
 **Depends on:** Block 0 (pattern), a first cut of the item/test/session Snapshots (Block 4/7 refine them).
-**Done when:** interfaces compile, are documented, and have written conformance-suite skeletons (`ports/testdbtest`, etc.) — no adapter yet.
+**Done:** the three repository interfaces are documented with per-context
+sentinels (`Err{Unknown,Invalid}{Item,Test,Session}`) and proven by the
+`ports/testdbtest` conformance suites. The Snapshot/Filter DTOs stay minimal
+shells (they refine in Blocks 4/7); the method sets are firm.
 
-## Block 2 — In-memory TestDb ▶
+## Block 2 — In-memory TestDb ✅ (done)
 
 **Goal:** `adapters/native/testdb/memorytestdb` implementing `TestRepository`
 (and likely `ItemRepository`/`SessionRepository`), mirroring `memorycatalog`:
 map-backed, deep-copy on read, concurrency-safe.
 **Touches:** new adapter module + `ports/testdbtest` conformance suite.
 **Depends on:** Block 1.
-**Done when:** the conformance suite passes against the memory adapter; it becomes the default store in tests and the CLI.
+**Done:** one `memorytestdb.Store` satisfies all three TestDb ports and passes
+`RunTestRepositoryTests` / `RunItemRepositoryTests` / `RunSessionRepositoryTests`
+under `-race`; it is the default store wired into the CLI composition root.
 
-## Block 3 — SQLite TestDb 🚧
+## Block 3 — SQLite TestDb ▶
 
 **Goal:** `adapters/native/testdb/sqlitetestdb` implementing the **same**
 repositories against `modernc.org/sqlite` (pure-Go, no cgo), with all driver
@@ -153,10 +158,10 @@ consumers. Design rules in [DESIGN.md](DESIGN.md#6-llm-support) §6.
 ## Dependency sketch
 
 ```
-0 ✅ ──► 1 ──► 2 ──► 3
-             │      └─► 4 ──► 5 ──► 12
-             │           ├──► 6
-             │           └──► 7 ──► 8 ──► 9 ──► 10
+0 ✅ ──► 1 ✅ ──► 2 ✅ ──► 3
+              │      └─► 4 ──► 5 ──► 12
+              │           ├──► 6
+              │           └──► 7 ──► 8 ──► 9 ──► 10
                                      11 ◄─ 4
 ```
 

@@ -52,6 +52,7 @@ components:
   # --- adapters (one component per technology; siblings stay isolated) ---
   adapter_source_memorycatalog: { in: [adapters/native/source/memorycatalog, adapters/native/source/memorycatalog/**] }
   adapter_source_filecatalog: { in: [adapters/native/source/filecatalog, adapters/native/source/filecatalog/**] }
+  adapter_testdb_memorytestdb: { in: [adapters/native/testdb/memorytestdb, adapters/native/testdb/memorytestdb/**] }
   adapter_fetch_stubfetcher: { in: [adapters/native/fetch/stubfetcher, adapters/native/fetch/stubfetcher/**] }
   adapter_llm_openaicompat: { in: [adapters/native/llm/openaicompat, adapters/native/llm/openaicompat/**] }
 
@@ -91,6 +92,10 @@ deps:
   adapter_source_filecatalog:
     mayDependOn: [domain, domain_shared, ports]
     canUse: [yaml]
+
+  adapter_testdb_memorytestdb:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [_no_external_deps_]
 
   adapter_fetch_stubfetcher:
     mayDependOn: [domain, domain_shared, ports]

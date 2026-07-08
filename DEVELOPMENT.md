@@ -35,7 +35,8 @@ testmaker/
 │   └── scoring/            #   scoring & feedback     (SCAFFOLD)
 │
 ├── ports/                  # Hexagon boundary — interfaces; imports domain only
-│   └── sourcetest/         #   conformance suite for SourceRepository adapters
+│   ├── sourcetest/         #   conformance suite for SourceRepository adapters
+│   └── testdbtest/         #   conformance suites for the TestDb repositories
 │
 ├── app/                    # Application core (use-cases); imports domain + ports
 │   └── catalog/            #   source-catalogue service
@@ -45,6 +46,8 @@ testmaker/
 │       ├── source/
 │       │   ├── memorycatalog/   # in-memory SourceRepository
 │       │   └── filecatalog/     # JSON/YAML CatalogLoader (yaml vendor)
+│       ├── testdb/
+│       │   └── memorytestdb/    # in-memory Test/Item/SessionRepository
 │       └── fetch/
 │           └── stubfetcher/     # no-op Fetcher (wires the fetch boundary)
 │
