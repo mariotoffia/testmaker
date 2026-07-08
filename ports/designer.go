@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/mariotoffia/testmaker/domain/item"
 	"github.com/mariotoffia/testmaker/domain/scoring"
@@ -52,12 +53,38 @@ type Generator interface {
 	Generate(ctx context.Context, spec GenerateSpec) ([]item.ItemSnapshot, error)
 }
 
-// Executor administers a test: start, deliver the next item (honoring timing
-// and adaptive difficulty), capture responses and complete (driving port).
+// Delivery is what the executor hands back after each administration step: the
+// session snapshot (persisted state, for the caller to resume or score), the
+// item now in front of the taker, and when their time on it runs out.
 //
-// SCAFFOLD: firms up in the Renderer / Executor block.
+// Item is nil when no item is presented — the plan is exhausted (call Complete)
+// or the session ended. Deadline is the earliest binding instant for the current
+// item (per-item cap or the global budget, whichever is sooner); a zero Deadline
+// means untimed. It is advisory to a renderer; the executor itself enforces only
+// the global budget, abandoning a session whose total time has run out.
+type Delivery struct {
+	Session  session.SessionSnapshot
+	Item     *item.ItemSnapshot
+	Deadline time.Time
+}
+
+// Executor administers a test: start it, capture each answer (grading it and,
+// under timing and the delivery policy, presenting the next item) and complete
+// it (driving port).
+//
+// Backed by app/execution, which injects a clock (domain/clock), the item bank
+// (to grade answers and fetch item content) and the session repository.
 type Executor interface {
-	Start(ctx context.Context, test testset.TestSnapshot) (session.SessionSnapshot, error)
+	// Start creates a session for the test, presents the first item and returns
+	// the opening Delivery.
+	Start(ctx context.Context, test testset.TestSnapshot) (Delivery, error)
+	// Answer grades the taker's answer to itemID in session id and advances to the
+	// next Delivery. It fails if the session is unknown or the answer does not
+	// target the presented item.
+	Answer(ctx context.Context, id session.SessionID, itemID string, ans session.Answer) (Delivery, error)
+	// Complete ends session id and returns its final snapshot. It normally
+	// records completion, but abandons the session instead when the global time
+	// budget has already been exhausted (mirroring the Answer deadline check).
 	Complete(ctx context.Context, id session.SessionID) (session.SessionSnapshot, error)
 }
 

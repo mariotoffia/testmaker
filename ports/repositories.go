@@ -38,8 +38,11 @@ type TestRepository interface {
 
 // SessionRepository persists test-taking sessions (driven port).
 //
-// The session.SessionSnapshot DTO firms up in the Renderer / Executor block;
-// the method set is the firm persistence contract.
+// SaveSession is a blind upsert with no version guard: it is safe for the
+// single-active-attempt execution the CLI drives today, but concurrent writers
+// to one session id last-writer-wins. An optimistic-concurrency guard is a
+// Block 10 prerequisite (see IMPLEMENTATION_PLAN.md) before the execution
+// use-case is exposed to more than one request per attempt.
 type SessionRepository interface {
 	// SaveSession inserts or replaces a session by id; an empty id is session.ErrInvalidSession.
 	SaveSession(ctx context.Context, snap session.SessionSnapshot) error

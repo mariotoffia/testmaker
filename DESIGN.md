@@ -104,25 +104,35 @@ satisfies its non-decreasing-difficulty invariant by construction.
 
 ---
 
-## 4. Execution & scoring 🚧
+## 4. Execution & scoring — execution ✅ · scoring 🚧
 
-**Aggregate `session.Session`** — one attempt, a small state machine:
+**Aggregate `session.Session`** ✅ — one attempt, a small clock-free state machine:
 
 ```
-created → in_progress → completed
+created → in-progress → completed
                      ↘ abandoned (timeout / cancel)
 ```
 
 It records navigation state, the item currently presented, captured `Response`s
-(chosen option / value + **elapsed time**), and — for adaptive tests — the
-difficulty path taken. All timing comes from an **injected clock** (deterministic
-under test; `forbidigo` bans `time.Now`).
+(chosen option / value + **elapsed time** + graded correctness), and — for
+adaptive tests — the difficulty path taken. The aggregate holds no clock: the
+executor owns time and passes a `now time.Time` into every transition
+(`Begin`/`Record`/`Complete`/`Abandon`), so an attempt is deterministic under
+test. The real reading comes from **`domain/clock.System()`** (`forbidigo` bans
+raw `time.Now`); `clock.Fake` drives the tests.
 
-The **`Executor`** driving port drives the machine: `Start` builds the session
-from a Test, then delivers items honoring timing and (for adaptive) selecting the
-next item's difficulty from the running ability estimate; `Complete` finalizes.
+The **`Executor`** driving port (`app/execution.Service`) drives the machine:
+`Start` builds the session from a Test snapshot and presents the first item;
+`Answer` grades the taker's answer against the item's key, records it and
+presents the next item — for adaptive tests, the undelivered item whose band is
+closest to a running target that climbs one band per correct answer and descends
+one per wrong (a classical up/down staircase; IRT selection is deferred to
+scoring). It abandons the attempt when the global budget is exhausted.
+`Complete` finalizes. Attempt state lives only in the persisted
+`SessionSnapshot` (a rich JSON blob in both testdb backends), so the service is
+stateless and resumable.
 
-**Scoring** (`scoring` context + `Scorer` port) turns a completed session into:
+**Scoring** (`scoring` context + `Scorer` port) 🚧 turns a completed session into:
 
 - **Raw score** (count / weighted correct),
 - **Percentile / normal-distribution band** (from norm tables per test),

@@ -298,7 +298,10 @@ func RunSessionRepositoryTests(t *testing.T, newRepo func() ports.SessionReposit
 
 	t.Run("SaveThenGet", func(t *testing.T) {
 		repo := newRepo()
-		want := session.SessionSnapshot{ID: "sess-1", TestID: "gia"}
+		// a started, partially-answered session — every nested value object
+		// (plan sections/items, timing, the presented item, captured responses,
+		// normalized timestamps) must survive the round-trip.
+		want := sessionSnapshot(t, "sess-1", "gia")
 		if err := repo.SaveSession(ctx, want); err != nil {
 			t.Fatalf("save: %v", err)
 		}
@@ -306,8 +309,8 @@ func RunSessionRepositoryTests(t *testing.T, newRepo func() ports.SessionReposit
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
-		if got != want {
-			t.Fatalf("got %+v, want %+v", got, want)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("round-trip mismatch:\n got %+v\nwant %+v", got, want)
 		}
 	})
 
@@ -327,25 +330,31 @@ func RunSessionRepositoryTests(t *testing.T, newRepo func() ports.SessionReposit
 
 	t.Run("SaveReplacesSameID", func(t *testing.T) {
 		repo := newRepo()
-		mustSaveSession(t, repo, session.SessionSnapshot{ID: "sess-1", TestID: "gia"})
-		mustSaveSession(t, repo, session.SessionSnapshot{ID: "sess-1", TestID: "ravens"})
+		mustSaveSession(t, repo, sessionSnapshot(t, "sess-1", "gia"))
+		// a different plan under the same id must rewrite every field.
+		want := sessionSnapshot(t, "sess-1", "ravens")
+		mustSaveSession(t, repo, want)
 		got, err := repo.GetSession(ctx, "sess-1")
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
-		if got.TestID != "ravens" {
-			t.Fatalf("replace failed: %q", got.TestID)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("replace did not rewrite every field:\n got %+v\nwant %+v", got, want)
 		}
 	})
 
 	t.Run("StoredSnapshotIsolatedFromInput", func(t *testing.T) {
 		repo := newRepo()
-		snap := session.SessionSnapshot{ID: "sess-1", TestID: "gia"}
+		snap := sessionSnapshot(t, "sess-1", "gia")
+		want := sessionSnapshot(t, "sess-1", "gia") // an untouched twin to compare against
 		mustSaveSession(t, repo, snap)
-		snap.TestID = "mutated"
+		// mutate the nested plan and response slices the caller still holds.
+		snap.Sections[0].Items[0].Difficulty = 99
+		snap.Responses[0].Correct = false
+
 		got, _ := repo.GetSession(ctx, "sess-1")
-		if got.TestID != "gia" {
-			t.Fatalf("store aliased caller input: %q", got.TestID)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("store aliased caller input:\n got %+v\nwant %+v", got, want)
 		}
 	})
 }
@@ -486,6 +495,43 @@ func mustSaveSession(t *testing.T, repo ports.SessionRepository, snap session.Se
 	if err := repo.SaveSession(context.Background(), snap); err != nil {
 		t.Fatalf("save session %s: %v", snap.ID, err)
 	}
+}
+
+// sessionSnapshot builds a started, partially-answered session snapshot via the
+// real aggregate, so the conformance suite exercises the same normalization
+// (cloned plan slices, UTC-normalized timestamps, captured responses) every
+// store must preserve. The id is woven into the item ids so distinct sessions
+// hold distinct plans. Timestamps are UTC so the snapshot is DeepEqual-stable
+// across a JSON round-trip.
+func sessionSnapshot(t *testing.T, id session.SessionID, testID string) session.SessionSnapshot {
+	t.Helper()
+	p := string(id)
+	start := time.Date(2024, 1, 2, 15, 4, 5, 0, time.UTC)
+	sess, err := session.NewSession(session.SessionSpec{
+		ID:     id,
+		TestID: testID,
+		Policy: session.PolicyFixedIncreasing,
+		Timing: session.Timing{Total: 20 * time.Minute},
+		Sections: []session.PlanSection{{
+			Title:  "Reasoning",
+			Family: shared.FamilyLogical,
+			Timing: session.Timing{PerItem: 60 * time.Second},
+			Items: []session.PlanItem{
+				{ItemID: p + "-a", Difficulty: 1},
+				{ItemID: p + "-b", Difficulty: 2},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("build session %s: %v", id, err)
+	}
+	if err := sess.Begin(start); err != nil {
+		t.Fatalf("begin session %s: %v", id, err)
+	}
+	if err := sess.Record(p+"-a", session.Answer{OptionID: "c"}, true, start.Add(15*time.Second)); err != nil {
+		t.Fatalf("record session %s: %v", id, err)
+	}
+	return sess.Snapshot()
 }
 
 // mcItemSnapshot builds a valid multiple-choice item snapshot (non-nil option

@@ -97,7 +97,7 @@ IDE flags a violation before `make arch-lint` runs.
 | **Source catalogue** | `domain/source` | core (supporting to sourcing) | where items come from: access class, license/redistributability, extraction | ✅ implemented |
 | Item bank | `domain/item` | **core** | the scored items themselves (stem, options, key, difficulty, provenance) | ✅ implemented |
 | Test authoring | `domain/testset` | core | composed tests: sections, timing, delivery policy | ✅ implemented |
-| Test execution | `domain/session` | core | a live/completed attempt: navigation, timing, responses | 🚧 scaffold |
+| Test execution | `domain/session` | core | a live/completed attempt: navigation, timing, responses | ✅ implemented |
 | Scoring | `domain/scoring` | supporting | raw → percentile band → IQ-scaled + feedback | 🚧 scaffold |
 
 ### Context map
@@ -147,9 +147,9 @@ aggregates.
 | `PromptRepository` | driven | versioned prompt store for the LLM service | ✅ (port; adapters 🚧) |
 | `ItemRepository` | driven | item bank | ✅ (memory + sqlite) |
 | `TestRepository` | driven | "TestDb" — composed tests | ✅ (memory + sqlite) |
-| `SessionRepository` | driven | execution | ✅ (memory; DTO refines in Block 8) |
+| `SessionRepository` | driven | execution | ✅ (memory + sqlite; rich JSON snapshot) |
 | `Generator` | driven | procedural item generation | ✅ (port; `rulegen` figural backend ✅) |
-| `Executor` | driving | administer a test | 🚧 |
+| `Executor` | driving | administer a test | ✅ (`app/execution.Service`) |
 | `Scorer` | driven | score a session | 🚧 |
 
 Ports are kept small (`interfacebloat max: 6`) and split read/write when a
@@ -232,7 +232,7 @@ the research catalogue at [`data/catalog/sources.json`](data/catalog).
 
 ---
 
-## 7. Item & test model (item bank ✅; test/session — design/scaffold)
+## 7. Item & test model (item bank ✅; test ✅; session ✅)
 
 The item bank normalizes everything into one **Item** aggregate:
 
@@ -258,16 +258,18 @@ From [CLAUDE.md](CLAUDE.md), the mechanics the model must support:
 | Requirement | Design placement |
 | --- | --- |
 | Item formats: MC 4–6, open numeric, T/F/cannot-say | `item` value objects (`AnswerFormat`) |
-| Timing: strict global + per-item (e.g. 60 s/item, 6 min/section) | `testset` Section timing + `session` clocks |
-| Difficulty: fixed increasing **and** adaptive | `testset.DeliveryPolicy`; `Executor` selects next item |
+| Timing: strict global + per-item (e.g. 60 s/item, 6 min/section) | `testset` Section timing + `session` deadlines off an injected `domain/clock` |
+| Difficulty: fixed increasing **and** adaptive | `testset.DeliveryPolicy`; `session` selects the next item, `app/execution` grades and drives |
 | Composite tests (multi-family timed sections) | `testset` Sections |
 | Scoring: raw, percentile/normal band, IQ-scaled | `scoring` context + `Scorer` port |
 | Speed as a first-class scoring dimension | timing captured per item in `session`, consumed by `scoring` |
 | Per-item explanations after completion | `item` explanation + `scoring` feedback |
 
-Timing and adaptivity depend on a **clock** injected through the domain (never
-`time.Now` directly — `forbidigo` enforces this), keeping execution
-deterministic under test.
+Timing and adaptivity depend on a **clock** injected through `domain/clock`
+(never `time.Now` directly — `forbidigo` enforces this): `clock.System()` is the
+real reading in production and `clock.Fake` makes every attempt deterministic
+under test. The `session` aggregate itself holds no clock — the executor passes
+`now` into each transition.
 
 ---
 
@@ -281,9 +283,9 @@ edge.
 testmaker/
   go.work                       workspace (lists every module)
   go.mod                        github.com/mariotoffia/testmaker (domain, ports, app)
-  domain/{shared,source,prompt,item,testset,session,scoring}/
+  domain/{shared,clock,source,prompt,item,testset,session,scoring}/
   ports/            + ports/{sourcetest,testdbtest,generatortest}/   (conformance suites)
-  app/{catalog,ingest,llm,authoring}/
+  app/{catalog,ingest,llm,authoring,execution}/
   adapters/native/source/{memorycatalog,filecatalog}/   (own go.mod each)
   adapters/native/testdb/{memorytestdb,sqlitetestdb}/     (own go.mod each)
   adapters/native/fetch/{stubfetcher,httpfetch}/          (own go.mod each)
