@@ -101,10 +101,11 @@ func (s *Store) GetItem(ctx context.Context, id item.ItemID) (item.ItemSnapshot,
 	return snap, nil
 }
 
-// ListItems returns all items ordered by id. The filter is a placeholder shell
-// until the Item Bank block, so every stored item is returned.
-func (s *Store) ListItems(ctx context.Context, _ item.ItemFilter) ([]item.ItemSnapshot, error) {
-	return s.listItemRows(ctx)
+// ListItems returns the items matching filter, ordered by id. Filtering happens
+// in SQL over the migration-3 query columns (see itemListQuery); the returned
+// snapshots are decoded from the JSON blob, which stays the source of truth.
+func (s *Store) ListItems(ctx context.Context, filter item.ItemFilter) ([]item.ItemSnapshot, error) {
+	return s.listItemRows(ctx, filter)
 }
 
 // --- SessionRepository ---

@@ -1,38 +1,16 @@
 // Package item is the "item bank" bounded context — the store of concrete,
-// scored test items (questions) with stems, options, keys, difficulty and
-// provenance back to a source.
+// scored test items (questions) with a stimulus, options, an answer key,
+// difficulty and provenance back to a source.
 //
-// SCAFFOLD: only the identifiers and DTO shells referenced by ports are present
-// so the workspace compiles. The aggregate (Item), its value objects (Stimulus,
-// Option, AnswerKey, Difficulty) and invariants are modeled in the "Item Bank"
-// implementation block. The A1..E2 taxonomy currently in domain/source will be
-// promoted to a shared taxonomy package during that block.
+// The aggregate root is Item. It is validated on construction (NewItem) and
+// crosses ports only as an ItemSnapshot DTO; RehydrateFromSnapshot rebuilds a
+// trusted snapshot without re-validating. One aggregate serves every ability
+// family (figural, numerical, verbal, spatial, speed): they differ only in
+// TestType, Stimulus media and AnswerFormat, which keeps the bank, generator
+// and renderer uniform. Media is stored by reference (blob key / URL), never as
+// bytes, so the aggregate stays small and serializable.
+//
+// The A1..E2 taxonomy and the Redistributable reuse gate live in the shared
+// kernel (domain/shared); this package consumes them so source, item and
+// testset never drift.
 package item
-
-import "github.com/mariotoffia/testmaker/domain/shared"
-
-// Item-context sentinels.
-var (
-	// ErrInvalidItem is returned when an item snapshot violates an invariant.
-	ErrInvalidItem = &shared.TestmakerError{
-		Code: "item.invalid", Class: shared.ClassInvalid, Message: "invalid item",
-	}
-	// ErrUnknownItem is returned when an item id is not in the bank.
-	ErrUnknownItem = &shared.TestmakerError{
-		Code: "item.unknown", Class: shared.ClassNotFound, Message: "unknown item",
-	}
-)
-
-// ItemID uniquely identifies a bank item.
-type ItemID string
-
-// ItemSnapshot is a placeholder persistence/transport DTO for a bank item.
-// Fields will expand when the Item Bank block is implemented.
-type ItemSnapshot struct {
-	ID       ItemID
-	SourceID string // provenance -> source.SourceID
-	Stem     string
-}
-
-// ItemFilter is a placeholder query object for the item bank.
-type ItemFilter struct{}

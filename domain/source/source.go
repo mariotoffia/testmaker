@@ -261,18 +261,7 @@ func RehydrateFromSnapshot(s Snapshot) *Source {
 }
 
 // DeriveFamilies maps a set of test-type codes to the distinct, sorted set of
-// ability families they belong to.
+// ability families they belong to (delegates to the shared-kernel taxonomy).
 func DeriveFamilies(codes []TestTypeCode) []AbilityFamily {
-	seen := map[AbilityFamily]struct{}{}
-	for _, c := range codes {
-		if f, ok := c.Family(); ok {
-			seen[f] = struct{}{}
-		}
-	}
-	out := make([]AbilityFamily, 0, len(seen))
-	for f := range seen {
-		out = append(out, f)
-	}
-	slices.Sort(out)
-	return out
+	return shared.DeriveFamilies(codes)
 }

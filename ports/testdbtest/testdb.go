@@ -7,10 +7,12 @@ package testdbtest
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/mariotoffia/testmaker/domain/item"
 	"github.com/mariotoffia/testmaker/domain/session"
+	"github.com/mariotoffia/testmaker/domain/shared"
 	"github.com/mariotoffia/testmaker/domain/testset"
 	"github.com/mariotoffia/testmaker/ports"
 )
@@ -136,7 +138,7 @@ func RunItemRepositoryTests(t *testing.T, newRepo func() ports.ItemRepository) {
 
 	t.Run("SaveThenGet", func(t *testing.T) {
 		repo := newRepo()
-		want := item.ItemSnapshot{ID: "omib-1", SourceID: "omib", Stem: "next figure?"}
+		want := mcItemSnapshot(t, "omib-1", "A2", 3)
 		if err := repo.SaveItem(ctx, want); err != nil {
 			t.Fatalf("save: %v", err)
 		}
@@ -144,8 +146,11 @@ func RunItemRepositoryTests(t *testing.T, newRepo func() ports.ItemRepository) {
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
-		if got != want {
-			t.Fatalf("got %+v, want %+v", got, want)
+		// a full aggregate snapshot must survive the round-trip intact — every
+		// nested value object (provenance, stimulus parts, options, key,
+		// difficulty), not just the id.
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("round-trip mismatch:\n got %+v\nwant %+v", got, want)
 		}
 	})
 
@@ -158,15 +163,20 @@ func RunItemRepositoryTests(t *testing.T, newRepo func() ports.ItemRepository) {
 
 	t.Run("SaveEmptyIDReturnsErrInvalidItem", func(t *testing.T) {
 		repo := newRepo()
-		if err := repo.SaveItem(ctx, item.ItemSnapshot{Stem: "no id"}); !errors.Is(err, item.ErrInvalidItem) {
+		if err := repo.SaveItem(ctx, item.ItemSnapshot{Explanation: "no id"}); !errors.Is(err, item.ErrInvalidItem) {
 			t.Fatalf("want ErrInvalidItem, got %v", err)
 		}
 	})
 
 	t.Run("SaveReplacesSameID", func(t *testing.T) {
 		repo := newRepo()
-		mustSaveItem(t, repo, item.ItemSnapshot{ID: "omib-1", SourceID: "omib", Stem: "v1"})
-		mustSaveItem(t, repo, item.ItemSnapshot{ID: "omib-1", SourceID: "ravens", Stem: "v2"})
+		mustSaveItem(t, repo, mcItemSnapshot(t, "omib-1", "A2", 2))
+		// replace with a snapshot that differs in every mutable field; a store
+		// that forgets a column (or a JSON blob it never rewrites) would leak the
+		// old value here.
+		replacement := numericItemSnapshot(t, "omib-1", "B1", 7)
+		mustSaveItem(t, repo, replacement)
+
 		all, err := repo.ListItems(ctx, item.ItemFilter{})
 		if err != nil {
 			t.Fatalf("list: %v", err)
@@ -174,11 +184,9 @@ func RunItemRepositoryTests(t *testing.T, newRepo func() ports.ItemRepository) {
 		if len(all) != 1 {
 			t.Fatalf("expected 1 after replace, got %d", len(all))
 		}
-		// every mutable field must be replaced, not just stem: an ON CONFLICT that
-		// forgets a column would leave a stale source_id here.
 		got, _ := repo.GetItem(ctx, "omib-1")
-		if got.SourceID != "ravens" || got.Stem != "v2" {
-			t.Fatalf("replace failed: %+v", got)
+		if !reflect.DeepEqual(got, replacement) {
+			t.Fatalf("replace failed:\n got %+v\nwant %+v", got, replacement)
 		}
 	})
 
@@ -189,37 +197,89 @@ func RunItemRepositoryTests(t *testing.T, newRepo func() ports.ItemRepository) {
 			t.Fatalf("list empty = %d, %v", len(empty), err)
 		}
 		// full snapshots inserted out of order; List must sort by id and preserve
-		// every field (a dropped source_id/stem would pass an id-only check).
-		mustSaveItem(t, repo, item.ItemSnapshot{ID: "c", SourceID: "sc", Stem: "stem-c"})
-		mustSaveItem(t, repo, item.ItemSnapshot{ID: "a", SourceID: "sa", Stem: "stem-a"})
-		mustSaveItem(t, repo, item.ItemSnapshot{ID: "b", SourceID: "sb", Stem: "stem-b"})
+		// every field (a dropped column / blob field passes an id-only check).
+		want := []item.ItemSnapshot{
+			mcItemSnapshot(t, "a", "A1", 1),
+			mcItemSnapshot(t, "b", "A2", 4),
+			mcItemSnapshot(t, "c", "A3", 9),
+		}
+		mustSaveItem(t, repo, want[2])
+		mustSaveItem(t, repo, want[0])
+		mustSaveItem(t, repo, want[1])
+
 		got, err := repo.ListItems(ctx, item.ItemFilter{})
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
-		want := []item.ItemSnapshot{
-			{ID: "a", SourceID: "sa", Stem: "stem-a"},
-			{ID: "b", SourceID: "sb", Stem: "stem-b"},
-			{ID: "c", SourceID: "sc", Stem: "stem-c"},
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("list mismatch:\n got %+v\nwant %+v", got, want)
 		}
-		if len(got) != len(want) {
-			t.Fatalf("got %+v, want %+v", got, want)
+	})
+
+	t.Run("ListFiltersByFamilyTypeDifficulty", func(t *testing.T) {
+		repo := newRepo()
+		// Three items differing in family, test type, difficulty, origin AND
+		// redistributability, so a filter subtest fails if any field is ignored:
+		//   a = A2 logical  band 2  fetched   conditional
+		//   b = B1 numerical band 5  generated yes
+		//   c = A1 logical  band 8  authored  no
+		mustSaveItem(t, repo, mcItemSnapshotP(t, "a", "A2", 2, item.OriginFetched, shared.RedistConditional))
+		mustSaveItem(t, repo, numericItemSnapshotP(t, "b", "B1", 5, item.OriginGenerated, shared.RedistYes))
+		mustSaveItem(t, repo, mcItemSnapshotP(t, "c", "A1", 8, item.OriginAuthored, shared.RedistNo))
+
+		cases := []struct {
+			name    string
+			filter  item.ItemFilter
+			wantIDs []item.ItemID
+		}{
+			{"empty matches all", item.ItemFilter{}, []item.ItemID{"a", "b", "c"}},
+			{"by family", item.ItemFilter{Families: []shared.AbilityFamily{shared.FamilyLogical}}, []item.ItemID{"a", "c"}},
+			{"by test type", item.ItemFilter{TestTypes: []shared.TestTypeCode{"A2"}}, []item.ItemID{"a"}},
+			{"min difficulty", item.ItemFilter{MinDifficulty: 5}, []item.ItemID{"b", "c"}},
+			{"max difficulty", item.ItemFilter{MaxDifficulty: 2}, []item.ItemID{"a"}},
+			{"difficulty band", item.ItemFilter{MinDifficulty: 3, MaxDifficulty: 6}, []item.ItemID{"b"}},
+			{"by origin", item.ItemFilter{Origins: []item.Origin{item.OriginAuthored}}, []item.ItemID{"c"}},
+			{"origin OR (multi-value)", item.ItemFilter{Origins: []item.Origin{item.OriginFetched, item.OriginAuthored}}, []item.ItemID{"a", "c"}},
+			{"by redistributable", item.ItemFilter{Redistributable: []shared.Redistributable{shared.RedistYes}}, []item.ItemID{"b"}},
+			{"family AND difficulty", item.ItemFilter{
+				Families:      []shared.AbilityFamily{shared.FamilyLogical},
+				MinDifficulty: 5,
+			}, []item.ItemID{"c"}},
+			{"family AND redistributable miss", item.ItemFilter{
+				Families:        []shared.AbilityFamily{shared.FamilyNumerical},
+				Redistributable: []shared.Redistributable{shared.RedistNo},
+			}, []item.ItemID{}},
 		}
-		for i := range want {
-			if got[i] != want[i] {
-				t.Fatalf("list mismatch at %d: got %+v, want %+v", i, got[i], want[i])
-			}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				got, err := repo.ListItems(ctx, tc.filter)
+				if err != nil {
+					t.Fatalf("list: %v", err)
+				}
+				gotIDs := make([]item.ItemID, len(got))
+				for i, s := range got {
+					gotIDs[i] = s.ID
+				}
+				if !reflect.DeepEqual(gotIDs, tc.wantIDs) {
+					t.Fatalf("filter %+v: got ids %v, want %v", tc.filter, gotIDs, tc.wantIDs)
+				}
+			})
 		}
 	})
 
 	t.Run("StoredSnapshotIsolatedFromInput", func(t *testing.T) {
 		repo := newRepo()
-		snap := item.ItemSnapshot{ID: "omib-1", Stem: "orig"}
+		// two independent builds: want stays pristine while snap is mutated after
+		// Save, so a store that aliased the caller's slices would fail here.
+		snap := mcItemSnapshot(t, "omib-1", "A2", 3)
+		want := mcItemSnapshot(t, "omib-1", "A2", 3)
 		mustSaveItem(t, repo, snap)
-		snap.Stem = "mutated"
+		snap.Stimulus[0].Text = "mutated"
+		snap.Options[0].Text = "mutated"
+
 		got, _ := repo.GetItem(ctx, "omib-1")
-		if got.Stem != "orig" {
-			t.Fatalf("store aliased caller input: %q", got.Stem)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("store aliased caller input:\n got %+v\nwant %+v", got, want)
 		}
 	})
 }
@@ -307,7 +367,7 @@ func RunSharedKeyspaceTests(t *testing.T, newStore func() TestDB) {
 	if err := s.SaveTest(ctx, testset.TestSnapshot{ID: "x", Title: "T"}); err != nil {
 		t.Fatalf("save test: %v", err)
 	}
-	if err := s.SaveItem(ctx, item.ItemSnapshot{ID: "x", Stem: "I"}); err != nil {
+	if err := s.SaveItem(ctx, mcItemSnapshot(t, "x", "A2", 3)); err != nil {
 		t.Fatalf("save item: %v", err)
 	}
 	if err := s.SaveSession(ctx, session.SessionSnapshot{ID: "x", TestID: "T"}); err != nil {
@@ -317,7 +377,7 @@ func RunSharedKeyspaceTests(t *testing.T, newStore func() TestDB) {
 	if got, err := s.GetTest(ctx, "x"); err != nil || got.Title != "T" {
 		t.Fatalf("test keyspace: got %+v, err %v", got, err)
 	}
-	if got, err := s.GetItem(ctx, "x"); err != nil || got.Stem != "I" {
+	if got, err := s.GetItem(ctx, "x"); err != nil || got.TestType != "A2" {
 		t.Fatalf("item keyspace: got %+v, err %v", got, err)
 	}
 	if got, err := s.GetSession(ctx, "x"); err != nil || got.TestID != "T" {
@@ -355,4 +415,63 @@ func mustSaveSession(t *testing.T, repo ports.SessionRepository, snap session.Se
 	if err := repo.SaveSession(context.Background(), snap); err != nil {
 		t.Fatalf("save session %s: %v", snap.ID, err)
 	}
+}
+
+// mcItemSnapshot builds a valid multiple-choice item snapshot (non-nil option
+// slice, one text + one figural stimulus part) via the real aggregate, so the
+// conformance suite exercises the same normalization every store must preserve.
+func mcItemSnapshot(t *testing.T, id item.ItemID, tt shared.TestTypeCode, band int) item.ItemSnapshot {
+	t.Helper()
+	return mcItemSnapshotP(t, id, tt, band, item.OriginFetched, shared.RedistConditional)
+}
+
+// mcItemSnapshotP is mcItemSnapshot with an explicit origin and redistributability
+// so filter subtests can vary those provenance fields.
+func mcItemSnapshotP(t *testing.T, id item.ItemID, tt shared.TestTypeCode, band int, origin item.Origin, redist shared.Redistributable) item.ItemSnapshot {
+	t.Helper()
+	it, err := item.NewItem(item.ItemSpec{
+		ID:           id,
+		Provenance:   item.Provenance{SourceID: "omib", Origin: origin, Redistributable: redist},
+		TestType:     tt,
+		Stimulus:     []item.StimulusPart{{Text: "which figure continues?"}, {MediaKind: item.MediaGrid, MediaRef: "blob://" + string(id)}},
+		AnswerFormat: item.FormatMultipleChoice,
+		Options: []item.Option{
+			{ID: "a", Text: "A"}, {ID: "b", Text: "B"}, {ID: "c", Text: "C"}, {ID: "d", Text: "D"},
+		},
+		AnswerKey:   item.AnswerKey{OptionID: "c"},
+		Explanation: "rotation by 90 degrees",
+		Difficulty:  item.Difficulty{Band: band},
+	})
+	if err != nil {
+		t.Fatalf("build mc item %s: %v", id, err)
+	}
+	return it.Snapshot()
+}
+
+// numericItemSnapshot builds a valid open-numeric item snapshot (nil option
+// slice) via the real aggregate, covering the nil-vs-empty slice parity that
+// memory and sqlite stores must both preserve under reflect.DeepEqual.
+func numericItemSnapshot(t *testing.T, id item.ItemID, tt shared.TestTypeCode, band int) item.ItemSnapshot {
+	t.Helper()
+	return numericItemSnapshotP(t, id, tt, band, item.OriginFetched, shared.RedistConditional)
+}
+
+// numericItemSnapshotP is numericItemSnapshot with an explicit origin and
+// redistributability.
+func numericItemSnapshotP(t *testing.T, id item.ItemID, tt shared.TestTypeCode, band int, origin item.Origin, redist shared.Redistributable) item.ItemSnapshot {
+	t.Helper()
+	it, err := item.NewItem(item.ItemSpec{
+		ID:           id,
+		Provenance:   item.Provenance{SourceID: "omib", Origin: origin, Redistributable: redist},
+		TestType:     tt,
+		Stimulus:     []item.StimulusPart{{Text: "2, 4, 8, 16, ?"}},
+		AnswerFormat: item.FormatOpenNumeric,
+		AnswerKey:    item.AnswerKey{Numeric: 32},
+		Explanation:  "doubling series",
+		Difficulty:   item.Difficulty{Band: band},
+	})
+	if err != nil {
+		t.Fatalf("build numeric item %s: %v", id, err)
+	}
+	return it.Snapshot()
 }

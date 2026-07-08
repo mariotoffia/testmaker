@@ -19,8 +19,9 @@ context is its `domain/<context>/doc.go`.**
 | Test execution | `domain/session` | **core** | a test-taking attempt |
 | Scoring | `domain/scoring` | supporting | raw → band → IQ-scaled + feedback |
 
-Only **source**, **prompt** and **shared** are implemented; the rest are
-scaffold shells.
+Implemented: **shared**, **source**, **prompt** and **item**. The remaining
+core/supporting contexts (**testset**, **session**, **scoring**) are scaffold
+shells until their blocks land.
 
 **LLM assistance is a generic subdomain, not a core context.** The backend is
 reached through the single driven port `ports.LLM`; the small `domain/prompt`
@@ -101,13 +102,16 @@ classDiagram
   `Category`, and (if set) `Extraction.Method` are from their closed set.
 - `Families` are **derived** from `TestTypes` — never accepted from input.
 
-### 3.2 Item (`domain/item`) 🚧 — aggregate root (designed)
+### 3.2 Item (`domain/item`) ✅ — aggregate root
 
 Root `Item` with value objects `Stimulus`, `Option`, `AnswerKey`, `Difficulty`,
-`Provenance`. Planned invariants: multiple-choice items have 4–6 options and a
-key referencing an existing option; open-numeric items have a numeric key;
-true/false/cannot-say items have a verdict key; `Difficulty` within range;
-`Provenance.SourceID` present. See [DESIGN.md §2](DESIGN.md#2-item-bank-).
+`Provenance`. Enforced invariants: multiple-choice items have 4–6 unique,
+non-empty options and a key referencing an existing option; open-numeric items
+have a numeric key and no options; true/false/cannot-say items have a verdict
+key and no options; `Difficulty.Band >= 1`; at least one non-empty stimulus
+part; `Provenance` (`SourceID` present, valid origin + redistributability). The
+`AbilityFamily` is derived from `TestType`, never accepted from callers. See
+[DESIGN.md §2](DESIGN.md#2-item-bank-).
 
 ### 3.3 Test (`domain/testset`) 🚧 — aggregate root (designed)
 
@@ -144,8 +148,10 @@ provenance on every LLM result.
 
 `TestmakerError{Code, Class, Message, Cause, Context}` — the one domain error
 type, matched by `Code`, with copy-on-write builders so sentinels stay immutable.
-The ability-family / A1..E2 taxonomy currently lives in `domain/source` and is
-promoted here (or to `domain/taxonomy`) with the item-bank block.
+The ability-family / A1..E2 taxonomy (`AbilityFamily`, `TestTypeCode`,
+`DeriveFamilies`) and the inherited `Redistributable` value live here, promoted
+from `domain/source` with the item-bank block; `domain/source` keeps type
+aliases so its callers are unchanged.
 
 ---
 
@@ -154,10 +160,10 @@ promoted here (or to `domain/taxonomy`) with the item-bank block.
 | Invariant | Owner | Enforced by |
 | --- | --- | --- |
 | Valid, closed-set source vocabulary | `source` | `NewSource` + `*.Valid()` |
-| Families derived from test types | `source` | `DeriveFamilies` |
+| Families derived from test types | `shared` | `DeriveFamilies` (aliased by `source`) |
 | Prompt templates parse; placeholders resolve | `prompt` | `NewPrompt` + `Render` (`missingkey=error`) |
-| Redistributability preserved to items | `item` (planned) | `item.NewItem` provenance |
-| MC items have 4–6 keyed options | `item` (planned) | `item.NewItem` |
+| Redistributability preserved to items | `item` | `item.NewItem` provenance |
+| MC items have 4–6 keyed options | `item` | `item.NewItem` |
 | Legal session transitions | `session` (planned) | state-machine methods |
 | Deterministic timing | `session` (planned) | injected clock |
 

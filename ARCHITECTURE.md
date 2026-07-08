@@ -95,7 +95,7 @@ IDE flags a violation before `make arch-lint` runs.
 | --- | --- | --- | --- | --- |
 | Shared kernel | `domain/shared` | kernel | `TestmakerError`, sentinels, shared vocabulary | ✅ |
 | **Source catalogue** | `domain/source` | core (supporting to sourcing) | where items come from: access class, license/redistributability, extraction | ✅ implemented |
-| Item bank | `domain/item` | **core** | the scored items themselves (stem, options, key, difficulty, provenance) | 🚧 scaffold |
+| Item bank | `domain/item` | **core** | the scored items themselves (stem, options, key, difficulty, provenance) | ✅ implemented |
 | Test authoring | `domain/testset` | core | composed tests: sections, timing, delivery policy | 🚧 scaffold |
 | Test execution | `domain/session` | core | a live/completed attempt: navigation, timing, responses | 🚧 scaffold |
 | Scoring | `domain/scoring` | supporting | raw → percentile band → IQ-scaled + feedback | 🚧 scaffold |
@@ -126,9 +126,10 @@ flowchart LR
   scoring -.uses.-> shared
 ```
 
-The taxonomy (ability families + A1..E2 codes) currently lives in
-`domain/source`; it is promoted to a shared taxonomy package when the item-bank
-block lands (see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)).
+The taxonomy (ability families + A1..E2 codes) and the inherited
+`Redistributable` value live in `domain/shared`, promoted from `domain/source`
+with the item-bank block; `domain/source` keeps type aliases so its public API
+is unchanged (see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)).
 
 ---
 
@@ -144,7 +145,7 @@ aggregates.
 | `Fetcher` | driven | pull raw items from a source | ✅ (stub) |
 | `LLM` | driven | extraction / translation / derivation steps | ✅ (port; backends 🚧) |
 | `PromptRepository` | driven | versioned prompt store for the LLM service | ✅ (port; adapters 🚧) |
-| `ItemRepository` | driven | item bank | ✅ (memory; DTO refines in Block 4) |
+| `ItemRepository` | driven | item bank | ✅ (memory + sqlite) |
 | `TestRepository` | driven | "TestDb" — composed tests | ✅ (memory + sqlite) |
 | `SessionRepository` | driven | execution | ✅ (memory; DTO refines in Block 8) |
 | `Generator` | driven | procedural item generation | 🚧 |
@@ -230,7 +231,7 @@ the research catalogue at [`data/catalog/sources.json`](data/catalog).
 
 ---
 
-## 7. Item & test model (design — scaffold)
+## 7. Item & test model (item bank ✅; test/session — design/scaffold)
 
 The item bank normalizes everything into one **Item** aggregate:
 

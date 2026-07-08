@@ -3,15 +3,18 @@ package sqlitetestdb_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"testing"
 
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/sqlitetestdb"
 	"github.com/mariotoffia/testmaker/domain/item"
 	"github.com/mariotoffia/testmaker/domain/session"
+	"github.com/mariotoffia/testmaker/domain/shared"
 	"github.com/mariotoffia/testmaker/domain/testset"
 	"github.com/mariotoffia/testmaker/ports"
 	"github.com/mariotoffia/testmaker/ports/testdbtest"
@@ -159,7 +162,11 @@ func TestFileDBPersistsAcrossReopen(t *testing.T) {
 	if err := first.SaveTest(ctx, testset.TestSnapshot{ID: "gia", Title: "GIA"}); err != nil {
 		t.Fatalf("save test: %v", err)
 	}
-	if err := first.SaveItem(ctx, item.ItemSnapshot{ID: "omib-1", SourceID: "omib", Stem: "next?"}); err != nil {
+	// A full item snapshot (nested value objects + a non-nil option slice)
+	// exercises the JSON-blob column across a real Close/reopen — the durability
+	// proof a memory store cannot give, and a check that the blob survives intact.
+	wantItem := mustItemSnapshot(t)
+	if err := first.SaveItem(ctx, wantItem); err != nil {
 		t.Fatalf("save item: %v", err)
 	}
 	if err := first.SaveSession(ctx, session.SessionSnapshot{ID: "sess-1", TestID: "gia"}); err != nil {
@@ -173,7 +180,7 @@ func TestFileDBPersistsAcrossReopen(t *testing.T) {
 	if got, err := second.GetTest(ctx, "gia"); err != nil || got.Title != "GIA" {
 		t.Fatalf("test after reopen: got %+v, err %v", got, err)
 	}
-	if got, err := second.GetItem(ctx, "omib-1"); err != nil || got.SourceID != "omib" || got.Stem != "next?" {
+	if got, err := second.GetItem(ctx, "omib-1"); err != nil || !reflect.DeepEqual(got, wantItem) {
 		t.Fatalf("item after reopen: got %+v, err %v", got, err)
 	}
 	if got, err := second.GetSession(ctx, "sess-1"); err != nil || got.TestID != "gia" {
@@ -213,4 +220,304 @@ func TestUnsupportedSchemaVersionRejected(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGetItemRejectsIdMismatch proves the id column is authoritative: a row whose
+// JSON snapshot carries a different id (a corrupted or hand-edited row) is
+// rejected with ErrStore rather than returned under the wrong key. The driver is
+// registered by the package under test, so a raw handle can seed the bad row.
+func TestGetItemRejectsIdMismatch(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "mismatch.sqlite")
+
+	// migrate the schema through the real Open, then Close so the raw handle owns
+	// the file.
+	if err := mustOpen(t, path).Close(); err != nil {
+		t.Fatalf("close after migrate: %v", err)
+	}
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	// row id "x" but the blob's snapshot id is "y".
+	if _, err := raw.Exec(`INSERT INTO items (id, snapshot) VALUES (?, ?)`, "x", `{"ID":"y"}`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed mismatched row: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close raw: %v", err)
+	}
+
+	store := mustOpen(t, path)
+	if _, err := store.GetItem(ctx, "x"); !errors.Is(err, sqlitetestdb.ErrStore) {
+		t.Fatalf("want ErrStore for id mismatch, got %v", err)
+	}
+}
+
+// TestMigrationV1UpgradePreservesLegacyRows proves upgrading a real v1 database
+// to the current schema does not destroy its data: the pre-Block-4 items(id,
+// source_id, stem) rows are quarantined into items_v1_legacy by migration 2, not
+// dropped, and the untouched v1 tests/sessions rows still read back through the
+// store. It is the regression lock for the data-preservation fix — a revert to
+// `DROP TABLE items` makes the legacy-row assertion fail, and a migration that
+// touched tests/sessions would fail the survival assertions. The driver is
+// registered by the package under test, so a bare handle can seed the frozen v1
+// schema (migration 1 is append-only, so that shape never changes).
+func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "v1.sqlite")
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	for _, stmt := range []string{
+		`CREATE TABLE tests (id TEXT PRIMARY KEY, title TEXT NOT NULL) STRICT`,
+		`CREATE TABLE items (id TEXT PRIMARY KEY, source_id TEXT NOT NULL, stem TEXT NOT NULL) STRICT`,
+		`CREATE TABLE sessions (id TEXT PRIMARY KEY, test_id TEXT NOT NULL) STRICT`,
+		`INSERT INTO tests (id, title) VALUES ('gia', 'GIA')`,
+		`INSERT INTO items (id, source_id, stem) VALUES ('old-1', 'omib', 'legacy stem')`,
+		`INSERT INTO sessions (id, test_id) VALUES ('sess-0', 'gia')`,
+		`PRAGMA user_version = 1`,
+	} {
+		if _, err := raw.Exec(stmt); err != nil {
+			_ = raw.Close()
+			t.Fatalf("seed v1: %v", err)
+		}
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close raw: %v", err)
+	}
+
+	// Open runs migrations 2 (RENAME items -> items_v1_legacy, CREATE new items)
+	// and 3 (add query columns).
+	store := mustOpen(t, path)
+
+	// The v1 tests/sessions rows are untouched by the item migrations and must
+	// still read back through the store's normal accessors.
+	if got, err := store.GetTest(ctx, "gia"); err != nil || got.Title != "GIA" {
+		t.Fatalf("v1 test after migration: got %+v, err %v", got, err)
+	}
+	if got, err := store.GetSession(ctx, "sess-0"); err != nil || got.TestID != "gia" {
+		t.Fatalf("v1 session after migration: got %+v, err %v", got, err)
+	}
+
+	// The old row must survive in the quarantine table (the DROP-revert tripwire)
+	// and the schema must have advanced to the latest version. Read through a
+	// separate handle, then release it before writing so the single-connection
+	// store never contends with it.
+	legacy, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("reopen raw: %v", err)
+	}
+	var sourceID, stem string
+	var version int
+	if err := legacy.QueryRow(`SELECT source_id, stem FROM items_v1_legacy WHERE id = 'old-1'`).Scan(&sourceID, &stem); err != nil {
+		_ = legacy.Close()
+		t.Fatalf("legacy row lost: %v", err)
+	}
+	if err := legacy.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		_ = legacy.Close()
+		t.Fatalf("read version: %v", err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatalf("close legacy handle: %v", err)
+	}
+	if sourceID != "omib" || stem != "legacy stem" {
+		t.Fatalf("legacy row corrupted: source_id=%q stem=%q", sourceID, stem)
+	}
+	if version != 3 {
+		t.Fatalf("user_version = %d, want 3", version)
+	}
+
+	// The upgraded database's new items table is the JSON-blob shape and
+	// round-trips a full snapshot.
+	want := mustItemSnapshot(t)
+	if err := store.SaveItem(ctx, want); err != nil {
+		t.Fatalf("save item into upgraded db: %v", err)
+	}
+	if got, err := store.GetItem(ctx, want.ID); err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("item roundtrip after upgrade: got %+v, err %v", got, err)
+	}
+
+	// A second open finds an already-current schema and applies nothing.
+	if err := store.Close(); err != nil {
+		t.Fatalf("close store: %v", err)
+	}
+	reopened := mustOpen(t, path)
+	if got, err := reopened.GetItem(ctx, want.ID); err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("item after second reopen: got %+v, err %v", got, err)
+	}
+}
+
+// TestMigrationV2ToV3AddsQueryColumns proves migration 3's generated query
+// columns are computed from the JSON snapshot of pre-existing v2 rows (which held
+// only id + snapshot), so a filter over every one of them — family, test type,
+// origin, redistributable and difficulty, none of which the WHERE reads from the
+// blob — returns the row after upgrade. This is the runnable check for the
+// json_extract projection and guards each column's JSON path; a wrong path leaves
+// that column NULL and drops the row.
+func TestMigrationV2ToV3AddsQueryColumns(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "v2.sqlite")
+
+	want := mustItemSnapshot(t) // A2 -> logical family, band 3, fetched, conditional
+	blob, err := json.Marshal(want)
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	if _, err := raw.Exec(`CREATE TABLE items (id TEXT PRIMARY KEY, snapshot TEXT NOT NULL) STRICT`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed v2 items table: %v", err)
+	}
+	if _, err := raw.Exec(`INSERT INTO items (id, snapshot) VALUES (?, ?)`, string(want.ID), string(blob)); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed v2 row: %v", err)
+	}
+	if _, err := raw.Exec(`PRAGMA user_version = 2`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed user_version: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close raw: %v", err)
+	}
+
+	// Open runs migration 3 (add generated query columns).
+	store := mustOpen(t, path)
+
+	// A filter over all five query columns can only match if each was computed
+	// from the blob; the query never reads the JSON snapshot itself.
+	got, err := store.ListItems(ctx, item.ItemFilter{
+		Families:        []shared.AbilityFamily{shared.FamilyLogical},
+		TestTypes:       []shared.TestTypeCode{"A2"},
+		Origins:         []item.Origin{item.OriginFetched},
+		Redistributable: []shared.Redistributable{shared.RedistConditional},
+		MinDifficulty:   3,
+		MaxDifficulty:   3,
+	})
+	if err != nil {
+		t.Fatalf("list after upgrade: %v", err)
+	}
+	if len(got) != 1 || !reflect.DeepEqual(got[0], want) {
+		t.Fatalf("row not matched by column filter after upgrade: got %+v", got)
+	}
+}
+
+// TestListNullDifficultyBandMirrorsGoZeroValue proves the COALESCE in the
+// difficulty predicates makes a row whose blob is missing Difficulty.Band — so
+// the generated difficulty_band column resolves to NULL — behave exactly as
+// item.ItemFilter.Matches treats it: the unmarshalled snapshot has Band == 0, so
+// a MaxDifficulty filter includes it and a MinDifficulty >= 1 filter excludes it.
+// Without COALESCE the NULL column would make both predicates UNKNOWN and wrongly
+// drop the row from the MaxDifficulty query. Such a blob is not producible via
+// NewItem/SaveItem (Band >= 1 is enforced and always marshalled); the test
+// hand-edits the JSON to lock the parity the COALESCE exists for, cross-checking
+// every expectation against Matches as the oracle.
+func TestListNullDifficultyBandMirrorsGoZeroValue(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "nullband.sqlite")
+
+	// Build a valid snapshot, then strip Difficulty.Band from its JSON so the
+	// generated column is NULL (json_extract of a missing path).
+	full := mustItemSnapshot(t) // family logical, band 3
+	blob, err := json.Marshal(full)
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(blob, &doc); err != nil {
+		t.Fatalf("unmarshal to map: %v", err)
+	}
+	diff, ok := doc["Difficulty"].(map[string]any)
+	if !ok {
+		t.Fatalf("Difficulty not an object: %T", doc["Difficulty"])
+	}
+	delete(diff, "Band")
+	stripped, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("re-marshal stripped: %v", err)
+	}
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	if _, err := raw.Exec(`CREATE TABLE items (id TEXT PRIMARY KEY, snapshot TEXT NOT NULL) STRICT`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed v2 items table: %v", err)
+	}
+	if _, err := raw.Exec(`INSERT INTO items (id, snapshot) VALUES (?, ?)`, string(full.ID), string(stripped)); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed row: %v", err)
+	}
+	if _, err := raw.Exec(`PRAGMA user_version = 2`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed user_version: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close raw: %v", err)
+	}
+
+	store := mustOpen(t, path) // runs migration 3 -> difficulty_band is NULL for this row
+
+	// The read-back snapshot's Band must be the JSON zero value; this is what
+	// Matches sees and what COALESCE must mirror.
+	oracle, err := store.GetItem(ctx, full.ID)
+	if err != nil {
+		t.Fatalf("get stripped item: %v", err)
+	}
+	if oracle.Difficulty.Band != 0 {
+		t.Fatalf("stripped Band = %d, want 0 (json zero value)", oracle.Difficulty.Band)
+	}
+
+	// MaxDifficulty: COALESCE(NULL,0) <= 5 -> 0 <= 5 -> included (mirrors Matches).
+	maxFilter := item.ItemFilter{MaxDifficulty: 5}
+	if !maxFilter.Matches(oracle) {
+		t.Fatalf("oracle: Matches(MaxDifficulty:5) = false, want true")
+	}
+	if list, err := store.ListItems(ctx, maxFilter); err != nil {
+		t.Fatalf("list MaxDifficulty: %v", err)
+	} else if len(list) != 1 || !reflect.DeepEqual(list[0], oracle) {
+		t.Fatalf("MaxDifficulty:5 returned %d rows, want the null-band row (COALESCE null->0)", len(list))
+	}
+
+	// MinDifficulty: COALESCE(NULL,0) >= 1 -> 0 >= 1 -> excluded (mirrors Matches).
+	minFilter := item.ItemFilter{MinDifficulty: 1}
+	if minFilter.Matches(oracle) {
+		t.Fatalf("oracle: Matches(MinDifficulty:1) = true, want false")
+	}
+	if list, err := store.ListItems(ctx, minFilter); err != nil {
+		t.Fatalf("list MinDifficulty: %v", err)
+	} else if len(list) != 0 {
+		t.Fatalf("MinDifficulty:1 returned %d rows, want 0", len(list))
+	}
+}
+
+// mustItemSnapshot builds a valid, fully-populated item snapshot via the real
+// aggregate for the reopen durability proof.
+func mustItemSnapshot(t *testing.T) item.ItemSnapshot {
+	t.Helper()
+	it, err := item.NewItem(item.ItemSpec{
+		ID:           "omib-1",
+		Provenance:   item.Provenance{SourceID: "omib", Origin: item.OriginFetched, Redistributable: shared.RedistConditional},
+		TestType:     "A2",
+		Stimulus:     []item.StimulusPart{{Text: "which figure continues?"}, {MediaKind: item.MediaGrid, MediaRef: "blob://omib-1"}},
+		AnswerFormat: item.FormatMultipleChoice,
+		Options: []item.Option{
+			{ID: "a", Text: "A"}, {ID: "b", Text: "B"}, {ID: "c", Text: "C"}, {ID: "d", Text: "D"},
+		},
+		AnswerKey:   item.AnswerKey{OptionID: "c"},
+		Explanation: "rotation by 90 degrees",
+		Difficulty:  item.Difficulty{Band: 3},
+	})
+	if err != nil {
+		t.Fatalf("build item: %v", err)
+	}
+	return it.Snapshot()
 }

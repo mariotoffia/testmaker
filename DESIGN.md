@@ -43,7 +43,7 @@ Seed data: the 81-source research catalogue at `data/catalog/sources.json`
 
 ---
 
-## 2. Item bank 🚧
+## 2. Item bank ✅
 
 **Aggregate `item.Item`** — one scored test item.
 
@@ -56,8 +56,8 @@ Seed data: the 81-source research catalogue at `data/catalog/sources.json`
 | `AnswerFormat` | `multiple-choice` (4–6 `Option`s) · `open-numeric` · `true-false-cannotsay` |
 | `AnswerKey` | correct option id / numeric value / verdict |
 | `Explanation` | shown after completion |
-| `Difficulty` | integer band (1..N); optional IRT `a/b/c` params |
-| `Norms` | optional item p-value / response-time baseline |
+| `Difficulty` | integer band (1..N); IRT `a/b/c` params deferred to adaptive delivery (Block 8) |
+| `Norms` | item p-value / response-time baseline deferred to scoring (Block 9) |
 
 Design decisions:
 
@@ -69,9 +69,11 @@ Design decisions:
   aggregate small and serializable.
 - **Provenance carries the license.** An item never loses the redistributability
   of its source, so export/publish paths can filter on it.
-- **The taxonomy is promoted to a shared package** (`domain/shared` or
-  `domain/taxonomy`) when this block lands, so `source`, `item` and `testset`
-  share one definition of families and codes.
+- **The taxonomy is promoted to a shared package.** It now lives in
+  `domain/shared` (`AbilityFamily`, `TestTypeCode`, `DeriveFamilies`, and the
+  inherited `Redistributable`), so `source`, `item` and `testset` share one
+  definition of families and codes; `domain/source` keeps type aliases so its
+  public API is unchanged.
 
 ---
 
@@ -284,7 +286,8 @@ Design rules:
 
 ## 8. Open design questions (resolve per block)
 
-- Taxonomy home: `domain/shared` vs a dedicated `domain/taxonomy` package.
+- Taxonomy home: **resolved (Block 4)** — promoted to `domain/shared`, not a
+  dedicated `domain/taxonomy` package.
 - Blob/media storage port shape (local FS vs S3) and item media addressing.
 - IRT vs classical difficulty for the first adaptive implementation.
 - Norm-table representation and where population norms are sourced/stored.

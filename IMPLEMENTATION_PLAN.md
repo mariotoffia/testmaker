@@ -60,7 +60,7 @@ and SQL live in `acl_sqlite.go`; a `PRAGMA user_version` migration runner is the
 upgrade path for the snapshot fields Blocks 4/7/8 add. Wired into the CLI behind
 `-testdb`.
 
-## Block 4 — Item bank domain + repository 🚧
+## Block 4 — Item bank domain + repository ✅
 
 **Goal:** model the `Item` aggregate (stimulus, options, key, difficulty,
 provenance, explanation) and its invariants; promote the A1..E2 taxonomy to a

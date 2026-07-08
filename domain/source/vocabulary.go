@@ -2,45 +2,26 @@ package source
 
 import "github.com/mariotoffia/testmaker/domain/shared"
 
+// The ability-family / A1..E2 taxonomy and the Redistributable reuse gate now
+// live in the shared kernel (domain/shared) so source, item and testset share
+// one definition. These aliases and re-exports keep the source package's public
+// vocabulary — source.AbilityFamily, source.FamilyLogical, source.TestTypeCode,
+// source.RedistYes, … — stable for existing callers.
+
 // AbilityFamily is the top-level cognitive family an item belongs to.
-type AbilityFamily string
+type AbilityFamily = shared.AbilityFamily
 
 const (
-	FamilyLogical   AbilityFamily = "logical"
-	FamilyNumerical AbilityFamily = "numerical"
-	FamilyVerbal    AbilityFamily = "verbal"
-	FamilySpatial   AbilityFamily = "spatial"
-	FamilySpeed     AbilityFamily = "speed"
+	FamilyLogical   = shared.FamilyLogical
+	FamilyNumerical = shared.FamilyNumerical
+	FamilyVerbal    = shared.FamilyVerbal
+	FamilySpatial   = shared.FamilySpatial
+	FamilySpeed     = shared.FamilySpeed
 )
 
-// TestTypeCode is a fine-grained item-type code (A1..E2) from the CLAUDE.md
-// taxonomy. The leading letter selects the AbilityFamily.
-type TestTypeCode string
-
-var familyByLetter = map[byte]AbilityFamily{
-	'A': FamilyLogical, 'B': FamilyNumerical, 'C': FamilyVerbal, 'D': FamilySpatial, 'E': FamilySpeed,
-}
-
-// validTestTypes is the closed set of taxonomy codes.
-var validTestTypes = map[TestTypeCode]struct{}{
-	"A1": {}, "A2": {}, "A3": {}, "A4": {}, "A5": {},
-	"B1": {}, "B2": {}, "B3": {}, "B4": {}, "B5": {},
-	"C1": {}, "C2": {}, "C3": {}, "C4": {},
-	"D1": {}, "D2": {}, "D3": {},
-	"E1": {}, "E2": {},
-}
-
-// Valid reports whether the code is a known taxonomy code.
-func (c TestTypeCode) Valid() bool { _, ok := validTestTypes[c]; return ok }
-
-// Family returns the AbilityFamily implied by the code's leading letter.
-func (c TestTypeCode) Family() (AbilityFamily, bool) {
-	if len(c) == 0 {
-		return "", false
-	}
-	f, ok := familyByLetter[c[0]]
-	return f, ok
-}
+// TestTypeCode is a fine-grained item-type code (A1..E2); its leading letter
+// selects the AbilityFamily. Valid() and Family() live on the shared type.
+type TestTypeCode = shared.TestTypeCode
 
 // AccessClass describes how a source is reached by the Fetcher.
 type AccessClass string
@@ -84,19 +65,15 @@ var validLicenseCategories = map[LicenseCategory]struct{}{
 // Valid reports whether the license category is known.
 func (l LicenseCategory) Valid() bool { _, ok := validLicenseCategories[l]; return ok }
 
-// Redistributable is the gate for reusing a source's items.
-type Redistributable string
+// Redistributable is the reuse gate for a source's items. Defined in the shared
+// kernel because it also travels onto every item derived from the source.
+type Redistributable = shared.Redistributable
 
 const (
-	RedistYes         Redistributable = "yes"
-	RedistConditional Redistributable = "conditional"
-	RedistNo          Redistributable = "no"
+	RedistYes         = shared.RedistYes
+	RedistConditional = shared.RedistConditional
+	RedistNo          = shared.RedistNo
 )
-
-// Valid reports whether the value is a known tri-state.
-func (r Redistributable) Valid() bool {
-	return r == RedistYes || r == RedistConditional || r == RedistNo
-}
 
 // Availability is a yes/no/partial tri-state (answer keys, norms, ...).
 type Availability string
