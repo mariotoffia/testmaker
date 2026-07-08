@@ -115,6 +115,9 @@ func (n NormTable) ScaledIQ(x float64) int {
 
 // Reporting bounds for a normal norm. The IQ range is the conventional Wechsler
 // floor/ceiling; the percentile range keeps the rank strictly inside 0..100.
+// The two are independent presentation caps, not a single-model correspondence —
+// a saturated report may read "IQ 160, 99.9 percentile" though those z-values
+// differ; both simply mean "off the top of what this norm resolves".
 //
 // ponytail: clamp to the range the model is valid over, do not extrapolate the
 // tail. Empirical extreme-score norms are the upgrade path if a test publishes

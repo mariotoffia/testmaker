@@ -74,6 +74,25 @@ func mcItem(t *testing.T, id, key, explanation string, band int) item.ItemSnapsh
 	return it.Snapshot()
 }
 
+// numItemS builds a valid open-numeric bank item with a known key + explanation.
+func numItemS(t *testing.T, id string, key float64, explanation string, band int) item.ItemSnapshot {
+	t.Helper()
+	it, err := item.NewItem(item.ItemSpec{
+		ID:           item.ItemID(id),
+		Provenance:   item.Provenance{SourceID: "rulegen", Origin: item.OriginGenerated, Redistributable: shared.RedistYes},
+		TestType:     "B1",
+		Stimulus:     []item.StimulusPart{{Text: "5 - 5 = ?"}},
+		AnswerFormat: item.FormatOpenNumeric,
+		AnswerKey:    item.AnswerKey{Numeric: key},
+		Explanation:  explanation,
+		Difficulty:   item.Difficulty{Band: band},
+	})
+	if err != nil {
+		t.Fatalf("build numeric item %s: %v", id, err)
+	}
+	return it.Snapshot()
+}
+
 func resp(id string, band, section int, answer string, correct bool, elapsed time.Duration) session.Response {
 	return session.Response{
 		ItemID:     id,
@@ -224,6 +243,83 @@ func TestScoreAdaptiveConsumesDeliveryOrder(t *testing.T) {
 }
 
 // --- error + resilience paths ------------------------------------------------
+
+func TestScoreAdaptiveWeightsAbilityBySectionLength(t *testing.T) {
+	ctx := context.Background()
+	bank := newBank(
+		mcItem(t, "s0", "b", "", 4),
+		mcItem(t, "s1a", "b", "", 1), mcItem(t, "s1b", "b", "", 1), mcItem(t, "s1c", "b", "", 1),
+	)
+	svc := scoring.NewService(bank, model.NormBook{"t-adapt": {Mean: 2, SD: 1}})
+
+	// Section 0: one correct at band 4 (monotone ⇒ ability 4).
+	// Section 1: three correct at band 1 (monotone ⇒ ability 1).
+	// A plain per-section mean would be (4+1)/2 = 2.5; the response-count-weighted
+	// mean is (4·1 + 1·3)/4 = 1.75, so the longer section pulls proportionally.
+	snap := completed("t-adapt", session.PolicyAdaptive,
+		resp("s0", 4, 0, "b", true, time.Second),
+		resp("s1a", 1, 1, "b", true, time.Second),
+		resp("s1b", 1, 1, "b", true, time.Second),
+		resp("s1c", 1, 1, "b", true, time.Second),
+	)
+	score, err := svc.Score(ctx, snap)
+	if err != nil {
+		t.Fatalf("score: %v", err)
+	}
+	if score.Ability != 1.75 {
+		t.Fatalf("weighted ability = %v, want 1.75 (an unweighted mean would be 2.5)", score.Ability)
+	}
+}
+
+// TestScoreRendersNumericZeroAsGiven guards the regression where a legitimate
+// numeric answer of 0 (e.g. "5 − 5") rendered as blank: 0 is a real answer.
+func TestScoreRendersNumericZeroAsGiven(t *testing.T) {
+	ctx := context.Background()
+	bank := newBank(numItemS(t, "n0", 0, "five minus five is zero", 1))
+	svc := scoring.NewService(bank, model.NormBook{"t": {Mean: 0, SD: 1}})
+
+	snap := completed("t", session.PolicyFixedIncreasing,
+		session.Response{
+			ItemID: "n0", Difficulty: 1, Section: 0,
+			Answer:  session.Answer{Numeric: 0},
+			Elapsed: time.Second, Correct: true,
+		},
+	)
+	score, err := svc.Score(ctx, snap)
+	if err != nil {
+		t.Fatalf("score: %v", err)
+	}
+	fb := score.Items[0]
+	if fb.Given != "0" {
+		t.Fatalf("given numeric-0 answer = %q, want %q (0 is a real answer, not blank)", fb.Given, "0")
+	}
+	if fb.CorrectAnswer != "0" {
+		t.Fatalf("correct answer = %q, want %q", fb.CorrectAnswer, "0")
+	}
+}
+
+// TestScoreRendersBlankMultipleChoiceAsBlank is the other half of the format
+// dispatch: a blank multiple-choice answer must render "", not a spurious "0".
+func TestScoreRendersBlankMultipleChoiceAsBlank(t *testing.T) {
+	ctx := context.Background()
+	bank := newBank(mcItem(t, "m1", "b", "because b", 1))
+	svc := scoring.NewService(bank, model.NormBook{"t": {Mean: 0, SD: 1}})
+
+	snap := completed("t", session.PolicyFixedIncreasing,
+		session.Response{
+			ItemID: "m1", Difficulty: 1, Section: 0,
+			Answer:  session.Answer{},
+			Elapsed: time.Second, Correct: false,
+		},
+	)
+	score, err := svc.Score(ctx, snap)
+	if err != nil {
+		t.Fatalf("score: %v", err)
+	}
+	if got := score.Items[0].Given; got != "" {
+		t.Fatalf("blank multiple-choice answer rendered %q, want %q", got, "")
+	}
+}
 
 func TestScoreRejectsEmptyCompletedSession(t *testing.T) {
 	ctx := context.Background()

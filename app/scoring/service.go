@@ -175,7 +175,6 @@ func (s *Service) feedback(ctx context.Context, responses []session.Response) ([
 		fb := model.ItemFeedback{
 			ItemID:  r.ItemID,
 			Correct: r.Correct,
-			Given:   givenAnswer(r.Answer),
 			Elapsed: r.Elapsed,
 		}
 		it, err := s.bank.GetItem(ctx, item.ItemID(r.ItemID))
@@ -191,24 +190,36 @@ func (s *Service) feedback(ctx context.Context, responses []session.Response) ([
 		default:
 			return nil, 0, err
 		}
+		// Render the answer by the item's format (it is the zero snapshot when the
+		// item is gone, so givenAnswer falls back to whichever field is populated).
+		fb.Given = givenAnswer(r.Answer, it.AnswerFormat)
 		out[i] = fb
 	}
 	return out, degraded, nil
 }
 
-// givenAnswer renders the taker's answer for display, picking the field the
-// answer format populated (the session stored the answer verbatim). A wholly
-// empty answer renders as the empty string, not a spurious "0".
-func givenAnswer(ans session.Answer) string {
-	switch {
-	case ans.OptionID != "":
+// givenAnswer renders the taker's answer for display, interpreted by the item's
+// answer format (as keyAnswer does for the key), so a numeric 0 — a valid answer,
+// e.g. "5 − 5" — renders as "0" while a genuinely blank multiple-choice answer
+// renders as "". When the item is gone (unknown format) it falls back to
+// whichever field the answer populated; the feedback text is already blank then.
+func givenAnswer(ans session.Answer, format item.AnswerFormat) string {
+	switch format {
+	case item.FormatMultipleChoice:
 		return ans.OptionID
-	case ans.Verdict != "":
-		return ans.Verdict
-	case ans.Numeric != 0:
+	case item.FormatOpenNumeric:
 		return strconv.FormatFloat(ans.Numeric, 'g', -1, 64)
+	case item.FormatTrueFalseCannotSay:
+		return ans.Verdict
 	default:
-		return ""
+		switch {
+		case ans.OptionID != "":
+			return ans.OptionID
+		case ans.Verdict != "":
+			return ans.Verdict
+		default:
+			return strconv.FormatFloat(ans.Numeric, 'g', -1, 64)
+		}
 	}
 }
 

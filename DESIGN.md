@@ -149,8 +149,11 @@ discriminator.
   no data to norm and is rejected with `ErrNotScorable` rather than stamped with a
   confident low IQ. The raw denominator is the *answered* count (a power-test
   convention: unanswered = wrong is not assumed); a norm-derived score therefore
-  assumes a full administration, which the executor always produces — it answers
-  every planned item, so answered == planned on the normal path.
+  assumes a full administration. On the normal executor path that holds — it
+  presents every planned item in turn — but `Complete` does not *enforce*
+  answered == planned, so a norm applied to a deliberately short attempt would
+  over-state it; per-attempt norm selection is the upgrade path if partial
+  administrations ever become a supported flow.
 - **Percentile / normal-distribution band** — from a per-test **norm table**, a
   parametric normal model (`NormTable{Mean, SD}` of the scored dimension). The
   `NormBook` (test id → table) is provided at the composition root. A test with
