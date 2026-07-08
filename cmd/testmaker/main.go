@@ -25,8 +25,10 @@ import (
 	"github.com/mariotoffia/testmaker/app/catalog"
 	"github.com/mariotoffia/testmaker/app/execution"
 	"github.com/mariotoffia/testmaker/app/ingest"
+	scoringapp "github.com/mariotoffia/testmaker/app/scoring"
 	"github.com/mariotoffia/testmaker/domain/clock"
 	"github.com/mariotoffia/testmaker/domain/item"
+	"github.com/mariotoffia/testmaker/domain/scoring"
 	"github.com/mariotoffia/testmaker/domain/session"
 	"github.com/mariotoffia/testmaker/domain/shared"
 	"github.com/mariotoffia/testmaker/domain/source"
@@ -269,6 +271,14 @@ func runTestDemo(
 	}
 	author := authoring.NewTestService(bank, tests)
 	exec := execution.NewService(clock.System(), bank, sessions, execution.RandomIDs())
+	// Demo norms: the composition root carries a deployment's norm book (test id →
+	// normal norm of the scored dimension). The fixed test norms the raw count;
+	// the adaptive test norms the staircase ability (bands 1..3), so its IQ
+	// reflects the path taken. ponytail: illustrative mean/SD, not published norms.
+	scorer := scoringapp.NewService(bank, scoring.NormBook{
+		"run-fixed":    {Mean: 2, SD: 1.5},
+		"run-adaptive": {Mean: 2, SD: 1},
+	})
 
 	fixedID, err := author.Compose(ctx, authoring.ComposeSpec{
 		ID:     "run-fixed",
@@ -287,7 +297,7 @@ func runTestDemo(
 	if err != nil {
 		return err
 	}
-	if err := driveAttempt(ctx, exec, fixedTest, "fixed"); err != nil {
+	if err := driveAttempt(ctx, exec, scorer, fixedTest, "fixed"); err != nil {
 		return err
 	}
 
@@ -306,15 +316,15 @@ func runTestDemo(
 	if err != nil {
 		return err
 	}
-	return driveAttempt(ctx, exec, adaptTest, "adaptive")
+	return driveAttempt(ctx, exec, scorer, adaptTest, "adaptive")
 }
 
 // driveAttempt starts a session for the test, answers each presented item and
-// completes it, then prints the delivery path and score. It alternates
-// correct/incorrect answers so an adaptive attempt exercises both directions of
-// the staircase; the seeded items all key option "b", so "a" is a deterministic
-// wrong answer.
-func driveAttempt(ctx context.Context, exec *execution.Service, test testset.TestSnapshot, label string) error {
+// completes it, then scores the completed session and prints the delivery path
+// and score. It alternates correct/incorrect answers so an adaptive attempt
+// exercises both directions of the staircase; the seeded items all key option
+// "b", so "a" is a deterministic wrong answer.
+func driveAttempt(ctx context.Context, exec *execution.Service, scorer ports.Scorer, test testset.TestSnapshot, label string) error {
 	d, err := exec.Start(ctx, test)
 	if err != nil {
 		return err
@@ -336,15 +346,34 @@ func driveAttempt(ctx context.Context, exec *execution.Service, test testset.Tes
 	if err != nil {
 		return err
 	}
-	correct := 0
-	for _, r := range final.Responses {
-		if r.Correct {
-			correct++
-		}
+	score, err := scorer.Score(ctx, final)
+	if err != nil {
+		return err
 	}
-	fmt.Printf("\nRun-test demo (%s): administered %q\n  path:  %v\n  state: %s, score: %d/%d correct\n",
-		label, final.TestID, path, final.State, correct, len(final.Responses))
+	fmt.Printf("\nRun-test demo (%s): administered %q\n  path:  %v\n  state: %s\n%s",
+		label, final.TestID, path, final.State, formatScore(score))
 	return nil
+}
+
+// formatScore renders a scoring.Score for the CLI demo: the raw count, the
+// norm-derived band / scaled IQ / percentile (or a raw-only note when the test
+// is unnormed), the speed dimension, how many per-item explanations are
+// available and — if any — how many degraded because their item was removed.
+func formatScore(s scoring.Score) string {
+	norm := "unnormed (raw only)"
+	if s.Normed {
+		norm = fmt.Sprintf("band %s, IQ %d, %.1f percentile", s.Band, s.ScaledIQ, s.Percentile)
+	}
+	ability := ""
+	if s.Ability != 0 {
+		ability = fmt.Sprintf(", ability %.2f", s.Ability)
+	}
+	degraded := ""
+	if s.DegradedFeedback > 0 {
+		degraded = fmt.Sprintf(" (%d degraded: item removed)", s.DegradedFeedback)
+	}
+	return fmt.Sprintf("  score: %d/%d correct%s\n  norm:  %s\n  speed: %v total, %v/item, %.1f correct/min\n  feedback: %d item explanation(s)%s\n",
+		s.Raw, s.Max, ability, norm, s.Speed.Total, s.Speed.Mean, s.Speed.CorrectPerMinute, len(s.Items), degraded)
 }
 
 // itemBankDemo exercises the ItemRepository: it builds a validated multiple-choice

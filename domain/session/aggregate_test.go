@@ -3,6 +3,7 @@ package session_test
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -140,6 +141,19 @@ func TestRecordRejectsWrongTargetAndBackwardsClock(t *testing.T) {
 	}
 	if err := s.Record("log-1", session.Answer{}, true, t0.Add(-time.Second)); !errors.Is(err, session.ErrInvalidSession) {
 		t.Fatalf("backwards clock must fail, got %v", err)
+	}
+}
+
+func TestRecordRejectsNonFiniteNumericAnswer(t *testing.T) {
+	// A NaN/Inf numeric answer is not JSON-encodable: allowing it would persist in
+	// the memory store but fail in sqlite, splitting backend parity.
+	for _, bad := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		s := session.MustSession(fixedSpec())
+		mustBegin(t, s, t0) // presents log-1 @ t0
+		err := s.Record("log-1", session.Answer{Numeric: bad}, false, t0.Add(time.Second))
+		if !errors.Is(err, session.ErrInvalidSession) {
+			t.Fatalf("numeric answer %v must be rejected, got %v", bad, err)
+		}
 	}
 }
 

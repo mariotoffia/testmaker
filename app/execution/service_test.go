@@ -123,6 +123,25 @@ func mcItem(t *testing.T, id string, band int, key string) item.ItemSnapshot {
 
 var epoch = time.Date(2024, 6, 7, 9, 0, 0, 0, time.UTC)
 
+// numItem builds a valid open-numeric bank item with an absolute grading
+// tolerance (epsilon). tol == 0 means exact equality.
+func numItem(t *testing.T, id string, band int, key, tol float64) item.ItemSnapshot {
+	t.Helper()
+	it, err := item.NewItem(item.ItemSpec{
+		ID:           item.ItemID(id),
+		Provenance:   item.Provenance{SourceID: "rulegen", Origin: item.OriginGenerated, Redistributable: shared.RedistYes},
+		TestType:     "B1",
+		Stimulus:     []item.StimulusPart{{Text: "next number?"}},
+		AnswerFormat: item.FormatOpenNumeric,
+		AnswerKey:    item.AnswerKey{Numeric: key, Tolerance: tol},
+		Difficulty:   item.Difficulty{Band: band},
+	})
+	if err != nil {
+		t.Fatalf("build numeric item %s: %v", id, err)
+	}
+	return it.Snapshot()
+}
+
 // --- fixed-policy end-to-end -------------------------------------------------
 
 func TestStartDeliversFirstItemAndDeadline(t *testing.T) {
@@ -219,8 +238,42 @@ func TestFixedRunGradesAndCompletes(t *testing.T) {
 	}
 }
 
-// --- adaptive-policy end-to-end ----------------------------------------------
+// TestAnswerGradesNumericWithinTolerance proves the executor honours an item's
+// absolute grading tolerance: an answer on the epsilon boundary is correct
+// (inclusive), one past it is wrong. Tolerance 0 keeps exact equality.
+func TestAnswerGradesNumericWithinTolerance(t *testing.T) {
+	ctx := context.Background()
+	bank := seededBank(t,
+		numItem(t, "num-1", 1, 10, 0.5),
+		numItem(t, "num-2", 2, 20, 0.5),
+	)
+	repo := newFakeSessions()
+	clk := clock.NewFake(epoch)
+	svc := execution.NewService(clk, bank, repo, counterIDs())
 
+	d, err := svc.Start(ctx, fixedTest(t, "num-1", "num-2"))
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	id := d.Session.ID
+	// 10.5 lands exactly on the +0.5 boundary → correct (inclusive).
+	mustAnswer(t, svc, ctx, id, "num-1", session.Answer{Numeric: 10.5})
+	// 20.6 is 0.6 from 20, past the 0.5 epsilon → wrong.
+	mustAnswer(t, svc, ctx, id, "num-2", session.Answer{Numeric: 20.6})
+
+	snap, err := svc.Complete(ctx, id)
+	if err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	want := []bool{true, false}
+	for i, r := range snap.Responses {
+		if r.Correct != want[i] {
+			t.Fatalf("numeric response %d correct = %v, want %v", i, r.Correct, want[i])
+		}
+	}
+}
+
+// --- adaptive-policy end-to-end ----------------------------------------------
 func TestAdaptiveRunFollowsStaircase(t *testing.T) {
 	ctx := context.Background()
 	// A pool spanning bands 1..3 with a duplicate band-2 item so the staircase

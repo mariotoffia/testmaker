@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"crypto/rand"
+	"math"
 
 	"github.com/mariotoffia/testmaker/domain/clock"
 	"github.com/mariotoffia/testmaker/domain/item"
@@ -140,18 +141,21 @@ func (s *Service) persistAndDeliver(ctx context.Context, sess *session.Session) 
 // ponytail: the key is read from the live bank, not frozen into the plan. No
 // administered item type is open-numeric yet and the ItemRepository exposes no
 // delete, so mid-attempt key drift cannot happen today; freezing the key (or a
-// content hash) into the plan is a Block 9 fairness decision, deferred until
-// scoring depends on it. Two known ceilings, both Block 9:
-//   - open-numeric uses exact float equality (fine for the exact, finite keys
-//     the bank stores; an epsilon belongs with the scoring model, not here);
-//   - a zero-valued numeric answer matches a zero-valued key (Answer.Numeric has
-//     no presence bit), so add an "answered" signal before numeric items ship.
+// content hash) into the plan is a fairness decision deferred to Block 10
+// execution hardening (scoring already reads the frozen graded outcome, so a
+// completed attempt is drift-immune).
+//
+// Open-numeric grading honours the key's Tolerance (absolute epsilon; 0 = exact,
+// the default). Numeric answer *presence* needs no bit here: an unanswered item
+// is never recorded (session.Record only appends on a real answer), and on the
+// key side AnswerFormat is the presence discriminator by decision (see
+// item.AnswerKey).
 func graded(it item.ItemSnapshot, ans session.Answer) bool {
 	switch it.AnswerFormat {
 	case item.FormatMultipleChoice:
 		return ans.OptionID == it.AnswerKey.OptionID
 	case item.FormatOpenNumeric:
-		return ans.Numeric == it.AnswerKey.Numeric
+		return math.Abs(ans.Numeric-it.AnswerKey.Numeric) <= it.AnswerKey.Tolerance
 	case item.FormatTrueFalseCannotSay:
 		return ans.Verdict == string(it.AnswerKey.Verdict)
 	default:

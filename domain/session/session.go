@@ -1,6 +1,7 @@
 package session
 
 import (
+	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -256,6 +257,11 @@ func (s *Session) Record(itemID string, ans Answer, correct bool, now time.Time)
 			With("id", string(s.id))
 	case now.Before(s.presented.DeliveredAt):
 		return ErrInvalidSession.WithMessage("clock ran backwards before the item was delivered").With("id", string(s.id))
+	case math.IsNaN(ans.Numeric) || math.IsInf(ans.Numeric, 0):
+		// a non-finite numeric answer is not JSON-encodable: it would persist in
+		// the memory store yet fail in sqlite, splitting backend parity (the item
+		// key is guarded the same way, and for the same reason).
+		return ErrInvalidSession.WithMessage("numeric answer must be a finite number").With("id", string(s.id))
 	}
 	s.responses = append(s.responses, Response{
 		ItemID:     s.presented.ItemID,

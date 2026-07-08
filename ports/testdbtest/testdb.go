@@ -583,7 +583,7 @@ func numericItemSnapshotP(t *testing.T, id item.ItemID, tt shared.TestTypeCode, 
 		TestType:     tt,
 		Stimulus:     []item.StimulusPart{{Text: "2, 4, 8, 16, ?"}},
 		AnswerFormat: item.FormatOpenNumeric,
-		AnswerKey:    item.AnswerKey{Numeric: 32},
+		AnswerKey:    item.AnswerKey{Numeric: 32, Tolerance: 0.5},
 		Explanation:  "doubling series",
 		Difficulty:   item.Difficulty{Band: band},
 	})

@@ -138,10 +138,16 @@ func (o Option) mediaKindWithoutRef() bool { return o.MediaKind != "" && o.Media
 // "open-numeric answer not yet known" — is a draft/authoring concept outside
 // this bank of scored items, so a pointer / presence flag is intentionally
 // omitted until such a producer exists.
+//
+// Tolerance is the absolute epsilon within which a numeric answer grades correct
+// (open-numeric only): the executor accepts an answer when |answer − Numeric| ≤
+// Tolerance. It defaults to 0, i.e. exact equality — the original behaviour — so
+// every existing key is unaffected. For non-numeric formats it must be 0.
 type AnswerKey struct {
-	OptionID string
-	Numeric  float64
-	Verdict  Verdict
+	OptionID  string
+	Numeric   float64
+	Tolerance float64
+	Verdict   Verdict
 }
 
 // Difficulty is an item's ordinal difficulty band (1..N).
@@ -269,32 +275,46 @@ func validateAnswer(spec ItemSpec) *shared.TestmakerError {
 	case FormatMultipleChoice:
 		return validateMultipleChoice(spec, fail)
 	case FormatOpenNumeric:
-		if len(spec.Options) != 0 {
-			return fail("open-numeric item must have no options")
-		}
-		if spec.AnswerKey.OptionID != "" || spec.AnswerKey.Verdict != "" {
-			return fail("open-numeric key must be numeric only")
-		}
-		// a non-finite key is meaningless and, crucially, is not JSON-encodable —
-		// it would save in memory but fail in the sqlite store, breaking parity.
-		if math.IsNaN(spec.AnswerKey.Numeric) || math.IsInf(spec.AnswerKey.Numeric, 0) {
-			return fail("open-numeric key must be a finite number")
-		}
-		return nil
+		return validateOpenNumeric(spec, fail)
 	case FormatTrueFalseCannotSay:
-		if len(spec.Options) != 0 {
-			return fail("true-false-cannotsay item must have no options")
-		}
-		if spec.AnswerKey.OptionID != "" || spec.AnswerKey.Numeric != 0 {
-			return fail("true-false-cannotsay key must be a verdict only")
-		}
-		if !spec.AnswerKey.Verdict.Valid() {
-			return fail("true-false-cannotsay key verdict is invalid: " + string(spec.AnswerKey.Verdict))
-		}
-		return nil
+		return validateTrueFalse(spec, fail)
 	default:
 		return fail("invalid answer format: " + string(spec.AnswerFormat))
 	}
+}
+
+// validateOpenNumeric enforces a numeric-only key with a finite value and a
+// finite, non-negative grading tolerance (0 = exact equality).
+func validateOpenNumeric(spec ItemSpec, fail func(string) *shared.TestmakerError) *shared.TestmakerError {
+	if len(spec.Options) != 0 {
+		return fail("open-numeric item must have no options")
+	}
+	if spec.AnswerKey.OptionID != "" || spec.AnswerKey.Verdict != "" {
+		return fail("open-numeric key must be numeric only")
+	}
+	// a non-finite key is meaningless and, crucially, is not JSON-encodable —
+	// it would save in memory but fail in the sqlite store, breaking parity.
+	if math.IsNaN(spec.AnswerKey.Numeric) || math.IsInf(spec.AnswerKey.Numeric, 0) {
+		return fail("open-numeric key must be a finite number")
+	}
+	if spec.AnswerKey.Tolerance < 0 || math.IsNaN(spec.AnswerKey.Tolerance) || math.IsInf(spec.AnswerKey.Tolerance, 0) {
+		return fail("open-numeric key tolerance must be a finite, non-negative number")
+	}
+	return nil
+}
+
+// validateTrueFalse enforces a verdict-only key drawn from the valid verdicts.
+func validateTrueFalse(spec ItemSpec, fail func(string) *shared.TestmakerError) *shared.TestmakerError {
+	if len(spec.Options) != 0 {
+		return fail("true-false-cannotsay item must have no options")
+	}
+	if spec.AnswerKey.OptionID != "" || spec.AnswerKey.Numeric != 0 || spec.AnswerKey.Tolerance != 0 {
+		return fail("true-false-cannotsay key must be a verdict only")
+	}
+	if !spec.AnswerKey.Verdict.Valid() {
+		return fail("true-false-cannotsay key verdict is invalid: " + string(spec.AnswerKey.Verdict))
+	}
+	return nil
 }
 
 // validateMultipleChoice enforces 4–6 unique, non-empty options and a key that
@@ -303,7 +323,7 @@ func validateMultipleChoice(spec ItemSpec, fail func(string) *shared.TestmakerEr
 	if n := len(spec.Options); n < minMCOptions || n > maxMCOptions {
 		return fail("multiple-choice item must have 4–6 options")
 	}
-	if spec.AnswerKey.Verdict != "" || spec.AnswerKey.Numeric != 0 {
+	if spec.AnswerKey.Verdict != "" || spec.AnswerKey.Numeric != 0 || spec.AnswerKey.Tolerance != 0 {
 		return fail("multiple-choice key must be an option id only")
 	}
 	seen := make(map[string]struct{}, len(spec.Options))

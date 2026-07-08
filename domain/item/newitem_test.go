@@ -88,6 +88,27 @@ func TestNewItemDerivesFamilyAndSnapshots(t *testing.T) {
 	}
 }
 
+func TestNewItemAcceptsNumericTolerance(t *testing.T) {
+	spec := item.ItemSpec{
+		ID:           "num-tol",
+		Provenance:   item.Provenance{SourceID: "s", Origin: item.OriginAuthored, Redistributable: shared.RedistYes},
+		TestType:     "B1",
+		Stimulus:     []item.StimulusPart{{Text: "1/3 as a decimal?"}},
+		AnswerFormat: item.FormatOpenNumeric,
+		AnswerKey:    item.AnswerKey{Numeric: 0.333, Tolerance: 0.01},
+		Difficulty:   item.Difficulty{Band: 1},
+	}
+	it, err := item.NewItem(spec)
+	if err != nil {
+		t.Fatalf("NewItem with a valid tolerance: %v", err)
+	}
+	// the tolerance must survive the snapshot round-trip both stores rely on.
+	snap := item.RehydrateFromSnapshot(it.Snapshot()).Snapshot()
+	if snap.AnswerKey.Tolerance != 0.01 {
+		t.Fatalf("tolerance = %v, want 0.01 (lost through snapshot)", snap.AnswerKey.Tolerance)
+	}
+}
+
 func TestNewItemRejectsInvalidSpecs(t *testing.T) {
 	mutate := func(f func(s *item.ItemSpec)) item.ItemSpec {
 		s := validMC()
@@ -146,6 +167,7 @@ func TestNewItemRejectsInvalidSpecs(t *testing.T) {
 		})},
 		{"mc key is verdict", mutate(func(s *item.ItemSpec) { s.AnswerKey = item.AnswerKey{Verdict: item.VerdictTrue} })},
 		{"mc key has numeric", mutate(func(s *item.ItemSpec) { s.AnswerKey.Numeric = 3 })},
+		{"mc key has tolerance", mutate(func(s *item.ItemSpec) { s.AnswerKey.Tolerance = 0.5 })},
 		{"option missing id", mutate(func(s *item.ItemSpec) { s.Options[0].ID = "" })},
 		{"duplicate option id", mutate(func(s *item.ItemSpec) { s.Options[1].ID = "a" })},
 		{"empty option", mutate(func(s *item.ItemSpec) { s.Options[0] = item.Option{ID: "a"} })},
@@ -164,9 +186,13 @@ func TestNewItemRejectsInvalidSpecs(t *testing.T) {
 		{"open-numeric key NaN", numeric(func(s *item.ItemSpec) { s.AnswerKey.Numeric = math.NaN() })},
 		{"open-numeric key +Inf", numeric(func(s *item.ItemSpec) { s.AnswerKey.Numeric = math.Inf(1) })},
 		{"open-numeric key -Inf", numeric(func(s *item.ItemSpec) { s.AnswerKey.Numeric = math.Inf(-1) })},
+		{"open-numeric tolerance negative", numeric(func(s *item.ItemSpec) { s.AnswerKey.Tolerance = -0.1 })},
+		{"open-numeric tolerance NaN", numeric(func(s *item.ItemSpec) { s.AnswerKey.Tolerance = math.NaN() })},
+		{"open-numeric tolerance +Inf", numeric(func(s *item.ItemSpec) { s.AnswerKey.Tolerance = math.Inf(1) })},
 		{"tf has options", tf(func(s *item.ItemSpec) { s.Options = []item.Option{{ID: "a", Text: "A"}} })},
 		{"tf key has option id", tf(func(s *item.ItemSpec) { s.AnswerKey.OptionID = "a" })},
 		{"tf key has numeric", tf(func(s *item.ItemSpec) { s.AnswerKey.Numeric = 1 })},
+		{"tf key has tolerance", tf(func(s *item.ItemSpec) { s.AnswerKey.Tolerance = 0.5 })},
 		{"tf key verdict invalid", tf(func(s *item.ItemSpec) { s.AnswerKey.Verdict = "maybe" })},
 		{"tf key verdict empty", tf(func(s *item.ItemSpec) { s.AnswerKey.Verdict = "" })},
 	}

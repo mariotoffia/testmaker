@@ -135,29 +135,46 @@ timing (injected clock), navigation, and adaptive next-item selection.
 **Depends on:** Blocks 3, 7.
 **Done when:** a session can be started, driven item-by-item under timing (fixed and adaptive), and completed with responses + timings captured. ✅ — `app/execution.Service` over an injected `clock.Clock`; sessions persist as a rich JSON snapshot in both testdb backends; `-run-test` administers a fixed and an adaptive attempt end-to-end.
 
-## Block 9 — Scoring & feedback 🚧
+## Block 9 — Scoring & feedback ✅
 
 **Goal:** raw score, percentile/normal band, IQ-scaled score, and per-item
 explanations; speed as a scoring dimension where the test defines it; norm-table
 representation.
 **Touches:** `domain/scoring`, `ports.Scorer`, a scoring service.
 **Depends on:** Block 8.
-**Done when:** a completed session yields a raw score, band, scaled IQ, and feedback for a normed test.
-**Inherited from Block 8 (fix here before scoring leans on grading):**
-- **Freeze the answer key** — the executor grades against the *live* item bank
-  (`app/execution.graded`), not a key frozen into the session plan. Snapshot the
-  key (or a content hash) into the plan at composition so grading is reproducible
-  and immune to bank drift/deletion. (ADR candidate.)
-- **Numeric answer presence** — a zero-valued numeric answer currently matches a
-  zero-valued key (`Answer.Numeric` has no presence bit); add an "answered"
-  signal before any open-numeric item is administered.
-- **Numeric tolerance** — open-numeric grading is exact float equality; introduce
-  an epsilon with the scoring model if an item type needs approximate answers.
-- **Consume adaptive delivery order** — Block 8 captures a distinct delivery
-  path for adaptive attempts but, over a fully-administered pool, the *set* of
-  responses is identical to a fixed attempt; only the order differs. The scorer
-  must actually consume delivery order/path (or an ability-based early stop must
-  land) or "adaptive" stays behaviorally cosmetic.
+**Done when:** a completed session yields a raw score, band, scaled IQ, and feedback for a normed test. ✅
+**Delivered:**
+- `domain/scoring` (pure, stdlib-only): `Score`/`Speed`/`ItemFeedback`/`Outcome`
+  values; `NormTable{Mean,SD}` parametric normal norm + `NormBook` by test id
+  (`percentile = 100·Φ(z)`, `IQ = round(100+15·z)`, `Φ` via `math.Erfc`);
+  Wechsler-style `Band` + `Classify`; `AbilityFromStaircase` reversal-mean
+  estimator; sentinel `ErrNotScorable`.
+- `app/scoring.Service` implements `ports.Scorer` (reclassified driven →
+  **driving**, mirroring `Executor`): maps a `SessionSnapshot` onto the model,
+  reads the bank for feedback, resolves the norm book. Fixed attempts norm the
+  raw count; adaptive attempts norm the staircase ability.
+- Wired into `cmd/testmaker -run-test` (demo norm book; prints band/IQ/percentile,
+  speed and feedback count for both fixed and adaptive attempts).
+**Inherited from Block 8 — resolution:**
+- **Freeze the answer key** — RESOLVED for scoring: the scorer reads the *frozen*
+  grades captured at administration (`session.Response.Correct`), never re-grading
+  against the live bank, so a score is drift-immune; the bank is consulted only
+  for feedback text, which degrades to blank if an item was deleted. Freezing the
+  key into the *execution plan* (so live grading is also reproducible) remains a
+  Block-10 execution-hardening concern.
+- **Numeric answer tolerance** — RESOLVED: `item.AnswerKey.Tolerance` (an absolute
+  epsilon, default 0 = exact) is validated for open-numeric keys and honoured by
+  `app/execution.graded` (`|answer − key| ≤ tolerance`), proven by
+  `TestAnswerGradesNumericWithinTolerance`. Existing keys keep exact equality.
+- **Numeric answer presence** — RESOLVED by decision (no bit): `AnswerFormat` is the
+  presence discriminator (0 is a valid open-numeric answer, e.g. "5 − 5"), and the
+  session never records an unanswered item, so a matched zero is a real answer, not a
+  skip. Documented on `item.AnswerKey` and `execution.graded`.
+- **Consume adaptive delivery order** — RESOLVED: `AbilityFromStaircase` is the
+  reversal-mean estimator, which consumes the *order* of correct/wrong outcomes.
+  Two attempts with the same items and the same count correct but a different
+  sequence get different abilities (proven by
+  `TestScoreAdaptiveConsumesDeliveryOrder`), so "adaptive" is no longer cosmetic.
 
 ## Block 10 — Delivery surface (CLI / HTTP API) 🚧
 

@@ -70,14 +70,19 @@ context. Terms marked 🚧 are designed but not yet implemented.
 | **Global deadline** | `startedAt + total budget`; the executor abandons an attempt once `now` passes it. |
 | **Adaptive path** | The sequence of difficulties taken through an adaptive test: a classical up/down staircase (climb on correct, descend on wrong). |
 
-## Scoring (`domain/scoring`) 🚧
+## Scoring (`domain/scoring`) ✅
 
 | Term | Meaning |
 |---|---|
-| **Score** | Value result: raw score, percentile/normal band, IQ-scaled score, per-item feedback. |
-| **Band** | Percentile / normal-distribution classification of a raw score. |
-| **Scaled IQ** | Raw score mapped to an IQ-style scale (mean 100, SD 15 by convention). |
-| **Scorer** | The driven port that turns a completed session into a Score. |
+| **Score** | Value result: raw score, adaptive ability, percentile/normal band, IQ-scaled score, speed, per-item feedback. Carries no identity. |
+| **Norm table** | A test's parametric normal norm (`Mean`, `SD`) of its scored dimension; maps a raw/ability value to a percentile and an IQ. |
+| **Norm book** | A deployment's map of test id → norm table, supplied at the composition root. A test with no entry scores raw-only. |
+| **Band** | Qualitative classification of a scaled IQ (Wechsler-style: extremely-low … very-superior; `unnormed` when no norm applied). |
+| **Scaled IQ** | The scored dimension mapped to an IQ-style scale (mean 100, SD 15): `round(100 + 15·z)`. |
+| **Ability** | The adaptive scored dimension in difficulty-band units: the mean band at the staircase **reversal** points (the transformed up/down estimate). Consumes the delivery order. |
+| **Speed** | The response-time scoring dimension (total, mean per item, correct-per-minute); reported, not folded into the scaled IQ. |
+| **Item feedback** | Per-item post-completion explanation: the taker's answer, the correct answer, and why. |
+| **Scorer** | The driving port (`app/scoring.Service`) that turns a completed session into a Score. |
 
 ## LLM prompts (`domain/prompt`) ✅
 
