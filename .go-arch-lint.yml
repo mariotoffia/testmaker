@@ -55,6 +55,7 @@ components:
   adapter_testdb_memorytestdb: { in: [adapters/native/testdb/memorytestdb, adapters/native/testdb/memorytestdb/**] }
   adapter_testdb_sqlitetestdb: { in: [adapters/native/testdb/sqlitetestdb, adapters/native/testdb/sqlitetestdb/**] }
   adapter_fetch_stubfetcher: { in: [adapters/native/fetch/stubfetcher, adapters/native/fetch/stubfetcher/**] }
+  adapter_fetch_httpfetch: { in: [adapters/native/fetch/httpfetch, adapters/native/fetch/httpfetch/**] }
   adapter_llm_openaicompat: { in: [adapters/native/llm/openaicompat, adapters/native/llm/openaicompat/**] }
 
   # --- composition root ---
@@ -105,6 +106,11 @@ deps:
     canUse: [sqlite]
 
   adapter_fetch_stubfetcher:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [_no_external_deps_]
+
+  # Direct-download fetcher: stdlib net/http + archive/zip only.
+  adapter_fetch_httpfetch:
     mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
 

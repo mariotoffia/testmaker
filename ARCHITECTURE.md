@@ -142,7 +142,7 @@ aggregates.
 | --- | --- | --- | --- |
 | `SourceRepository` | driven | catalogue app service | ✅ |
 | `CatalogLoader` | driven | ingest a catalogue file | ✅ |
-| `Fetcher` | driven | pull raw items from a source | ✅ (stub) |
+| `Fetcher` | driven | pull raw items from a source | ✅ (stub + `httpfetch` direct-download) |
 | `LLM` | driven | extraction / translation / derivation steps | ✅ (port; backends 🚧) |
 | `PromptRepository` | driven | versioned prompt store for the LLM service | ✅ (port; adapters 🚧) |
 | `ItemRepository` | driven | item bank | ✅ (memory + sqlite) |
@@ -179,9 +179,10 @@ one shared conformance suite (see [TESTS.md](TESTS.md)).
 | source | memory | `adapters/native/source/memorycatalog` | `SourceRepository` | ✅ |
 | source | file | `adapters/native/source/filecatalog` | `CatalogLoader` (JSON/YAML) | ✅ |
 | fetch | stub | `adapters/native/fetch/stubfetcher` | `Fetcher` | ✅ |
+| fetch | direct-download | `adapters/native/fetch/httpfetch` | `Fetcher` | ✅ |
 | testdb | memory | `adapters/native/testdb/memorytestdb` | `TestRepository` + `ItemRepository` + `SessionRepository` | ✅ |
 | testdb | sqlite | `adapters/native/testdb/sqlitetestdb` | `TestRepository` + `ItemRepository` + `SessionRepository` | ✅ |
-| fetch | download/scrape/headless/generate | `adapters/native/fetch/*` | `Fetcher` | 🚧 |
+| fetch | download/scrape/headless/generate | `adapters/native/fetch/*` | `Fetcher` | ✅ direct-download (`httpfetch`); scrape/headless/generate 🚧 |
 | generate | sandia / raven / matriks | `adapters/native/generate/*` | `Generator` | 🚧 |
 | llm | openaicompat | `adapters/native/llm/openaicompat` | `LLM` | ✅ |
 | llm | bedrock | `adapters/aws/llm/bedrock` | `LLM` | 🚧 (optional) |

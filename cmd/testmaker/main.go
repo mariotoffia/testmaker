@@ -12,6 +12,7 @@ import (
 	"os"
 	"sort"
 
+	"github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch"
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher"
 	"github.com/mariotoffia/testmaker/adapters/native/llm/openaicompat"
 	"github.com/mariotoffia/testmaker/adapters/native/source/filecatalog"
@@ -19,6 +20,7 @@ import (
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/memorytestdb"
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/sqlitetestdb"
 	"github.com/mariotoffia/testmaker/app/catalog"
+	"github.com/mariotoffia/testmaker/app/ingest"
 	"github.com/mariotoffia/testmaker/domain/item"
 	"github.com/mariotoffia/testmaker/domain/shared"
 	"github.com/mariotoffia/testmaker/domain/source"
@@ -30,15 +32,16 @@ func main() {
 	path := flag.String("catalog", "data/catalog/sources.json", "path to the source catalogue (json or yaml)")
 	testdbDSN := flag.String("testdb", "memory", `TestDb backend: "memory" or a sqlite DSN (a file path or ":memory:")`)
 	llmPrompt := flag.String("llm-prompt", "", "if set (and TESTMAKER_LLM_BASE_URL is configured), send this prompt to the LLM backend")
+	ingestID := flag.String("ingest", "", "if set to a catalogue source id (e.g. openpsych-viqt), fetch and ingest its items into the bank")
 	flag.Parse()
 
-	if err := run(context.Background(), *path, *testdbDSN, *llmPrompt); err != nil {
+	if err := run(context.Background(), *path, *testdbDSN, *llmPrompt, *ingestID); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, path, testdbDSN, llmPrompt string) (err error) {
+func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID string) (err error) {
 	// --- composition root: choose adapters, wire the service ---
 	// One concrete TestDb store backs all three repositories; it is exposed here
 	// as the separate ports the app depends on. The default is the dependency-free
@@ -84,6 +87,25 @@ func run(ctx context.Context, path, testdbDSN, llmPrompt string) (err error) {
 	}
 	printByCategory(all)
 
+	if err := reportReusability(ctx, svc, fetcher); err != nil {
+		return err
+	}
+
+	if err := testDbDemo(ctx, testdb); err != nil {
+		return err
+	}
+	if err := itemBankDemo(ctx, itembank); err != nil {
+		return err
+	}
+	if err := ingestDemo(ctx, svc, itembank, ingestID); err != nil {
+		return err
+	}
+	return llmDemo(ctx, llmPrompt)
+}
+
+// reportReusability prints the reuse/generator breakdown of the catalogue and
+// exercises the fetch boundary (stub) against one generator source.
+func reportReusability(ctx context.Context, svc *catalog.Service, fetcher ports.Fetcher) error {
 	reusable, err := svc.Reusable(ctx)
 	if err != nil {
 		return err
@@ -99,7 +121,6 @@ func run(ctx context.Context, path, testdbDSN, llmPrompt string) (err error) {
 	fmt.Printf("\nReusable: %d\nConditional (license terms apply): %d\nGenerators: %d\n",
 		len(reusable), len(cond), len(gens))
 
-	// Exercise the fetch boundary (stub) against one generator source.
 	if len(gens) > 0 && fetcher.Supports(gens[0]) {
 		res, ferr := fetcher.Fetch(ctx, ports.FetchRequest{Source: gens[0], Limit: 5})
 		if ferr != nil {
@@ -107,14 +128,7 @@ func run(ctx context.Context, path, testdbDSN, llmPrompt string) (err error) {
 		}
 		fmt.Printf("\nFetch demo (%s): %s\n", res.SourceID, res.Note)
 	}
-
-	if err := testDbDemo(ctx, testdb); err != nil {
-		return err
-	}
-	if err := itemBankDemo(ctx, itembank); err != nil {
-		return err
-	}
-	return llmDemo(ctx, llmPrompt)
+	return nil
 }
 
 // testDbDemo exercises the in-memory TestDb (the default ports.TestRepository)
@@ -167,6 +181,42 @@ func itemBankDemo(ctx context.Context, bank ports.ItemRepository) error {
 	}
 	fmt.Printf("Item bank demo: stored %q (%s, family=%s); query by family/type/difficulty matched %d item(s)\n",
 		snap.ID, snap.AnswerFormat, snap.Family, len(matches))
+	return nil
+}
+
+// ingestDemo wires the real fetch → normalize → validate → store pipeline. With
+// no -ingest flag the step is skipped. When a source id is given, it looks the
+// source up in the catalogue, fetches its artifacts through the httpfetch
+// adapter (falling back to the stub for unsupported methods), normalizes them
+// into validated bank items and reports the per-stage counts. The composition
+// root is the only place that knows the concrete fetchers and per-source
+// normalizers.
+func ingestDemo(ctx context.Context, cat *catalog.Service, bank ports.ItemRepository, sourceID string) error {
+	if sourceID == "" {
+		fmt.Println("\nIngest: not requested (pass -ingest <source-id>, e.g. openpsych-viqt); skipping.")
+		return nil
+	}
+
+	snap, err := cat.Get(ctx, source.SourceID(sourceID))
+	if err != nil {
+		return err
+	}
+
+	// Inject through the port type (like the other adapters at the composition
+	// root) so the wiring is an app→ports dependency, not adapter→app.
+	var (
+		downloader ports.Fetcher = httpfetch.New()
+		stub       ports.Fetcher = stubfetcher.NewFetcher()
+	)
+	svc := ingest.NewService(bank, downloader, stub)
+	svc.Register(ingest.VIQTSourceID, ingest.VIQTNormalizer)
+
+	rep, err := svc.Ingest(ctx, snap, 0)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\nIngest demo (%s): fetched %d artifact(s), normalized %d, saved %d, skipped %d — %s\n",
+		rep.SourceID, rep.Fetched, rep.Normalized, rep.Saved, rep.Skipped, rep.Note)
 	return nil
 }
 
