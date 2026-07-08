@@ -127,13 +127,13 @@ old `(id,title)` rows are quarantined into `tests_v1_legacy`). Proven end-to-end
 by the `-author-test` CLI demo (memory + sqlite) and the shared `TestRepository`
 conformance suite.
 
-## Block 8 — Renderer / executor 🚧
+## Block 8 — Renderer / executor ✅
 
 **Goal:** administer a test — the `Session` state machine, per-item and global
 timing (injected clock), navigation, and adaptive next-item selection.
-**Touches:** `domain/session`, `ports.Executor/SessionRepository`, `adapters/native/testdb/*`, an execution service.
+**Touches:** `domain/clock`, `domain/session`, `ports.Executor/SessionRepository`, `adapters/native/testdb/*`, `app/execution`, `cmd/testmaker -run-test`.
 **Depends on:** Blocks 3, 7.
-**Done when:** a session can be started, driven item-by-item under timing (fixed and adaptive), and completed with responses + timings captured.
+**Done when:** a session can be started, driven item-by-item under timing (fixed and adaptive), and completed with responses + timings captured. ✅ — `app/execution.Service` over an injected `clock.Clock`; sessions persist as a rich JSON snapshot in both testdb backends; `-run-test` administers a fixed and an adaptive attempt end-to-end.
 
 ## Block 9 — Scoring & feedback 🚧
 
@@ -143,6 +143,21 @@ representation.
 **Touches:** `domain/scoring`, `ports.Scorer`, a scoring service.
 **Depends on:** Block 8.
 **Done when:** a completed session yields a raw score, band, scaled IQ, and feedback for a normed test.
+**Inherited from Block 8 (fix here before scoring leans on grading):**
+- **Freeze the answer key** — the executor grades against the *live* item bank
+  (`app/execution.graded`), not a key frozen into the session plan. Snapshot the
+  key (or a content hash) into the plan at composition so grading is reproducible
+  and immune to bank drift/deletion. (ADR candidate.)
+- **Numeric answer presence** — a zero-valued numeric answer currently matches a
+  zero-valued key (`Answer.Numeric` has no presence bit); add an "answered"
+  signal before any open-numeric item is administered.
+- **Numeric tolerance** — open-numeric grading is exact float equality; introduce
+  an epsilon with the scoring model if an item type needs approximate answers.
+- **Consume adaptive delivery order** — Block 8 captures a distinct delivery
+  path for adaptive attempts but, over a fully-administered pool, the *set* of
+  responses is identical to a fixed attempt; only the order differs. The scorer
+  must actually consume delivery order/path (or an ability-based early stop must
+  land) or "adaptive" stays behaviorally cosmetic.
 
 ## Block 10 — Delivery surface (CLI / HTTP API) 🚧
 
@@ -152,6 +167,12 @@ root.
 **Touches:** `cmd/testmaker`, optional `httpapi`, config.
 **Depends on:** Blocks 7–9.
 **Done when:** a user can author, take and be scored on a test through the surface.
+**Inherited from Block 8 (close before concurrent multi-request execution):**
+- **Optimistic concurrency on `SessionRepository`** — `SaveSession` is a blind
+  upsert, so two concurrent `Answer`s (or an `Answer` racing a `Complete`) on one
+  session id last-writer-wins and can even resurrect a completed attempt. Add a
+  version/etag guard before the execution use-case is exposed to more than one
+  request per attempt. (ADR candidate.)
 
 ## Block 11 — Media / blob storage 🚧
 
@@ -184,7 +205,7 @@ consumers. Design rules in [DESIGN.md](DESIGN.md#6-llm-support) §6.
 
 ## Cross-cutting (fold into blocks as needed)
 
-- **Clock** (`domain/clock` + fake) — introduce with Block 8 (timing/adaptivity); `forbidigo` already bans raw `time.Now`.
+- **Clock** (`domain/clock` + fake) — introduced with Block 8 ✅ (timing/adaptivity); `forbidigo` bans raw `time.Now`, so `System()` is the sanctioned real reading and `Fake` drives tests deterministically.
 - **Observability / logging** — add a `logging` port when the delivery surface (Block 10) needs it.
 - **AWS SDK v2 adapters** — DynamoDB `TestDb` and S3 blob store as `adapters/aws/*` when cloud persistence is wanted (own modules, own vendor allow-list).
 

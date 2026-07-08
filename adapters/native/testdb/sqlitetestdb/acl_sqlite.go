@@ -111,6 +111,29 @@ func schemaMigrations() [][]string {
 				snapshot TEXT NOT NULL
 			) STRICT`,
 		},
+		// Block 8 (renderer / executor): the session aggregate outgrew the
+		// scaffold's flat (id, test_id) columns — a snapshot now carries the plan
+		// (sections, item refs, timing), the lifecycle state, timing anchors, the
+		// presented item and every captured response. Persist it as a single JSON
+		// document keyed by id, exactly like items (migration 2) and tests
+		// (migration 4). No query column is added: SessionFilter has no consumer
+		// yet and GetSession is a point lookup. Upgrade path if a session-query
+		// surface (Block 9 scoring) lands: add generated columns like the items
+		// table.
+		//
+		// The old (id, test_id) shape cannot be transformed into a valid
+		// SessionSnapshot (which now requires a plan, state and timing anchors), so
+		// there is no correct in-place conversion — the same reason migrations 2
+		// and 4 quarantined their scaffold tables. Rename the old table to
+		// sessions_v1_legacy: any rows are preserved for manual recovery and a
+		// fresh database just carries an empty legacy table.
+		{
+			`ALTER TABLE sessions RENAME TO sessions_v1_legacy`,
+			`CREATE TABLE sessions (
+				id       TEXT PRIMARY KEY,
+				snapshot TEXT NOT NULL
+			) STRICT`,
+		},
 	}
 }
 
@@ -427,26 +450,55 @@ func (s *Store) listItemRows(ctx context.Context, filter item.ItemFilter) ([]ite
 
 // --- sessions table ---
 
+// The Session aggregate is persisted as a single JSON document (see migration
+// 5), mirroring the items and tests tables. encoding/json round-trips every
+// snapshot field and preserves the nil-vs-empty slice distinction, and the
+// aggregate normalizes every timestamp to UTC in Snapshot, so a snapshot read
+// back is reflect.DeepEqual to the one saved — the parity the conformance suite
+// asserts against the memory store. Unmarshalling allocates fresh slices, so a
+// returned snapshot never aliases stored bytes or caller input.
+
 func (s *Store) saveSessionRow(ctx context.Context, snap session.SessionSnapshot) error {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO sessions (id, test_id) VALUES (?, ?)
-		 ON CONFLICT(id) DO UPDATE SET test_id = excluded.test_id`,
-		string(snap.ID), snap.TestID)
+	blob, err := json.Marshal(snap)
+	if err != nil {
+		return ErrStore.WithMessagef("marshal session %q", snap.ID).Wrap(err)
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO sessions (id, snapshot) VALUES (?, ?)
+		 ON CONFLICT(id) DO UPDATE SET snapshot = excluded.snapshot`,
+		string(snap.ID), string(blob))
 	if err != nil {
 		return ErrStore.WithMessagef("save session %q", snap.ID).Wrap(err)
 	}
 	return nil
 }
 
+func unmarshalSession(id session.SessionID, blob string) (session.SessionSnapshot, error) {
+	var snap session.SessionSnapshot
+	if err := json.Unmarshal([]byte(blob), &snap); err != nil {
+		return session.SessionSnapshot{}, ErrStore.WithMessagef("unmarshal session %q", id).Wrap(err)
+	}
+	// The id column is authoritative; a blob whose embedded id disagrees means a
+	// corrupted or hand-edited row. Reject it rather than return a snapshot under
+	// the wrong key (mirrors unmarshalItem / unmarshalTest).
+	if snap.ID != id {
+		return session.SessionSnapshot{}, ErrStore.WithMessagef("session row %q holds a snapshot with id %q", id, snap.ID)
+	}
+	return snap, nil
+}
+
 func (s *Store) getSessionRow(ctx context.Context, id session.SessionID) (session.SessionSnapshot, bool, error) {
-	snap := session.SessionSnapshot{ID: id}
-	err := s.db.QueryRowContext(ctx,
-		`SELECT test_id FROM sessions WHERE id = ?`, string(id)).Scan(&snap.TestID)
+	var blob string
+	err := s.db.QueryRowContext(ctx, `SELECT snapshot FROM sessions WHERE id = ?`, string(id)).Scan(&blob)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return session.SessionSnapshot{}, false, nil
 	case err != nil:
 		return session.SessionSnapshot{}, false, ErrStore.WithMessagef("get session %q", id).Wrap(err)
+	}
+	snap, err := unmarshalSession(id, blob)
+	if err != nil {
+		return session.SessionSnapshot{}, false, err
 	}
 	return snap, true, nil
 }

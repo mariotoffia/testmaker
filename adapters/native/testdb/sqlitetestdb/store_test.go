@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/sqlitetestdb"
 	"github.com/mariotoffia/testmaker/domain/item"
@@ -169,7 +170,11 @@ func TestFileDBPersistsAcrossReopen(t *testing.T) {
 	if err := first.SaveItem(ctx, wantItem); err != nil {
 		t.Fatalf("save item: %v", err)
 	}
-	if err := first.SaveSession(ctx, session.SessionSnapshot{ID: "sess-1", TestID: "gia"}); err != nil {
+	// A started, partially-answered session (plan slices, captured responses,
+	// normalized timestamps) exercises the JSON session blob across a real
+	// Close/reopen — the durability proof a memory store cannot give.
+	wantSession := mustSessionSnapshot(t)
+	if err := first.SaveSession(ctx, wantSession); err != nil {
 		t.Fatalf("save session: %v", err)
 	}
 	if err := first.Close(); err != nil {
@@ -183,7 +188,7 @@ func TestFileDBPersistsAcrossReopen(t *testing.T) {
 	if got, err := second.GetItem(ctx, "omib-1"); err != nil || !reflect.DeepEqual(got, wantItem) {
 		t.Fatalf("item after reopen: got %+v, err %v", got, err)
 	}
-	if got, err := second.GetSession(ctx, "sess-1"); err != nil || got.TestID != "gia" {
+	if got, err := second.GetSession(ctx, wantSession.ID); err != nil || !reflect.DeepEqual(got, wantSession) {
 		t.Fatalf("session after reopen: got %+v, err %v", got, err)
 	}
 }
@@ -257,14 +262,14 @@ func TestGetItemRejectsIdMismatch(t *testing.T) {
 
 // TestMigrationV1UpgradePreservesLegacyRows proves upgrading a real v1 database
 // to the current schema does not destroy its data: the pre-Block-4 items(id,
-// source_id, stem) rows are quarantined into items_v1_legacy by migration 2 and
-// the pre-Block-7 tests(id, title) rows into tests_v1_legacy by migration 4 —
-// neither is dropped — while the untouched v1 sessions rows still read back
-// through the store. It is the regression lock for the data-preservation fix — a
-// revert to `DROP TABLE` makes a legacy-row assertion fail, and a migration that
-// touched sessions would fail the survival assertion. The driver is registered by
-// the package under test, so a bare handle can seed the frozen v1 schema
-// (migration 1 is append-only, so that shape never changes).
+// source_id, stem) rows are quarantined into items_v1_legacy by migration 2, the
+// pre-Block-7 tests(id, title) rows into tests_v1_legacy by migration 4, and the
+// pre-Block-8 sessions(id, test_id) rows into sessions_v1_legacy by migration 5 —
+// none is dropped. It is the regression lock for the data-preservation fix — a
+// revert to `DROP TABLE` in any of those migrations makes a legacy-row assertion
+// fail. The driver is registered by the package under test, so a bare handle can
+// seed the frozen v1 schema (migration 1 is append-only, so that shape never
+// changes).
 func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "v1.sqlite")
@@ -292,19 +297,18 @@ func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 	}
 
 	// Open runs migrations 2 (RENAME items -> items_v1_legacy, CREATE new items),
-	// 3 (add item query columns) and 4 (RENAME tests -> tests_v1_legacy, CREATE
-	// new tests).
+	// 3 (add item query columns), 4 (RENAME tests -> tests_v1_legacy, CREATE new
+	// tests) and 5 (RENAME sessions -> sessions_v1_legacy, CREATE new sessions).
 	store := mustOpen(t, path)
 
-	// The v1 sessions row is untouched by the item/test migrations and must still
-	// read back through the store's normal accessor.
-	if got, err := store.GetSession(ctx, "sess-0"); err != nil || got.TestID != "gia" {
-		t.Fatalf("v1 session after migration: got %+v, err %v", got, err)
-	}
-	// The v1 tests row cannot become a valid TestSnapshot, so migration 4
-	// quarantines it: the store no longer serves it under its old key.
+	// None of the v1 rows can become a valid snapshot, so every migration
+	// quarantines its table: the store no longer serves any of them under the old
+	// key.
 	if _, err := store.GetTest(ctx, "gia"); !errors.Is(err, testset.ErrUnknownTest) {
 		t.Fatalf("quarantined v1 test: want ErrUnknownTest, got %v", err)
+	}
+	if _, err := store.GetSession(ctx, "sess-0"); !errors.Is(err, session.ErrUnknownSession) {
+		t.Fatalf("quarantined v1 session: want ErrUnknownSession, got %v", err)
 	}
 
 	// The old rows must survive in the quarantine tables (the DROP-revert
@@ -315,7 +319,7 @@ func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen raw: %v", err)
 	}
-	var sourceID, stem, title string
+	var sourceID, stem, title, sessionTestID string
 	var version int
 	if err := legacy.QueryRow(`SELECT source_id, stem FROM items_v1_legacy WHERE id = 'old-1'`).Scan(&sourceID, &stem); err != nil {
 		_ = legacy.Close()
@@ -324,6 +328,10 @@ func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 	if err := legacy.QueryRow(`SELECT title FROM tests_v1_legacy WHERE id = 'gia'`).Scan(&title); err != nil {
 		_ = legacy.Close()
 		t.Fatalf("legacy test row lost: %v", err)
+	}
+	if err := legacy.QueryRow(`SELECT test_id FROM sessions_v1_legacy WHERE id = 'sess-0'`).Scan(&sessionTestID); err != nil {
+		_ = legacy.Close()
+		t.Fatalf("legacy session row lost: %v", err)
 	}
 	if err := legacy.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
 		_ = legacy.Close()
@@ -338,8 +346,11 @@ func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 	if title != "GIA" {
 		t.Fatalf("legacy test row corrupted: title=%q", title)
 	}
-	if version != 4 {
-		t.Fatalf("user_version = %d, want 4", version)
+	if sessionTestID != "gia" {
+		t.Fatalf("legacy session row corrupted: test_id=%q", sessionTestID)
+	}
+	if version != 5 {
+		t.Fatalf("user_version = %d, want 5", version)
 	}
 
 	// The upgraded database's new items table is the JSON-blob shape and
@@ -390,6 +401,10 @@ func TestMigrationV2ToV3AddsQueryColumns(t *testing.T) {
 	if _, err := raw.Exec(`CREATE TABLE tests (id TEXT PRIMARY KEY, title TEXT NOT NULL) STRICT`); err != nil {
 		_ = raw.Close()
 		t.Fatalf("seed v2 tests table: %v", err)
+	}
+	if _, err := raw.Exec(`CREATE TABLE sessions (id TEXT PRIMARY KEY, test_id TEXT NOT NULL) STRICT`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed v2 sessions table: %v", err)
 	}
 	if _, err := raw.Exec(`INSERT INTO items (id, snapshot) VALUES (?, ?)`, string(want.ID), string(blob)); err != nil {
 		_ = raw.Close()
@@ -471,6 +486,10 @@ func TestListNullDifficultyBandMirrorsGoZeroValue(t *testing.T) {
 		_ = raw.Close()
 		t.Fatalf("seed v2 tests table: %v", err)
 	}
+	if _, err := raw.Exec(`CREATE TABLE sessions (id TEXT PRIMARY KEY, test_id TEXT NOT NULL) STRICT`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed v2 sessions table: %v", err)
+	}
 	if _, err := raw.Exec(`INSERT INTO items (id, snapshot) VALUES (?, ?)`, string(full.ID), string(stripped)); err != nil {
 		_ = raw.Close()
 		t.Fatalf("seed row: %v", err)
@@ -539,4 +558,34 @@ func mustItemSnapshot(t *testing.T) item.ItemSnapshot {
 		t.Fatalf("build item: %v", err)
 	}
 	return it.Snapshot()
+}
+
+// mustSessionSnapshot builds a started, partially-answered session snapshot via
+// the real aggregate, so the durability test round-trips the same nested plan,
+// captured responses and UTC-normalized timestamps a real attempt would persist.
+func mustSessionSnapshot(t *testing.T) session.SessionSnapshot {
+	t.Helper()
+	start := time.Date(2024, 6, 7, 8, 9, 10, 0, time.UTC)
+	sess, err := session.NewSession(session.SessionSpec{
+		ID:     "sess-1",
+		TestID: "gia",
+		Policy: session.PolicyFixedIncreasing,
+		Timing: session.Timing{Total: 20 * time.Minute},
+		Sections: []session.PlanSection{{
+			Title:  "Reasoning",
+			Family: shared.FamilyLogical,
+			Timing: session.Timing{PerItem: 60 * time.Second},
+			Items:  []session.PlanItem{{ItemID: "log-1", Difficulty: 1}, {ItemID: "log-2", Difficulty: 2}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("build session: %v", err)
+	}
+	if err := sess.Begin(start); err != nil {
+		t.Fatalf("begin session: %v", err)
+	}
+	if err := sess.Record("log-1", session.Answer{OptionID: "c"}, true, start.Add(15*time.Second)); err != nil {
+		t.Fatalf("record session: %v", err)
+	}
+	return sess.Snapshot()
 }

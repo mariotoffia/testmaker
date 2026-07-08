@@ -13,12 +13,10 @@ import (
 // Store is an in-memory TestDb backing the Test, Item and Session repositories,
 // safe for concurrent use.
 //
-// Test and Item snapshots carry slices (sections/item-refs, stimulus/options),
-// so their reads and writes are deep-copied through the aggregate
-// (RehydrateFromSnapshot(...).Snapshot()) to keep stored state from aliasing
-// caller memory — the memorycatalog clone pattern. Session snapshots are still
-// value-only structs (a plain assignment is a deep copy); route them through
-// their aggregate too once Block 8 adds slice/map/pointer fields.
+// Every snapshot carries slices (test sections/item-refs, item stimulus/options,
+// session plan/responses), so reads and writes are deep-copied through the
+// aggregate (RehydrateFromSnapshot(...).Snapshot()) to keep stored state from
+// aliasing caller memory — the memorycatalog clone pattern.
 type Store struct {
 	mu       sync.RWMutex
 	tests    map[testset.TestID]testset.TestSnapshot
@@ -136,6 +134,12 @@ func (s *Store) ListItems(_ context.Context, filter item.ItemFilter) ([]item.Ite
 
 // --- SessionRepository ---
 
+// cloneSession deep-copies a snapshot via the aggregate so stored state never
+// aliases (and is never aliased by) caller-held plan/response slices.
+func cloneSession(snap session.SessionSnapshot) session.SessionSnapshot {
+	return session.RehydrateFromSnapshot(snap).Snapshot()
+}
+
 // SaveSession inserts or replaces a session by id.
 func (s *Store) SaveSession(_ context.Context, snap session.SessionSnapshot) error {
 	if snap.ID == "" {
@@ -143,7 +147,7 @@ func (s *Store) SaveSession(_ context.Context, snap session.SessionSnapshot) err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.sessions[snap.ID] = snap
+	s.sessions[snap.ID] = cloneSession(snap)
 	return nil
 }
 
@@ -156,5 +160,5 @@ func (s *Store) GetSession(_ context.Context, id session.SessionID) (session.Ses
 	if !ok {
 		return session.SessionSnapshot{}, session.ErrUnknownSession.With("id", string(id))
 	}
-	return snap, nil
+	return cloneSession(snap), nil
 }

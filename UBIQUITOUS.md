@@ -55,14 +55,20 @@ context. Terms marked 🚧 are designed but not yet implemented.
 | **Delivery policy** | `fixed-increasing` (ascending difficulty) or `adaptive` (next difficulty depends on prior answer). |
 | **Composite test** | A test combining several ability families across sections. |
 
-## Test execution (`domain/session`) 🚧
+## Test execution (`domain/session`, `domain/clock`, `app/execution`) ✅
 
 | Term | Meaning |
 |---|---|
-| **Session** | Aggregate root: one attempt at a test — a state machine `created → in_progress → completed \| abandoned`. |
-| **Response** | A captured answer for a delivered item, with elapsed time. |
-| **Executor** | The driving port that administers a test (deliver, time, adapt, complete). |
-| **Adaptive path** | The sequence of difficulties taken through an adaptive test. |
+| **Session** | Aggregate root: one attempt at a test — a clock-free state machine `created → in-progress → completed \| abandoned`. |
+| **Plan** | The session's own copy of the test structure it runs: `PlanSection`s of `PlanItem`s (plain-string item ids + difficulty), snapshotted at start so a later test edit never mutates a running attempt. |
+| **Presented** | The item currently in front of the taker (id, difficulty, section, delivered-at); an empty item id means none is presented. |
+| **Response** | A captured answer for the presented item, with elapsed time and graded correctness. |
+| **Answer** | The taker's raw answer, interpreted by the item's format: OptionID (MC), Numeric (open), Verdict (T/F/cannot-say). |
+| **Executor** | The driving port (`app/execution.Service`) that administers a test: `Start`, `Answer` (grade + advance), `Complete`. |
+| **Delivery** | What the executor returns per step: the session snapshot, the presented item's content, and the advisory per-item deadline. |
+| **Clock** | `domain/clock.Clock` — the injected time source (`System()` in production, `Fake` in tests); the aggregate never reads the wall clock itself. |
+| **Global deadline** | `startedAt + total budget`; the executor abandons an attempt once `now` passes it. |
+| **Adaptive path** | The sequence of difficulties taken through an adaptive test: a classical up/down staircase (climb on correct, descend on wrong). |
 
 ## Scoring (`domain/scoring`) 🚧
 

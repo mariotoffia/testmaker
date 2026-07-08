@@ -23,8 +23,11 @@ import (
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/sqlitetestdb"
 	"github.com/mariotoffia/testmaker/app/authoring"
 	"github.com/mariotoffia/testmaker/app/catalog"
+	"github.com/mariotoffia/testmaker/app/execution"
 	"github.com/mariotoffia/testmaker/app/ingest"
+	"github.com/mariotoffia/testmaker/domain/clock"
 	"github.com/mariotoffia/testmaker/domain/item"
+	"github.com/mariotoffia/testmaker/domain/session"
 	"github.com/mariotoffia/testmaker/domain/shared"
 	"github.com/mariotoffia/testmaker/domain/source"
 	"github.com/mariotoffia/testmaker/domain/testset"
@@ -38,26 +41,28 @@ func main() {
 	ingestID := flag.String("ingest", "", "if set to a catalogue source id (e.g. openpsych-viqt), fetch and ingest its items into the bank")
 	genType := flag.String("generate", "", "if set to a figural test type (A1, A2, A3 or A4), procedurally generate a small batch of items into the bank")
 	authorTest := flag.Bool("author-test", false, "compose a composite, timed, difficulty-ordered test from the bank and store+reload it")
+	runTest := flag.Bool("run-test", false, "administer a composed test end-to-end (fixed + adaptive) under timing, grading answers and reporting the score")
 	flag.Parse()
 
-	if err := run(context.Background(), *path, *testdbDSN, *llmPrompt, *ingestID, *genType, *authorTest); err != nil {
+	if err := run(context.Background(), *path, *testdbDSN, *llmPrompt, *ingestID, *genType, *authorTest, *runTest); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType string, authorTest bool) (err error) {
+func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType string, authorTest, runTest bool) (err error) {
 	// --- composition root: choose adapters, wire the service ---
 	// One concrete TestDb store backs all three repositories; it is exposed here
 	// as the separate ports the app depends on. The default is the dependency-free
 	// in-memory store.
 	memStore := memorytestdb.NewStore()
 	var (
-		repo     ports.SourceRepository = memorycatalog.NewStore()
-		loader   ports.CatalogLoader    = filecatalog.NewLoader(path)
-		fetcher  ports.Fetcher          = stubfetcher.NewFetcher()
-		testdb   ports.TestRepository   = memStore
-		itembank ports.ItemRepository   = memStore
+		repo     ports.SourceRepository  = memorycatalog.NewStore()
+		loader   ports.CatalogLoader     = filecatalog.NewLoader(path)
+		fetcher  ports.Fetcher           = stubfetcher.NewFetcher()
+		testdb   ports.TestRepository    = memStore
+		itembank ports.ItemRepository    = memStore
+		sessions ports.SessionRepository = memStore
 	)
 	// A sqlite DSN swaps in the durable adapter. Its *Store satisfies every
 	// TestDb port, so nothing below changes — the only place that knows the
@@ -68,7 +73,7 @@ func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType stri
 		if oerr != nil {
 			return oerr
 		}
-		testdb, itembank, closeTestDB = store, store, store.Close
+		testdb, itembank, sessions, closeTestDB = store, store, store, store.Close
 	}
 	// Surface a close failure (a file-backed store may have unflushed writes)
 	// alongside the real error rather than instead of it.
@@ -109,6 +114,9 @@ func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType stri
 		return err
 	}
 	if err := authorTestDemo(ctx, itembank, testdb, authorTest); err != nil {
+		return err
+	}
+	if err := runTestDemo(ctx, itembank, testdb, sessions, runTest); err != nil {
 		return err
 	}
 	return llmDemo(ctx, llmPrompt)
@@ -238,6 +246,104 @@ func seedAuthoringBank(ctx context.Context, bank ports.ItemRepository) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// runTestDemo is the Block 8 "done when": it administers a composed test
+// end-to-end under timing. It reuses the authoring bank, composes a fixed and an
+// adaptive test, then drives each attempt through the execution service (real
+// clock, grading against each item's answer key) to a completed, scored session.
+// With no -run-test flag the step is skipped. The execution service is stateless
+// and reads/writes attempt state only through the session repository wired here.
+func runTestDemo(
+	ctx context.Context,
+	bank ports.ItemRepository, tests ports.TestRepository, sessions ports.SessionRepository,
+	runTest bool,
+) error {
+	if !runTest {
+		fmt.Println("\nRun test: not requested (pass -run-test); skipping.")
+		return nil
+	}
+	if err := seedAuthoringBank(ctx, bank); err != nil {
+		return err
+	}
+	author := authoring.NewTestService(bank, tests)
+	exec := execution.NewService(clock.System(), bank, sessions, execution.RandomIDs())
+
+	fixedID, err := author.Compose(ctx, authoring.ComposeSpec{
+		ID:     "run-fixed",
+		Title:  "Run Demo (fixed)",
+		Policy: testset.PolicyFixedIncreasing,
+		Timing: testset.Timing{Total: 15 * time.Minute, PerItem: time.Minute},
+		Sections: []authoring.SectionSpec{
+			{Title: "Logical", Family: shared.FamilyLogical, Timing: testset.Timing{Total: 8 * time.Minute, PerItem: time.Minute}},
+			{Title: "Numerical", Family: shared.FamilyNumerical, Timing: testset.Timing{Total: 5 * time.Minute}},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	fixedTest, err := tests.GetTest(ctx, fixedID)
+	if err != nil {
+		return err
+	}
+	if err := driveAttempt(ctx, exec, fixedTest, "fixed"); err != nil {
+		return err
+	}
+
+	// An adaptive logical pool (bands 1..3) shows the executor climbing and
+	// descending the staircase as answers are graded.
+	adaptID, err := author.Compose(ctx, authoring.ComposeSpec{
+		ID:       "run-adaptive",
+		Title:    "Run Demo (adaptive)",
+		Policy:   testset.PolicyAdaptive,
+		Sections: []authoring.SectionSpec{{Title: "Logical", Family: shared.FamilyLogical}},
+	})
+	if err != nil {
+		return err
+	}
+	adaptTest, err := tests.GetTest(ctx, adaptID)
+	if err != nil {
+		return err
+	}
+	return driveAttempt(ctx, exec, adaptTest, "adaptive")
+}
+
+// driveAttempt starts a session for the test, answers each presented item and
+// completes it, then prints the delivery path and score. It alternates
+// correct/incorrect answers so an adaptive attempt exercises both directions of
+// the staircase; the seeded items all key option "b", so "a" is a deterministic
+// wrong answer.
+func driveAttempt(ctx context.Context, exec *execution.Service, test testset.TestSnapshot, label string) error {
+	d, err := exec.Start(ctx, test)
+	if err != nil {
+		return err
+	}
+	id := d.Session.ID
+	var path []string
+	for step := 0; d.Session.Presented.ItemID != ""; step++ {
+		presented := d.Session.Presented
+		path = append(path, fmt.Sprintf("%s(b%d)", presented.ItemID, presented.Difficulty))
+		ans := session.Answer{OptionID: "a"}
+		if step%2 == 0 {
+			ans.OptionID = "b"
+		}
+		if d, err = exec.Answer(ctx, id, presented.ItemID, ans); err != nil {
+			return err
+		}
+	}
+	final, err := exec.Complete(ctx, id)
+	if err != nil {
+		return err
+	}
+	correct := 0
+	for _, r := range final.Responses {
+		if r.Correct {
+			correct++
+		}
+	}
+	fmt.Printf("\nRun-test demo (%s): administered %q\n  path:  %v\n  state: %s, score: %d/%d correct\n",
+		label, final.TestID, path, final.State, correct, len(final.Responses))
 	return nil
 }
 

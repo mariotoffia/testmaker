@@ -19,9 +19,9 @@ context is its `domain/<context>/doc.go`.**
 | Test execution | `domain/session` | **core** | a test-taking attempt |
 | Scoring | `domain/scoring` | supporting | raw → band → IQ-scaled + feedback |
 
-Implemented: **shared**, **source**, **prompt**, **item** and **testset**. The
-remaining core/supporting contexts (**session**, **scoring**) are scaffold
-shells until their blocks land.
+Implemented: **shared**, **clock**, **source**, **prompt**, **item**,
+**testset** and **session**. The remaining supporting context (**scoring**) is a
+scaffold shell until its block lands.
 
 **LLM assistance is a generic subdomain, not a core context.** The backend is
 reached through the single driven port `ports.LLM`; the small `domain/prompt`
@@ -128,12 +128,21 @@ non-decreasing by difficulty; under `adaptive` each section spans ≥2 difficult
 bands (a single-band pool cannot adapt). The aggregate crosses ports only as
 `TestSnapshot`.
 
-### 3.4 Session (`domain/session`) 🚧 — aggregate root (designed)
+### 3.4 Session (`domain/session`) ✅ — aggregate root
 
-Root `Session` as a state machine (`created → in_progress → completed |
-abandoned`) holding `Response`s (with elapsed time) and the adaptive path.
-Planned invariants: legal state transitions only; a response references a
-delivered item; timing monotonic under the injected clock.
+Root `Session` is a clock-free state machine (`created → in-progress →
+completed | abandoned`) holding `Response`s (with elapsed time + graded
+correctness) and, for adaptive tests, the difficulty path taken. It carries its
+own plan value objects (`PlanSection`/`PlanItem` — plain-string item ids +
+`time.Duration` budgets), because a bounded context meets `testset`/`item` only
+through the shared kernel. Enforced invariants: legal transitions only
+(`Begin`/`Record`/`Complete`/`Abandon`); a response targets the presented item;
+the clock never runs backwards (`now ≥ deliveredAt`). The aggregate holds no
+clock — the executor (`app/execution`) owns time and passes `now time.Time` into
+every transition, and grades answers against the item key before calling
+`Record` (the session cannot import the item context). It crosses ports only as
+the rich `SessionSnapshot` DTO, with every `time.Time` UTC-normalized so a memory
+clone and a sqlite JSON round-trip are `reflect.DeepEqual`-identical.
 
 ### 3.5 Score (`domain/scoring`) 🚧 — value result (designed)
 
@@ -172,8 +181,11 @@ aliases so its callers are unchanged.
 | Prompt templates parse; placeholders resolve | `prompt` | `NewPrompt` + `Render` (`missingkey=error`) |
 | Redistributability preserved to items | `item` | `item.NewItem` provenance |
 | MC items have 4–6 keyed options | `item` | `item.NewItem` |
-| Legal session transitions | `session` (planned) | state-machine methods |
-| Deterministic timing | `session` (planned) | injected clock |
+| Legal session transitions | `session` | `Begin`/`Record`/`Complete`/`Abandon` guards |
+| Response targets the presented item | `session` | `Record` (rejects a mismatched item id) |
+| Monotonic timing (clock never rewinds) | `session` | transition guard on `now` vs `deliveredAt` |
+| Deterministic timing (no hidden wall clock) | `domain/clock` + `app/execution` | injected `clock.Clock`; `forbidigo` bans `time.Now` |
+| Answer graded against the item key | `app/execution` | `graded()` before `session.Record` |
 
 ---
 
