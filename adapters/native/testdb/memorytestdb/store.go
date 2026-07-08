@@ -13,11 +13,12 @@ import (
 // Store is an in-memory TestDb backing the Test, Item and Session repositories,
 // safe for concurrent use.
 //
-// ponytail: snapshots are value-only structs today, so a plain assignment is a
-// deep copy — no clone helper needed. When later blocks add slice/map/pointer
-// fields (item = Block 4, test = Block 7, session = Block 8), route every
-// read/write through the aggregate (RehydrateFromSnapshot(...).Snapshot()) as
-// memorycatalog does, or the store will start aliasing caller state.
+// Item snapshots carry slices (stimulus, options), so item reads and writes are
+// deep-copied through the aggregate (RehydrateFromSnapshot(...).Snapshot()) to
+// keep stored state from aliasing caller memory — the memorycatalog clone
+// pattern. Test and Session snapshots are still value-only structs (a plain
+// assignment is a deep copy); route them through their aggregates too once
+// later blocks (test = Block 7, session = Block 8) add slice/map/pointer fields.
 type Store struct {
 	mu       sync.RWMutex
 	tests    map[testset.TestID]testset.TestSnapshot
@@ -83,6 +84,12 @@ func (s *Store) DeleteTest(_ context.Context, id testset.TestID) error {
 
 // --- ItemRepository ---
 
+// cloneItem deep-copies a snapshot via the aggregate so stored state never
+// aliases (and is never aliased by) caller-held slices.
+func cloneItem(snap item.ItemSnapshot) item.ItemSnapshot {
+	return item.RehydrateFromSnapshot(snap).Snapshot()
+}
+
 // SaveItem inserts or replaces an item by id.
 func (s *Store) SaveItem(_ context.Context, snap item.ItemSnapshot) error {
 	if snap.ID == "" {
@@ -90,7 +97,7 @@ func (s *Store) SaveItem(_ context.Context, snap item.ItemSnapshot) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.items[snap.ID] = snap
+	s.items[snap.ID] = cloneItem(snap)
 	return nil
 }
 
@@ -103,18 +110,19 @@ func (s *Store) GetItem(_ context.Context, id item.ItemID) (item.ItemSnapshot, e
 	if !ok {
 		return item.ItemSnapshot{}, item.ErrUnknownItem.With("id", string(id))
 	}
-	return snap, nil
+	return cloneItem(snap), nil
 }
 
-// ListItems returns all items, ordered by id. The filter is a placeholder shell
-// until the Item Bank block, so every stored item is returned.
-func (s *Store) ListItems(_ context.Context, _ item.ItemFilter) ([]item.ItemSnapshot, error) {
+// ListItems returns the items matching filter, ordered by id.
+func (s *Store) ListItems(_ context.Context, filter item.ItemFilter) ([]item.ItemSnapshot, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	out := make([]item.ItemSnapshot, 0, len(s.items))
 	for _, snap := range s.items {
-		out = append(out, snap)
+		if filter.Matches(snap) {
+			out = append(out, cloneItem(snap))
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil

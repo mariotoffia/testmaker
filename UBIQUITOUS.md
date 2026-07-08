@@ -31,16 +31,17 @@ context. Terms marked 🚧 are designed but not yet implemented.
 | **Generator (source)** | A source whose `Generator` flag is true: emits unlimited items + documented rules; IP-free backbone of the designer. |
 | **Priority / IP risk / Category** | Curation metadata: value for a logic-first bank; verbatim-reuse risk; catalogue grouping (`open-data`, `ml-dataset`, `branded-vendor`, …). |
 
-## Item bank (`domain/item`) 🚧
+## Item bank (`domain/item`)
 
 | Term | Meaning |
 |---|---|
 | **Item** | Aggregate root: one scored test item — stem/stimulus, answer format, key, explanation, difficulty, provenance. |
-| **Stimulus** | The item's prompt: text and/or figural media (image, SVG, matrix grid), by reference. |
+| **Stimulus** | The item's prompt: an ordered set of parts, each text and/or a figural media reference (image, SVG, matrix grid, figure). |
 | **Answer format** | `multiple-choice` (4–6 options), `open-numeric`, or `true-false-cannotsay`. |
-| **Answer key** | The correct response for an item. |
-| **Difficulty** | Ordinal band (1..N) and optional IRT parameters. |
+| **Answer key** | The correct response, interpreted by answer format: option id, numeric value, or verdict. |
+| **Difficulty** | Ordinal band (1..N). IRT parameters deferred to adaptive delivery. |
 | **Provenance** | The item's origin: `SourceID` + `fetched`/`generated`/`authored` + inherited redistributability. |
+| **Item filter** | Query criteria over the bank: ability family, test type, origin, redistributability, difficulty range. |
 | **RawItem** | A loose, unvalidated item pulled by a Fetcher before normalization into an `Item`. |
 
 ## Test authoring (`domain/testset`) 🚧

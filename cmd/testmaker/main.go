@@ -19,6 +19,8 @@ import (
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/memorytestdb"
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/sqlitetestdb"
 	"github.com/mariotoffia/testmaker/app/catalog"
+	"github.com/mariotoffia/testmaker/domain/item"
+	"github.com/mariotoffia/testmaker/domain/shared"
 	"github.com/mariotoffia/testmaker/domain/source"
 	"github.com/mariotoffia/testmaker/domain/testset"
 	"github.com/mariotoffia/testmaker/ports"
@@ -38,22 +40,27 @@ func main() {
 
 func run(ctx context.Context, path, testdbDSN, llmPrompt string) (err error) {
 	// --- composition root: choose adapters, wire the service ---
+	// One concrete TestDb store backs all three repositories; it is exposed here
+	// as the separate ports the app depends on. The default is the dependency-free
+	// in-memory store.
+	memStore := memorytestdb.NewStore()
 	var (
-		repo    ports.SourceRepository = memorycatalog.NewStore()
-		loader  ports.CatalogLoader    = filecatalog.NewLoader(path)
-		fetcher ports.Fetcher          = stubfetcher.NewFetcher()
-		testdb  ports.TestRepository   = memorytestdb.NewStore()
+		repo     ports.SourceRepository = memorycatalog.NewStore()
+		loader   ports.CatalogLoader    = filecatalog.NewLoader(path)
+		fetcher  ports.Fetcher          = stubfetcher.NewFetcher()
+		testdb   ports.TestRepository   = memStore
+		itembank ports.ItemRepository   = memStore
 	)
-	// The default is the dependency-free in-memory store; a sqlite DSN swaps in
-	// the durable adapter. Both satisfy ports.TestRepository, so nothing below
-	// changes — the only place that knows the concrete backend is right here.
+	// A sqlite DSN swaps in the durable adapter. Its *Store satisfies every
+	// TestDb port, so nothing below changes — the only place that knows the
+	// concrete backend is right here.
 	closeTestDB := func() error { return nil }
 	if testdbDSN != "" && testdbDSN != "memory" {
 		store, oerr := sqlitetestdb.Open(testdbDSN)
 		if oerr != nil {
 			return oerr
 		}
-		testdb, closeTestDB = store, store.Close
+		testdb, itembank, closeTestDB = store, store, store.Close
 	}
 	// Surface a close failure (a file-backed store may have unflushed writes)
 	// alongside the real error rather than instead of it.
@@ -104,6 +111,9 @@ func run(ctx context.Context, path, testdbDSN, llmPrompt string) (err error) {
 	if err := testDbDemo(ctx, testdb); err != nil {
 		return err
 	}
+	if err := itemBankDemo(ctx, itembank); err != nil {
+		return err
+	}
 	return llmDemo(ctx, llmPrompt)
 }
 
@@ -119,6 +129,44 @@ func testDbDemo(ctx context.Context, testdb ports.TestRepository) error {
 		return err
 	}
 	fmt.Printf("\nTestDb demo: stored and reloaded %q (%s)\n", got.Title, got.ID)
+	return nil
+}
+
+// itemBankDemo exercises the ItemRepository: it builds a validated multiple-choice
+// item through the aggregate, stores its snapshot, and queries the bank by
+// ability family, test type and difficulty band — the Block 4 "done when".
+func itemBankDemo(ctx context.Context, bank ports.ItemRepository) error {
+	it, ierr := item.NewItem(item.ItemSpec{
+		ID:           "omib-1",
+		Provenance:   item.Provenance{SourceID: "omib", Origin: item.OriginFetched, Redistributable: shared.RedistConditional},
+		TestType:     "A2",
+		Stimulus:     []item.StimulusPart{{Text: "which figure continues the series?"}, {MediaKind: item.MediaGrid, MediaRef: "blob://omib-1"}},
+		AnswerFormat: item.FormatMultipleChoice,
+		Options: []item.Option{
+			{ID: "a", Text: "A"}, {ID: "b", Text: "B"}, {ID: "c", Text: "C"}, {ID: "d", Text: "D"},
+		},
+		AnswerKey:   item.AnswerKey{OptionID: "c"},
+		Explanation: "each step rotates the figure 90 degrees",
+		Difficulty:  item.Difficulty{Band: 3},
+	})
+	if ierr != nil {
+		return ierr
+	}
+	snap := it.Snapshot()
+	if err := bank.SaveItem(ctx, snap); err != nil {
+		return err
+	}
+	matches, err := bank.ListItems(ctx, item.ItemFilter{
+		Families:      []shared.AbilityFamily{shared.FamilyLogical},
+		TestTypes:     []shared.TestTypeCode{"A2"},
+		MinDifficulty: 2,
+		MaxDifficulty: 5,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Item bank demo: stored %q (%s, family=%s); query by family/type/difficulty matched %d item(s)\n",
+		snap.ID, snap.AnswerFormat, snap.Family, len(matches))
 	return nil
 }
 
