@@ -14,11 +14,13 @@ import (
 
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch"
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher"
+	"github.com/mariotoffia/testmaker/adapters/native/generate/rulegen"
 	"github.com/mariotoffia/testmaker/adapters/native/llm/openaicompat"
 	"github.com/mariotoffia/testmaker/adapters/native/source/filecatalog"
 	"github.com/mariotoffia/testmaker/adapters/native/source/memorycatalog"
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/memorytestdb"
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/sqlitetestdb"
+	"github.com/mariotoffia/testmaker/app/authoring"
 	"github.com/mariotoffia/testmaker/app/catalog"
 	"github.com/mariotoffia/testmaker/app/ingest"
 	"github.com/mariotoffia/testmaker/domain/item"
@@ -33,15 +35,16 @@ func main() {
 	testdbDSN := flag.String("testdb", "memory", `TestDb backend: "memory" or a sqlite DSN (a file path or ":memory:")`)
 	llmPrompt := flag.String("llm-prompt", "", "if set (and TESTMAKER_LLM_BASE_URL is configured), send this prompt to the LLM backend")
 	ingestID := flag.String("ingest", "", "if set to a catalogue source id (e.g. openpsych-viqt), fetch and ingest its items into the bank")
+	genType := flag.String("generate", "", "if set to a figural test type (A1, A2, A3 or A4), procedurally generate a small batch of items into the bank")
 	flag.Parse()
 
-	if err := run(context.Background(), *path, *testdbDSN, *llmPrompt, *ingestID); err != nil {
+	if err := run(context.Background(), *path, *testdbDSN, *llmPrompt, *ingestID, *genType); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID string) (err error) {
+func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType string) (err error) {
 	// --- composition root: choose adapters, wire the service ---
 	// One concrete TestDb store backs all three repositories; it is exposed here
 	// as the separate ports the app depends on. The default is the dependency-free
@@ -98,6 +101,9 @@ func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID string) (err 
 		return err
 	}
 	if err := ingestDemo(ctx, svc, itembank, ingestID); err != nil {
+		return err
+	}
+	if err := generateDemo(ctx, itembank, genType); err != nil {
 		return err
 	}
 	return llmDemo(ctx, llmPrompt)
@@ -217,6 +223,34 @@ func ingestDemo(ctx context.Context, cat *catalog.Service, bank ports.ItemReposi
 	}
 	fmt.Printf("\nIngest demo (%s): fetched %d artifact(s), normalized %d, saved %d, skipped %d — %s\n",
 		rep.SourceID, rep.Fetched, rep.Normalized, rep.Saved, rep.Skipped, rep.Note)
+	return nil
+}
+
+// generateDemo wires the procedural generator (rulegen) through the authoring
+// use-case: with no -generate flag the step is skipped. When a figural test type
+// is given, it generates a small deterministic batch and stores it in the bank,
+// reporting the per-run counts. The composition root is the only place that
+// knows the concrete generator.
+func generateDemo(ctx context.Context, bank ports.ItemRepository, genType string) error {
+	if genType == "" {
+		fmt.Println("\nGenerate: not requested (pass -generate <A1|A2|A3|A4>); skipping.")
+		return nil
+	}
+
+	var gen ports.Generator = rulegen.New()
+	svc := authoring.NewService(gen, bank)
+
+	rep, err := svc.Generate(ctx, ports.GenerateSpec{
+		TestType:   shared.TestTypeCode(genType),
+		Difficulty: 2,
+		Count:      3,
+		Seed:       1,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\nGenerate demo (%s): generated %d item(s), saved %d into the bank\n",
+		rep.TestType, rep.Generated, rep.Saved)
 	return nil
 }
 

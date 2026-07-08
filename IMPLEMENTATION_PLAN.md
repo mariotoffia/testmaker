@@ -89,14 +89,23 @@ bands (p-values from the 12k-row response CSV). `go run ./cmd/testmaker
 `git-clone`, and `generate` branches remain 🚧 (no ingested source needs them
 yet); `stubfetcher` stays as the unsupported-method fallback.
 
-## Block 6 — Designer / generator 🚧
+## Block 6 — Designer / generator ✅ (`rulegen` native figural generator + `app/authoring` ✅; external rule-engine adapters not needed)
 
-**Goal:** the procedural generator — `Generator` port + adapters wrapping/porting
-rule engines (Sandia SGMT, matRiks, RAVEN-family, Bongard-LOGO) to emit items
-with ground-truth keys and rule metadata; plus a manual authoring path.
-**Touches:** `ports.Generator`, `adapters/native/generate/*`, `app/authoring`, `domain/item`.
+**Goal:** the procedural generator — `Generator` port + an adapter that emits
+items with ground-truth keys and rule metadata; plus a manual authoring path.
+**Touches:** `ports.Generator`, `adapters/native/generate/rulegen`, `app/authoring`, `domain/item`.
 **Depends on:** Block 4.
-**Done when:** the generator produces valid, keyed, difficulty-tagged items for the primary figural families and stores them in the bank.
+**Done when:** the generator produces valid, keyed, difficulty-tagged items for the primary figural families and stores them in the bank. ✅
+
+Built as `adapters/native/generate/rulegen`, a native Go rule engine covering
+the primary figural families (A1 figure-series, A2 matrix, A3 → series, A4
+odd-one-out). It derives each correct answer from the same rules that build the
+stimulus (keys are ground-truth by construction) and renders figures to
+self-contained SVG data-URIs, so it needs no external engine and no blob store.
+This resolves DESIGN open question #299 toward native rules rather than wrapping
+Sandia SGMT / matRiks / RAVEN-family / Bongard-LOGO (their IP and process
+overhead bought nothing the native engine did not). `app/authoring` stores a
+generated batch and also exposes a manual `Author` path onto the same bank.
 
 ## Block 7 — Test authoring 🚧
 

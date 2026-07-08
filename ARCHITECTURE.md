@@ -71,7 +71,7 @@ can never leak into the memory adapter or the core.
           ┌───────────────▼─────────────────────────────┐
  Ring 3   │  adapters/native/source/{memorycatalog,      │  each: domain + ports
           │     filecatalog} · fetch/stubfetcher ·        │        (+ own vendor)
-          │     llm/openaicompat · ...                    │
+          │     llm/openaicompat · generate/rulegen · ... │
           └───────────────┬─────────────────────────────┘
                           │ implement
           ┌───────────────▼───────────────┐
@@ -148,7 +148,7 @@ aggregates.
 | `ItemRepository` | driven | item bank | ✅ (memory + sqlite) |
 | `TestRepository` | driven | "TestDb" — composed tests | ✅ (memory + sqlite) |
 | `SessionRepository` | driven | execution | ✅ (memory; DTO refines in Block 8) |
-| `Generator` | driven | procedural item generation | 🚧 |
+| `Generator` | driven | procedural item generation | ✅ (port; `rulegen` figural backend ✅) |
 | `Executor` | driving | administer a test | 🚧 |
 | `Scorer` | driven | score a session | 🚧 |
 
@@ -183,7 +183,7 @@ one shared conformance suite (see [TESTS.md](TESTS.md)).
 | testdb | memory | `adapters/native/testdb/memorytestdb` | `TestRepository` + `ItemRepository` + `SessionRepository` | ✅ |
 | testdb | sqlite | `adapters/native/testdb/sqlitetestdb` | `TestRepository` + `ItemRepository` + `SessionRepository` | ✅ |
 | fetch | download/scrape/headless/generate | `adapters/native/fetch/*` | `Fetcher` | ✅ direct-download (`httpfetch`); scrape/headless/generate 🚧 |
-| generate | sandia / raven / matriks | `adapters/native/generate/*` | `Generator` | 🚧 |
+| generate | rulegen (native figural) | `adapters/native/generate/rulegen` | `Generator` | ✅ figural (A1/A2/A3/A4); external engines not needed |
 | llm | openaicompat | `adapters/native/llm/openaicompat` | `LLM` | ✅ |
 | llm | bedrock | `adapters/aws/llm/bedrock` | `LLM` | 🚧 (optional) |
 | llm | memory | `adapters/native/llm/memoryprompts` | `PromptRepository` | 🚧 |
@@ -282,12 +282,13 @@ testmaker/
   go.work                       workspace (lists every module)
   go.mod                        github.com/mariotoffia/testmaker (domain, ports, app)
   domain/{shared,source,prompt,item,testset,session,scoring}/
-  ports/            + ports/{sourcetest,testdbtest}/   (conformance suites)
-  app/{catalog,llm}/
+  ports/            + ports/{sourcetest,testdbtest,generatortest}/   (conformance suites)
+  app/{catalog,ingest,llm,authoring}/
   adapters/native/source/{memorycatalog,filecatalog}/   (own go.mod each)
   adapters/native/testdb/{memorytestdb,sqlitetestdb}/     (own go.mod each)
-  adapters/native/fetch/stubfetcher/                     (own go.mod)
+  adapters/native/fetch/{stubfetcher,httpfetch}/          (own go.mod each)
   adapters/native/llm/openaicompat/                      (own go.mod)
+  adapters/native/generate/rulegen/                      (own go.mod)
   cmd/testmaker/                                          (own go.mod)
   data/catalog/sources.{json,yaml}                        seed catalogue
   ARCHITECTURE.md DDD.md UBIQUITOUS.md DESIGN.md IMPLEMENTATION_PLAN.md
@@ -333,6 +334,8 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) and [LINT.md](LINT.md).
 
 Implemented end-to-end: the **source catalogue** slice (domain, ports, app,
 memory + file adapters, stub fetcher, CLI) with the 81-source research catalogue
-as seed data. Everything else is scaffolding — compiling package shells with
-`doc.go` and DTO stubs — filled in block by block per
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+as seed data, and the **designer / generator** slice (native figural rule engine,
+authoring use-case, `-generate` CLI). Remaining bounded contexts are scaffolding —
+compiling package shells with `doc.go` and DTO stubs — filled in block by block.
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) is the authoritative per-block
+status; consult it rather than this paragraph for what is done.
