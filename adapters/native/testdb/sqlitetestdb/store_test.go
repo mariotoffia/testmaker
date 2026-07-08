@@ -3,6 +3,7 @@ package sqlitetestdb_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -254,16 +255,16 @@ func TestGetItemRejectsIdMismatch(t *testing.T) {
 	}
 }
 
-// TestMigrationV1ToV2PreservesLegacyRows proves migration 2 upgrades a real v1
-// database without destroying its data: the pre-Block-4 items(id, source_id,
-// stem) rows are quarantined into items_v1_legacy, not dropped, and the untouched
-// v1 tests/sessions rows still read back through the store. It is the regression
-// lock for the data-preservation fix — a revert to `DROP TABLE items` makes the
-// legacy-row assertion fail, and a migration that touched tests/sessions would
-// fail the survival assertions. The driver is registered by the package under
-// test, so a bare handle can seed the frozen v1 schema (migration 1 is
-// append-only, so that shape never changes).
-func TestMigrationV1ToV2PreservesLegacyRows(t *testing.T) {
+// TestMigrationV1UpgradePreservesLegacyRows proves upgrading a real v1 database
+// to the current schema does not destroy its data: the pre-Block-4 items(id,
+// source_id, stem) rows are quarantined into items_v1_legacy by migration 2, not
+// dropped, and the untouched v1 tests/sessions rows still read back through the
+// store. It is the regression lock for the data-preservation fix — a revert to
+// `DROP TABLE items` makes the legacy-row assertion fail, and a migration that
+// touched tests/sessions would fail the survival assertions. The driver is
+// registered by the package under test, so a bare handle can seed the frozen v1
+// schema (migration 1 is append-only, so that shape never changes).
+func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "v1.sqlite")
 
@@ -289,11 +290,12 @@ func TestMigrationV1ToV2PreservesLegacyRows(t *testing.T) {
 		t.Fatalf("close raw: %v", err)
 	}
 
-	// Open runs migration 2 (RENAME items -> items_v1_legacy, CREATE new items).
+	// Open runs migrations 2 (RENAME items -> items_v1_legacy, CREATE new items)
+	// and 3 (add query columns).
 	store := mustOpen(t, path)
 
-	// The v1 tests/sessions rows are untouched by migration 2 and must still read
-	// back through the store's normal accessors.
+	// The v1 tests/sessions rows are untouched by the item migrations and must
+	// still read back through the store's normal accessors.
 	if got, err := store.GetTest(ctx, "gia"); err != nil || got.Title != "GIA" {
 		t.Fatalf("v1 test after migration: got %+v, err %v", got, err)
 	}
@@ -302,9 +304,9 @@ func TestMigrationV1ToV2PreservesLegacyRows(t *testing.T) {
 	}
 
 	// The old row must survive in the quarantine table (the DROP-revert tripwire)
-	// and the schema must have advanced to v2. Read through a separate handle,
-	// then release it before writing so the single-connection store never
-	// contends with it.
+	// and the schema must have advanced to the latest version. Read through a
+	// separate handle, then release it before writing so the single-connection
+	// store never contends with it.
 	legacy, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatalf("reopen raw: %v", err)
@@ -325,8 +327,8 @@ func TestMigrationV1ToV2PreservesLegacyRows(t *testing.T) {
 	if sourceID != "omib" || stem != "legacy stem" {
 		t.Fatalf("legacy row corrupted: source_id=%q stem=%q", sourceID, stem)
 	}
-	if version != 2 {
-		t.Fatalf("user_version = %d, want 2", version)
+	if version != 3 {
+		t.Fatalf("user_version = %d, want 3", version)
 	}
 
 	// The upgraded database's new items table is the JSON-blob shape and
@@ -346,6 +348,64 @@ func TestMigrationV1ToV2PreservesLegacyRows(t *testing.T) {
 	reopened := mustOpen(t, path)
 	if got, err := reopened.GetItem(ctx, want.ID); err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("item after second reopen: got %+v, err %v", got, err)
+	}
+}
+
+// TestMigrationV2ToV3AddsQueryColumns proves migration 3's generated query
+// columns are computed from the JSON snapshot of pre-existing v2 rows (which held
+// only id + snapshot), so a filter over every one of them — family, test type,
+// origin, redistributable and difficulty, none of which the WHERE reads from the
+// blob — returns the row after upgrade. This is the runnable check for the
+// json_extract projection and guards each column's JSON path; a wrong path leaves
+// that column NULL and drops the row.
+func TestMigrationV2ToV3AddsQueryColumns(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "v2.sqlite")
+
+	want := mustItemSnapshot(t) // A2 -> logical family, band 3, fetched, conditional
+	blob, err := json.Marshal(want)
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	if _, err := raw.Exec(`CREATE TABLE items (id TEXT PRIMARY KEY, snapshot TEXT NOT NULL) STRICT`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed v2 items table: %v", err)
+	}
+	if _, err := raw.Exec(`INSERT INTO items (id, snapshot) VALUES (?, ?)`, string(want.ID), string(blob)); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed v2 row: %v", err)
+	}
+	if _, err := raw.Exec(`PRAGMA user_version = 2`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed user_version: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close raw: %v", err)
+	}
+
+	// Open runs migration 3 (add generated query columns).
+	store := mustOpen(t, path)
+
+	// A filter over all five query columns can only match if each was computed
+	// from the blob; the query never reads the JSON snapshot itself.
+	got, err := store.ListItems(ctx, item.ItemFilter{
+		Families:        []shared.AbilityFamily{shared.FamilyLogical},
+		TestTypes:       []shared.TestTypeCode{"A2"},
+		Origins:         []item.Origin{item.OriginFetched},
+		Redistributable: []shared.Redistributable{shared.RedistConditional},
+		MinDifficulty:   3,
+		MaxDifficulty:   3,
+	})
+	if err != nil {
+		t.Fatalf("list after upgrade: %v", err)
+	}
+	if len(got) != 1 || !reflect.DeepEqual(got[0], want) {
+		t.Fatalf("row not matched by column filter after upgrade: got %+v", got)
 	}
 }
 

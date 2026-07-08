@@ -101,21 +101,11 @@ func (s *Store) GetItem(ctx context.Context, id item.ItemID) (item.ItemSnapshot,
 	return snap, nil
 }
 
-// ListItems returns the items matching filter, ordered by id. Rows are fetched
-// and filtered in Go via ItemFilter.Matches (no SQL predicate yet); see
-// migration 2 for the promote-to-columns upgrade path.
+// ListItems returns the items matching filter, ordered by id. Filtering happens
+// in SQL over the migration-3 query columns (see itemListQuery); the returned
+// snapshots are decoded from the JSON blob, which stays the source of truth.
 func (s *Store) ListItems(ctx context.Context, filter item.ItemFilter) ([]item.ItemSnapshot, error) {
-	all, err := s.listItemRows(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]item.ItemSnapshot, 0, len(all))
-	for _, snap := range all {
-		if filter.Matches(snap) {
-			out = append(out, snap)
-		}
-	}
-	return out, nil
+	return s.listItemRows(ctx, filter)
 }
 
 // --- SessionRepository ---

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	// modernc.org/sqlite is a pure-Go (no cgo) SQLite driver; the blank import
 	// registers it under the "sqlite" driver name. Keeping it here — and nowhere
@@ -67,6 +68,27 @@ func schemaMigrations() [][]string {
 				id       TEXT PRIMARY KEY,
 				snapshot TEXT NOT NULL
 			) STRICT`,
+		},
+		// Block 4 (item bank), query columns: expose the hot ItemFilter fields as
+		// indexed columns so ListItems filters in SQL (a WHERE clause) instead of
+		// unmarshalling and scanning every row in Go. They are VIRTUAL GENERATED
+		// columns computed from the JSON snapshot with json_extract (SQLite JSON1),
+		// so they are by definition a projection of the blob and can never drift
+		// from it — a raw INSERT of just (id, snapshot) still gets correct columns,
+		// and pre-existing v2 rows need no back-fill. SQLite can only ADD virtual
+		// (not stored) generated columns via ALTER, and indexes them fine. The
+		// low-cardinality origin/redistributable columns are exposed for filtering
+		// but left unindexed — three distinct values index poorly; add an index
+		// only if a query proves hot.
+		{
+			`ALTER TABLE items ADD COLUMN test_type       TEXT    GENERATED ALWAYS AS (json_extract(snapshot, '$.TestType')) VIRTUAL`,
+			`ALTER TABLE items ADD COLUMN family          TEXT    GENERATED ALWAYS AS (json_extract(snapshot, '$.Family')) VIRTUAL`,
+			`ALTER TABLE items ADD COLUMN origin          TEXT    GENERATED ALWAYS AS (json_extract(snapshot, '$.Provenance.Origin')) VIRTUAL`,
+			`ALTER TABLE items ADD COLUMN redistributable TEXT    GENERATED ALWAYS AS (json_extract(snapshot, '$.Provenance.Redistributable')) VIRTUAL`,
+			`ALTER TABLE items ADD COLUMN difficulty_band INTEGER GENERATED ALWAYS AS (json_extract(snapshot, '$.Difficulty.Band')) VIRTUAL`,
+			`CREATE INDEX idx_items_family ON items(family)`,
+			`CREATE INDEX idx_items_test_type ON items(test_type)`,
+			`CREATE INDEX idx_items_difficulty_band ON items(difficulty_band)`,
 		},
 	}
 }
@@ -194,11 +216,14 @@ func (s *Store) deleteTestRow(ctx context.Context, id testset.TestID) error {
 // --- items table ---
 
 // The item aggregate is persisted as a single JSON document (see migration 2).
-// encoding/json round-trips every snapshot field and preserves the nil-vs-empty
-// slice distinction (null↔nil, []↔non-nil-empty), so a snapshot read back is
-// reflect.DeepEqual to the one saved — the parity the conformance suite asserts
-// against the memory store. Unmarshalling always allocates fresh slices, so a
-// returned snapshot never aliases stored bytes or caller input.
+// The filterable query columns (migration 3) are VIRTUAL generated columns
+// computed from that document, so there is one source of truth: writes touch
+// only the blob and the columns follow automatically. encoding/json round-trips
+// every snapshot field and preserves the nil-vs-empty slice distinction
+// (null↔nil, []↔non-nil-empty), so a snapshot read back is reflect.DeepEqual to
+// the one saved — the parity the conformance suite asserts against the memory
+// store. Unmarshalling always allocates fresh slices, so a returned snapshot
+// never aliases stored bytes or caller input.
 
 func (s *Store) saveItemRow(ctx context.Context, snap item.ItemSnapshot) error {
 	blob, err := json.Marshal(snap)
@@ -246,8 +271,65 @@ func (s *Store) getItemRow(ctx context.Context, id item.ItemID) (item.ItemSnapsh
 	return snap, true, nil
 }
 
-func (s *Store) listItemRows(ctx context.Context) ([]item.ItemSnapshot, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, snapshot FROM items ORDER BY id`)
+// itemListQuery builds the SELECT that lists items matching filter, mapping each
+// ItemFilter dimension to a predicate over the migration-3 query columns. It
+// mirrors item.ItemFilter.Matches exactly: multi-value fields become IN clauses
+// (OR within), all predicates are ANDed, and a zero difficulty bound is omitted
+// (unbounded). The shared conformance suite runs identical filters against this
+// store and the in-Go memory store and asserts identical results, so any
+// divergence between this SQL and Matches fails the build.
+//
+// ponytail: one bind per filter value, no de-dup. The filter dimensions are
+// closed vocabularies (≤5 families, ≤19 test types, ≤3 origins, ≤3 redist), so a
+// meaningful filter is ~30 binds — far under SQLite's variable limit. De-dup or
+// chunk only if a caller is found passing pathologically repeated values.
+func itemListQuery(f item.ItemFilter) (string, []any) {
+	var conds []string
+	var args []any
+	in := func(col string, vals []any) {
+		if len(vals) == 0 {
+			return
+		}
+		conds = append(conds, col+" IN ("+strings.TrimSuffix(strings.Repeat("?,", len(vals)), ",")+")")
+		args = append(args, vals...)
+	}
+	in("family", toAnyStrings(f.Families))
+	in("test_type", toAnyStrings(f.TestTypes))
+	in("origin", toAnyStrings(f.Origins))
+	in("redistributable", toAnyStrings(f.Redistributable))
+	// COALESCE mirrors Go: ItemFilter.Matches runs on the unmarshalled snapshot,
+	// where a missing Difficulty.Band is the zero value 0, not absent. A store row
+	// always carries Band (>=1, NewItem-enforced; json.Marshal always emits it),
+	// so this only affects a hand-edited blob — but it keeps the generated column
+	// an exact behavioural projection of the blob even there.
+	if f.MinDifficulty > 0 {
+		conds = append(conds, "COALESCE(difficulty_band, 0) >= ?")
+		args = append(args, f.MinDifficulty)
+	}
+	if f.MaxDifficulty > 0 {
+		conds = append(conds, "COALESCE(difficulty_band, 0) <= ?")
+		args = append(args, f.MaxDifficulty)
+	}
+	query := `SELECT id, snapshot FROM items`
+	if len(conds) > 0 {
+		query += " WHERE " + strings.Join(conds, " AND ")
+	}
+	return query + " ORDER BY id", args
+}
+
+// toAnyStrings converts a slice of string-kinded values to the []any of bind
+// parameters an IN clause needs.
+func toAnyStrings[T ~string](vs []T) []any {
+	out := make([]any, len(vs))
+	for i, v := range vs {
+		out[i] = string(v)
+	}
+	return out
+}
+
+func (s *Store) listItemRows(ctx context.Context, filter item.ItemFilter) ([]item.ItemSnapshot, error) {
+	query, args := itemListQuery(filter)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, ErrStore.WithMessage("list items").Wrap(err)
 	}

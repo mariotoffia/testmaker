@@ -131,11 +131,13 @@ func (o Option) mediaKindWithoutRef() bool { return o.MediaKind != "" && o.Media
 // Only the field matching the format may be set; NewItem rejects a key that
 // carries a value for a non-matching field, so a snapshot is always canonical.
 //
-// Numeric has no presence bit: 0 is a valid open-numeric answer (e.g. "5 − 5"),
-// so a zero key is accepted, and for the other formats Numeric is canonically 0.
-// Distinguishing an omitted key from a deliberate 0 is a modelling decision
-// (a pointer / presence flag / per-format key types) deferred until a producer
-// — the generator (Block 6) or authoring — actually needs it.
+// Numeric has no presence bit, by decision: the AnswerFormat is the presence
+// discriminator. An open-numeric item always has a numeric answer and 0 is a
+// valid one (e.g. "5 − 5"); for every other format Numeric is canonically 0 and
+// validation rejects a non-zero value. The only state a presence bit would add —
+// "open-numeric answer not yet known" — is a draft/authoring concept outside
+// this bank of scored items, so a pointer / presence flag is intentionally
+// omitted until such a producer exists.
 type AnswerKey struct {
 	OptionID string
 	Numeric  float64
