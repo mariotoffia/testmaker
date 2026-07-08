@@ -19,8 +19,8 @@ context is its `domain/<context>/doc.go`.**
 | Test execution | `domain/session` | **core** | a test-taking attempt |
 | Scoring | `domain/scoring` | supporting | raw → band → IQ-scaled + feedback |
 
-Implemented: **shared**, **source**, **prompt** and **item**. The remaining
-core/supporting contexts (**testset**, **session**, **scoring**) are scaffold
+Implemented: **shared**, **source**, **prompt**, **item** and **testset**. The
+remaining core/supporting contexts (**session**, **scoring**) are scaffold
 shells until their blocks land.
 
 **LLM assistance is a generic subdomain, not a core context.** The backend is
@@ -113,12 +113,20 @@ part; `Provenance` (`SourceID` present, valid origin + redistributability). The
 `AbilityFamily` is derived from `TestType`, never accepted from callers. See
 [DESIGN.md §2](DESIGN.md#2-item-bank-).
 
-### 3.3 Test (`domain/testset`) 🚧 — aggregate root (designed)
+### 3.3 Test (`domain/testset`) ✅ — aggregate root
 
 Root `Test` composed of ordered `Section`s (value objects) with `Timing` and a
-`DeliveryPolicy` (`fixed-increasing` | `adaptive`). Planned invariants: ≥1
-section; each section ≥1 item; timing non-negative; adaptive sections require a
-difficulty-tagged item pool.
+`DeliveryPolicy` (`fixed-increasing` | `adaptive`). Each section carries a
+required ability `Family` and ordered `ItemRef`s (a plain-string item id plus its
+difficulty band — the testset context never imports the item context). The
+covered families are derived from the sections, never accepted from callers.
+Invariants (`NewTest`): id/title non-empty; ≥1 section; each section a valid
+family with ≥1 item; every item ref id non-empty and band ≥1; item ids unique
+across the whole test; timing non-negative and coherent (a per-item cap never
+exceeds its total budget); under `fixed-increasing` each section's refs are
+non-decreasing by difficulty; under `adaptive` each section spans ≥2 difficulty
+bands (a single-band pool cannot adapt). The aggregate crosses ports only as
+`TestSnapshot`.
 
 ### 3.4 Session (`domain/session`) 🚧 — aggregate root (designed)
 

@@ -34,6 +34,7 @@ type fakeBank struct {
 	saved     map[item.ItemID]item.ItemSnapshot
 	failAfter int // 0 = never fail
 	writeErr  error
+	listErr   error // non-nil = ListItems fails
 }
 
 func newFakeBank() *fakeBank { return &fakeBank{saved: map[item.ItemID]item.ItemSnapshot{}} }
@@ -55,6 +56,9 @@ func (b *fakeBank) GetItem(_ context.Context, id item.ItemID) (item.ItemSnapshot
 }
 
 func (b *fakeBank) ListItems(_ context.Context, filter item.ItemFilter) ([]item.ItemSnapshot, error) {
+	if b.listErr != nil {
+		return nil, b.listErr
+	}
 	var out []item.ItemSnapshot
 	for _, s := range b.saved {
 		if filter.Matches(s) {

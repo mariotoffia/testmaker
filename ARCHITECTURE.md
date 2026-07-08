@@ -96,7 +96,7 @@ IDE flags a violation before `make arch-lint` runs.
 | Shared kernel | `domain/shared` | kernel | `TestmakerError`, sentinels, shared vocabulary | ✅ |
 | **Source catalogue** | `domain/source` | core (supporting to sourcing) | where items come from: access class, license/redistributability, extraction | ✅ implemented |
 | Item bank | `domain/item` | **core** | the scored items themselves (stem, options, key, difficulty, provenance) | ✅ implemented |
-| Test authoring | `domain/testset` | core | composed tests: sections, timing, delivery policy | 🚧 scaffold |
+| Test authoring | `domain/testset` | core | composed tests: sections, timing, delivery policy | ✅ implemented |
 | Test execution | `domain/session` | core | a live/completed attempt: navigation, timing, responses | 🚧 scaffold |
 | Scoring | `domain/scoring` | supporting | raw → percentile band → IQ-scaled + feedback | 🚧 scaffold |
 
@@ -334,8 +334,11 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) and [LINT.md](LINT.md).
 
 Implemented end-to-end: the **source catalogue** slice (domain, ports, app,
 memory + file adapters, stub fetcher, CLI) with the 81-source research catalogue
-as seed data, and the **designer / generator** slice (native figural rule engine,
-authoring use-case, `-generate` CLI). Remaining bounded contexts are scaffolding —
+as seed data, the **designer / generator** slice (native figural rule engine,
+authoring use-case, `-generate` CLI), and the **test-authoring** slice
+(`testset.Test` aggregate, `app/authoring.TestService` composing bank items into
+composed timed tests, persisted via the memory + sqlite `TestRepository`,
+`-author-test` CLI). Remaining bounded contexts are scaffolding —
 compiling package shells with `doc.go` and DTO stubs — filled in block by block.
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) is the authoritative per-block
 status; consult it rather than this paragraph for what is done.

@@ -1,11 +1,12 @@
 // Package testset is the "test authoring" bounded context — a composed Test:
-// ordered sections, per-section and global timing, delivery policy (fixed
+// ordered sections, per-section and global timing, a delivery policy (fixed
 // increasing-difficulty vs adaptive) and the item references that make up a
 // runnable assessment.
 //
-// SCAFFOLD: only the identifiers and DTO shells referenced by ports are present
-// so the workspace compiles. The Test aggregate, Section value object, timing
-// and delivery-policy modeling land in the "Test Authoring" block.
+// The aggregate root Test is built through NewTest (which validates its
+// invariants) and crosses ports only as TestSnapshot. It references bank items
+// by plain-string id (ItemRef.ItemID carries an item.ItemID): bounded contexts
+// meet only through the shared kernel, never by importing each other.
 package testset
 
 import "github.com/mariotoffia/testmaker/domain/shared"
@@ -24,12 +25,3 @@ var (
 
 // TestID uniquely identifies a composed test.
 type TestID string
-
-// TestSnapshot is a placeholder persistence/transport DTO for a composed test.
-type TestSnapshot struct {
-	ID    TestID
-	Title string
-}
-
-// TestFilter is a placeholder query object for the test repository.
-type TestFilter struct{}

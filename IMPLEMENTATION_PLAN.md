@@ -107,7 +107,7 @@ Sandia SGMT / matRiks / RAVEN-family / Bongard-LOGO (their IP and process
 overhead bought nothing the native engine did not). `app/authoring` stores a
 generated batch and also exposes a manual `Author` path onto the same bank.
 
-## Block 7 — Test authoring 🚧
+## Block 7 — Test authoring ✅
 
 **Goal:** the `Test` aggregate — sections, timing, delivery policy
 (fixed-increasing vs adaptive), composite multi-family tests — plus an authoring
@@ -116,6 +116,16 @@ service that composes bank/generated items into tests and persists them via
 **Touches:** `domain/testset`, `app/authoring`, `ports.TestRepository`.
 **Depends on:** Blocks 2–4.
 **Done when:** a composite, timed, difficulty-ordered test can be authored, stored and reloaded.
+
+**Done:** `testset.Test` aggregate (ordered `Section`s, `Timing`, `DeliveryPolicy`,
+`ItemRef` carrying the item's difficulty band, families derived from sections);
+`NewTest` invariant gate; `Snapshot`/`RehydrateFromSnapshot` DTO round-trip.
+`app/authoring.TestService.Compose` queries the bank per section, orders matches
+by ascending difficulty (satisfying fixed-increasing), builds the test through
+the gate and persists it. sqlite migration 4 stores tests as a JSON blob (the
+old `(id,title)` rows are quarantined into `tests_v1_legacy`). Proven end-to-end
+by the `-author-test` CLI demo (memory + sqlite) and the shared `TestRepository`
+conformance suite.
 
 ## Block 8 — Renderer / executor 🚧
 

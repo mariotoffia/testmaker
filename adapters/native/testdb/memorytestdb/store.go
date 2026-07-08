@@ -13,12 +13,12 @@ import (
 // Store is an in-memory TestDb backing the Test, Item and Session repositories,
 // safe for concurrent use.
 //
-// Item snapshots carry slices (stimulus, options), so item reads and writes are
-// deep-copied through the aggregate (RehydrateFromSnapshot(...).Snapshot()) to
-// keep stored state from aliasing caller memory — the memorycatalog clone
-// pattern. Test and Session snapshots are still value-only structs (a plain
-// assignment is a deep copy); route them through their aggregates too once
-// later blocks (test = Block 7, session = Block 8) add slice/map/pointer fields.
+// Test and Item snapshots carry slices (sections/item-refs, stimulus/options),
+// so their reads and writes are deep-copied through the aggregate
+// (RehydrateFromSnapshot(...).Snapshot()) to keep stored state from aliasing
+// caller memory — the memorycatalog clone pattern. Session snapshots are still
+// value-only structs (a plain assignment is a deep copy); route them through
+// their aggregate too once Block 8 adds slice/map/pointer fields.
 type Store struct {
 	mu       sync.RWMutex
 	tests    map[testset.TestID]testset.TestSnapshot
@@ -37,6 +37,12 @@ func NewStore() *Store {
 
 // --- TestRepository ---
 
+// cloneTest deep-copies a snapshot via the aggregate so stored state never
+// aliases (and is never aliased by) caller-held section/item slices.
+func cloneTest(snap testset.TestSnapshot) testset.TestSnapshot {
+	return testset.RehydrateFromSnapshot(snap).Snapshot()
+}
+
 // SaveTest inserts or replaces a test by id.
 func (s *Store) SaveTest(_ context.Context, snap testset.TestSnapshot) error {
 	if snap.ID == "" {
@@ -44,7 +50,7 @@ func (s *Store) SaveTest(_ context.Context, snap testset.TestSnapshot) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.tests[snap.ID] = snap
+	s.tests[snap.ID] = cloneTest(snap)
 	return nil
 }
 
@@ -57,18 +63,18 @@ func (s *Store) GetTest(_ context.Context, id testset.TestID) (testset.TestSnaps
 	if !ok {
 		return testset.TestSnapshot{}, testset.ErrUnknownTest.With("id", string(id))
 	}
-	return snap, nil
+	return cloneTest(snap), nil
 }
 
 // ListTests returns all tests, ordered by id. The filter is a placeholder shell
-// until the Test Authoring block, so every stored test is returned.
+// (no test-query consumer yet), so every stored test is returned.
 func (s *Store) ListTests(_ context.Context, _ testset.TestFilter) ([]testset.TestSnapshot, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	out := make([]testset.TestSnapshot, 0, len(s.tests))
 	for _, snap := range s.tests {
-		out = append(out, snap)
+		out = append(out, cloneTest(snap))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil

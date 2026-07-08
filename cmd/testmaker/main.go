@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch"
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher"
@@ -36,15 +37,16 @@ func main() {
 	llmPrompt := flag.String("llm-prompt", "", "if set (and TESTMAKER_LLM_BASE_URL is configured), send this prompt to the LLM backend")
 	ingestID := flag.String("ingest", "", "if set to a catalogue source id (e.g. openpsych-viqt), fetch and ingest its items into the bank")
 	genType := flag.String("generate", "", "if set to a figural test type (A1, A2, A3 or A4), procedurally generate a small batch of items into the bank")
+	authorTest := flag.Bool("author-test", false, "compose a composite, timed, difficulty-ordered test from the bank and store+reload it")
 	flag.Parse()
 
-	if err := run(context.Background(), *path, *testdbDSN, *llmPrompt, *ingestID, *genType); err != nil {
+	if err := run(context.Background(), *path, *testdbDSN, *llmPrompt, *ingestID, *genType, *authorTest); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType string) (err error) {
+func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType string, authorTest bool) (err error) {
 	// --- composition root: choose adapters, wire the service ---
 	// One concrete TestDb store backs all three repositories; it is exposed here
 	// as the separate ports the app depends on. The default is the dependency-free
@@ -106,6 +108,9 @@ func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType stri
 	if err := generateDemo(ctx, itembank, genType); err != nil {
 		return err
 	}
+	if err := authorTestDemo(ctx, itembank, testdb, authorTest); err != nil {
+		return err
+	}
 	return llmDemo(ctx, llmPrompt)
 }
 
@@ -138,8 +143,9 @@ func reportReusability(ctx context.Context, svc *catalog.Service, fetcher ports.
 }
 
 // testDbDemo exercises the in-memory TestDb (the default ports.TestRepository)
-// with a save/reload round-trip. Test authoring proper arrives in a later block;
-// this just proves the store is wired at the composition root.
+// with a raw save/reload round-trip, proving the store is wired at the
+// composition root. Full test authoring (composing bank items into a timed,
+// difficulty-ordered test) is the -author-test demo below.
 func testDbDemo(ctx context.Context, testdb ports.TestRepository) error {
 	if err := testdb.SaveTest(ctx, testset.TestSnapshot{ID: "demo", Title: "Demo Test"}); err != nil {
 		return err
@@ -149,6 +155,89 @@ func testDbDemo(ctx context.Context, testdb ports.TestRepository) error {
 		return err
 	}
 	fmt.Printf("\nTestDb demo: stored and reloaded %q (%s)\n", got.Title, got.ID)
+	return nil
+}
+
+// authorTestDemo is the Block 7 "done when": it composes a composite, timed,
+// difficulty-ordered test out of bank items and stores+reloads it. With no
+// -author-test flag the step is skipped. It seeds a small logical+numerical item
+// set (distinct ids), wires the TestService over the same item bank and test
+// repository the rest of the CLI uses, composes a two-section fixed-increasing
+// test and reloads it through the store to prove the round-trip.
+func authorTestDemo(ctx context.Context, bank ports.ItemRepository, tests ports.TestRepository, authorTest bool) error {
+	if !authorTest {
+		fmt.Println("\nAuthor test: not requested (pass -author-test); skipping.")
+		return nil
+	}
+	if err := seedAuthoringBank(ctx, bank); err != nil {
+		return err
+	}
+
+	svc := authoring.NewTestService(bank, tests)
+	id, err := svc.Compose(ctx, authoring.ComposeSpec{
+		ID:     "demo-composite",
+		Title:  "Composite Aptitude (demo)",
+		Policy: testset.PolicyFixedIncreasing,
+		Timing: testset.Timing{Total: 30 * time.Minute},
+		Sections: []authoring.SectionSpec{
+			{Title: "Logical", Family: shared.FamilyLogical, Timing: testset.Timing{Total: 10 * time.Minute, PerItem: time.Minute}},
+			{Title: "Numerical", Family: shared.FamilyNumerical, Timing: testset.Timing{Total: 8 * time.Minute}},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	got, err := tests.GetTest(ctx, id)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\nAuthor-test demo: composed and reloaded %q (%s), policy=%s, families=%v\n",
+		got.Title, got.ID, got.Policy, got.Families)
+	for _, sec := range got.Sections {
+		ids := make([]string, len(sec.Items))
+		for i, ref := range sec.Items {
+			ids[i] = fmt.Sprintf("%s(b%d)", ref.ItemID, ref.Difficulty)
+		}
+		fmt.Printf("  %-10s %v\n", sec.Family, ids)
+	}
+	return nil
+}
+
+// seedAuthoringBank stores a small composite item set (logical + numerical,
+// bands deliberately unsorted) so the author-test demo has something to compose.
+func seedAuthoringBank(ctx context.Context, bank ports.ItemRepository) error {
+	seeds := []struct {
+		id       item.ItemID
+		testType shared.TestTypeCode
+		band     int
+	}{
+		{"demo-log-hard", "A1", 3},
+		{"demo-log-easy", "A2", 1},
+		{"demo-log-mid", "A3", 2},
+		{"demo-num-hard", "B1", 2},
+		{"demo-num-easy", "B2", 1},
+	}
+	for _, s := range seeds {
+		it, ierr := item.NewItem(item.ItemSpec{
+			ID:           s.id,
+			Provenance:   item.Provenance{SourceID: "rulegen", Origin: item.OriginGenerated, Redistributable: shared.RedistYes},
+			TestType:     s.testType,
+			Stimulus:     []item.StimulusPart{{Text: "stem"}},
+			AnswerFormat: item.FormatMultipleChoice,
+			Options: []item.Option{
+				{ID: "a", Text: "A"}, {ID: "b", Text: "B"}, {ID: "c", Text: "C"}, {ID: "d", Text: "D"},
+			},
+			AnswerKey:  item.AnswerKey{OptionID: "b"},
+			Difficulty: item.Difficulty{Band: s.band},
+		})
+		if ierr != nil {
+			return ierr
+		}
+		if err := bank.SaveItem(ctx, it.Snapshot()); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

@@ -77,22 +77,30 @@ Design decisions:
 
 ---
 
-## 3. Test authoring 🚧
+## 3. Test authoring ✅
 
 **Aggregate `testset.Test`** — a runnable assessment.
 
-- **Sections** — ordered; each has a `Family`/mix, an item selection (explicit
-  ids or a query), and timing.
+- **Sections** — ordered; each has a `Family`, an item selection (`ItemRef`s that
+  carry the item id and its difficulty band), and timing.
 - **Timing** — global limit and/or per-item limit; per-section limits (e.g. GIA
   6 min/section, adaptive Matrigma 60 s/item). Speed is modeled explicitly, not
   as an afterthought.
 - **DeliveryPolicy** — `fixed-increasing` (present items in ascending difficulty)
-  or `adaptive` (next item's difficulty is a function of prior correctness).
+  or `adaptive` (next item's difficulty is a function of prior correctness; an
+  adaptive section must span at least two difficulty bands so it has room to
+  adapt).
 - **Composite** — a single test may combine families across sections (IST / PI
   style).
 
 Design decision: delivery policy is data on the Test, not code in the renderer,
 so the same executor runs fixed and adaptive tests by reading the policy.
+
+The `app/authoring.TestService` composes a test from bank items: per section it
+queries the bank (`ItemRepository`) by family/difficulty, orders matches by
+ascending difficulty band and builds the `Test` through `NewTest` before
+persisting the snapshot via `TestRepository`. A fixed-increasing test therefore
+satisfies its non-decreasing-difficulty invariant by construction.
 
 ---
 

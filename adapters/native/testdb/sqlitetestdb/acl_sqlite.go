@@ -26,8 +26,9 @@ const driverName = "sqlite"
 // database's PRAGMA user_version once applied.
 //
 // Append-only: never edit a shipped migration, add a new one. This is the
-// upgrade path for the snapshot fields that later blocks add (item = Block 4,
-// test = Block 7, session = Block 8).
+// upgrade path for the snapshot fields per block: item (Block 4) and test
+// (Block 7) migrated their scaffold tables to JSON documents below; session
+// (Block 8) is the next expected entry.
 func schemaMigrations() [][]string {
 	return [][]string{
 		{
@@ -89,6 +90,26 @@ func schemaMigrations() [][]string {
 			`CREATE INDEX idx_items_family ON items(family)`,
 			`CREATE INDEX idx_items_test_type ON items(test_type)`,
 			`CREATE INDEX idx_items_difficulty_band ON items(difficulty_band)`,
+		},
+		// Block 7 (test authoring): the Test aggregate outgrew the scaffold's flat
+		// (id, title) columns — a snapshot now carries ordered sections, item refs,
+		// timing, a delivery policy and derived families. Persist it as a single
+		// JSON document keyed by id, exactly like items (migration 2). No query
+		// column is added: TestFilter has no consumer yet and tests are few, so
+		// ListTests full-scans. Upgrade path if a test-query surface (Block 10)
+		// lands: add generated columns like the items table.
+		//
+		// The old (id, title) shape cannot be transformed into a valid TestSnapshot
+		// (which now requires sections/policy), so there is no correct in-place
+		// conversion — the same reason migration 2 quarantined items. Rename the old
+		// table to tests_v1_legacy: any rows are preserved for manual recovery and a
+		// fresh database just carries an empty legacy table.
+		{
+			`ALTER TABLE tests RENAME TO tests_v1_legacy`,
+			`CREATE TABLE tests (
+				id       TEXT PRIMARY KEY,
+				snapshot TEXT NOT NULL
+			) STRICT`,
 		},
 	}
 }
@@ -162,31 +183,60 @@ func migrate(ctx context.Context, db *sql.DB) error {
 
 // --- tests table ---
 
+// The Test aggregate is persisted as a single JSON document (see migration 4),
+// mirroring the items table. encoding/json round-trips every snapshot field and
+// preserves the nil-vs-empty slice distinction, so a snapshot read back is
+// reflect.DeepEqual to the one saved — the parity the conformance suite asserts
+// against the memory store. Unmarshalling allocates fresh slices, so a returned
+// snapshot never aliases stored bytes or caller input.
+
 func (s *Store) saveTestRow(ctx context.Context, snap testset.TestSnapshot) error {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO tests (id, title) VALUES (?, ?)
-		 ON CONFLICT(id) DO UPDATE SET title = excluded.title`,
-		string(snap.ID), snap.Title)
+	blob, err := json.Marshal(snap)
+	if err != nil {
+		return ErrStore.WithMessagef("marshal test %q", snap.ID).Wrap(err)
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO tests (id, snapshot) VALUES (?, ?)
+		 ON CONFLICT(id) DO UPDATE SET snapshot = excluded.snapshot`,
+		string(snap.ID), string(blob))
 	if err != nil {
 		return ErrStore.WithMessagef("save test %q", snap.ID).Wrap(err)
 	}
 	return nil
 }
 
+func unmarshalTest(id testset.TestID, blob string) (testset.TestSnapshot, error) {
+	var snap testset.TestSnapshot
+	if err := json.Unmarshal([]byte(blob), &snap); err != nil {
+		return testset.TestSnapshot{}, ErrStore.WithMessagef("unmarshal test %q", id).Wrap(err)
+	}
+	// The id column is authoritative; a blob whose embedded id disagrees means a
+	// corrupted or hand-edited row. Reject it rather than return a snapshot under
+	// the wrong key (mirrors unmarshalItem).
+	if snap.ID != id {
+		return testset.TestSnapshot{}, ErrStore.WithMessagef("test row %q holds a snapshot with id %q", id, snap.ID)
+	}
+	return snap, nil
+}
+
 func (s *Store) getTestRow(ctx context.Context, id testset.TestID) (testset.TestSnapshot, bool, error) {
-	snap := testset.TestSnapshot{ID: id}
-	err := s.db.QueryRowContext(ctx, `SELECT title FROM tests WHERE id = ?`, string(id)).Scan(&snap.Title)
+	var blob string
+	err := s.db.QueryRowContext(ctx, `SELECT snapshot FROM tests WHERE id = ?`, string(id)).Scan(&blob)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return testset.TestSnapshot{}, false, nil
 	case err != nil:
 		return testset.TestSnapshot{}, false, ErrStore.WithMessagef("get test %q", id).Wrap(err)
 	}
+	snap, err := unmarshalTest(id, blob)
+	if err != nil {
+		return testset.TestSnapshot{}, false, err
+	}
 	return snap, true, nil
 }
 
 func (s *Store) listTestRows(ctx context.Context) ([]testset.TestSnapshot, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, title FROM tests ORDER BY id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, snapshot FROM tests ORDER BY id`)
 	if err != nil {
 		return nil, ErrStore.WithMessage("list tests").Wrap(err)
 	}
@@ -194,9 +244,13 @@ func (s *Store) listTestRows(ctx context.Context) ([]testset.TestSnapshot, error
 
 	out := make([]testset.TestSnapshot, 0)
 	for rows.Next() {
-		var snap testset.TestSnapshot
-		if err := rows.Scan(&snap.ID, &snap.Title); err != nil {
+		var id, blob string
+		if err := rows.Scan(&id, &blob); err != nil {
 			return nil, ErrStore.WithMessage("scan test").Wrap(err)
+		}
+		snap, err := unmarshalTest(testset.TestID(id), blob)
+		if err != nil {
+			return nil, err
 		}
 		out = append(out, snap)
 	}

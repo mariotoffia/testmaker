@@ -44,12 +44,13 @@ context. Terms marked 🚧 are designed but not yet implemented.
 | **Item filter** | Query criteria over the bank: ability family, test type, origin, redistributability, difficulty range. |
 | **RawItem** | A loose, unvalidated item pulled by a Fetcher before normalization into an `Item`. |
 
-## Test authoring (`domain/testset`) 🚧
+## Test authoring (`domain/testset`)
 
 | Term | Meaning |
 |---|---|
 | **Test** | Aggregate root: a runnable assessment — ordered sections, timing, delivery policy. |
-| **Section** | An ordered part of a test with its own family mix, item selection and timing. |
+| **Section** | An ordered part of a test with one ability family, its item references and timing. |
+| **Item reference** | A bank item placed in a section: its id plus the difficulty band (so a section can order and validate without the item context). |
 | **Timing** | Global and/or per-item and per-section limits. Speed is first-class. |
 | **Delivery policy** | `fixed-increasing` (ascending difficulty) or `adaptive` (next difficulty depends on prior answer). |
 | **Composite test** | A test combining several ability families across sections. |

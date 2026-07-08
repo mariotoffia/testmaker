@@ -257,13 +257,14 @@ func TestGetItemRejectsIdMismatch(t *testing.T) {
 
 // TestMigrationV1UpgradePreservesLegacyRows proves upgrading a real v1 database
 // to the current schema does not destroy its data: the pre-Block-4 items(id,
-// source_id, stem) rows are quarantined into items_v1_legacy by migration 2, not
-// dropped, and the untouched v1 tests/sessions rows still read back through the
-// store. It is the regression lock for the data-preservation fix — a revert to
-// `DROP TABLE items` makes the legacy-row assertion fail, and a migration that
-// touched tests/sessions would fail the survival assertions. The driver is
-// registered by the package under test, so a bare handle can seed the frozen v1
-// schema (migration 1 is append-only, so that shape never changes).
+// source_id, stem) rows are quarantined into items_v1_legacy by migration 2 and
+// the pre-Block-7 tests(id, title) rows into tests_v1_legacy by migration 4 —
+// neither is dropped — while the untouched v1 sessions rows still read back
+// through the store. It is the regression lock for the data-preservation fix — a
+// revert to `DROP TABLE` makes a legacy-row assertion fail, and a migration that
+// touched sessions would fail the survival assertion. The driver is registered by
+// the package under test, so a bare handle can seed the frozen v1 schema
+// (migration 1 is append-only, so that shape never changes).
 func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "v1.sqlite")
@@ -290,32 +291,39 @@ func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 		t.Fatalf("close raw: %v", err)
 	}
 
-	// Open runs migrations 2 (RENAME items -> items_v1_legacy, CREATE new items)
-	// and 3 (add query columns).
+	// Open runs migrations 2 (RENAME items -> items_v1_legacy, CREATE new items),
+	// 3 (add item query columns) and 4 (RENAME tests -> tests_v1_legacy, CREATE
+	// new tests).
 	store := mustOpen(t, path)
 
-	// The v1 tests/sessions rows are untouched by the item migrations and must
-	// still read back through the store's normal accessors.
-	if got, err := store.GetTest(ctx, "gia"); err != nil || got.Title != "GIA" {
-		t.Fatalf("v1 test after migration: got %+v, err %v", got, err)
-	}
+	// The v1 sessions row is untouched by the item/test migrations and must still
+	// read back through the store's normal accessor.
 	if got, err := store.GetSession(ctx, "sess-0"); err != nil || got.TestID != "gia" {
 		t.Fatalf("v1 session after migration: got %+v, err %v", got, err)
 	}
+	// The v1 tests row cannot become a valid TestSnapshot, so migration 4
+	// quarantines it: the store no longer serves it under its old key.
+	if _, err := store.GetTest(ctx, "gia"); !errors.Is(err, testset.ErrUnknownTest) {
+		t.Fatalf("quarantined v1 test: want ErrUnknownTest, got %v", err)
+	}
 
-	// The old row must survive in the quarantine table (the DROP-revert tripwire)
-	// and the schema must have advanced to the latest version. Read through a
-	// separate handle, then release it before writing so the single-connection
-	// store never contends with it.
+	// The old rows must survive in the quarantine tables (the DROP-revert
+	// tripwire) and the schema must have advanced to the latest version. Read
+	// through a separate handle, then release it before writing so the
+	// single-connection store never contends with it.
 	legacy, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatalf("reopen raw: %v", err)
 	}
-	var sourceID, stem string
+	var sourceID, stem, title string
 	var version int
 	if err := legacy.QueryRow(`SELECT source_id, stem FROM items_v1_legacy WHERE id = 'old-1'`).Scan(&sourceID, &stem); err != nil {
 		_ = legacy.Close()
-		t.Fatalf("legacy row lost: %v", err)
+		t.Fatalf("legacy item row lost: %v", err)
+	}
+	if err := legacy.QueryRow(`SELECT title FROM tests_v1_legacy WHERE id = 'gia'`).Scan(&title); err != nil {
+		_ = legacy.Close()
+		t.Fatalf("legacy test row lost: %v", err)
 	}
 	if err := legacy.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
 		_ = legacy.Close()
@@ -325,10 +333,13 @@ func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 		t.Fatalf("close legacy handle: %v", err)
 	}
 	if sourceID != "omib" || stem != "legacy stem" {
-		t.Fatalf("legacy row corrupted: source_id=%q stem=%q", sourceID, stem)
+		t.Fatalf("legacy item row corrupted: source_id=%q stem=%q", sourceID, stem)
 	}
-	if version != 3 {
-		t.Fatalf("user_version = %d, want 3", version)
+	if title != "GIA" {
+		t.Fatalf("legacy test row corrupted: title=%q", title)
+	}
+	if version != 4 {
+		t.Fatalf("user_version = %d, want 4", version)
 	}
 
 	// The upgraded database's new items table is the JSON-blob shape and
@@ -375,6 +386,10 @@ func TestMigrationV2ToV3AddsQueryColumns(t *testing.T) {
 	if _, err := raw.Exec(`CREATE TABLE items (id TEXT PRIMARY KEY, snapshot TEXT NOT NULL) STRICT`); err != nil {
 		_ = raw.Close()
 		t.Fatalf("seed v2 items table: %v", err)
+	}
+	if _, err := raw.Exec(`CREATE TABLE tests (id TEXT PRIMARY KEY, title TEXT NOT NULL) STRICT`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed v2 tests table: %v", err)
 	}
 	if _, err := raw.Exec(`INSERT INTO items (id, snapshot) VALUES (?, ?)`, string(want.ID), string(blob)); err != nil {
 		_ = raw.Close()
@@ -451,6 +466,10 @@ func TestListNullDifficultyBandMirrorsGoZeroValue(t *testing.T) {
 	if _, err := raw.Exec(`CREATE TABLE items (id TEXT PRIMARY KEY, snapshot TEXT NOT NULL) STRICT`); err != nil {
 		_ = raw.Close()
 		t.Fatalf("seed v2 items table: %v", err)
+	}
+	if _, err := raw.Exec(`CREATE TABLE tests (id TEXT PRIMARY KEY, title TEXT NOT NULL) STRICT`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed v2 tests table: %v", err)
 	}
 	if _, err := raw.Exec(`INSERT INTO items (id, snapshot) VALUES (?, ?)`, string(full.ID), string(stripped)); err != nil {
 		_ = raw.Close()

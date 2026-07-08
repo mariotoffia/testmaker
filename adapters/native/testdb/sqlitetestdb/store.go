@@ -69,7 +69,7 @@ func (s *Store) GetTest(ctx context.Context, id testset.TestID) (testset.TestSna
 }
 
 // ListTests returns all tests ordered by id. The filter is a placeholder shell
-// until the Test Authoring block, so every stored test is returned.
+// (no test-query consumer yet), so every stored test is returned.
 func (s *Store) ListTests(ctx context.Context, _ testset.TestFilter) ([]testset.TestSnapshot, error) {
 	return s.listTestRows(ctx)
 }

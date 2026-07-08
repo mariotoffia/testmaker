@@ -30,7 +30,7 @@ testmaker/
 │   ├── shared/             #   shared kernel: TestmakerError + sentinels
 │   ├── source/             #   source catalogue      (IMPLEMENTED)
 │   ├── item/               #   item bank             (SCAFFOLD)
-│   ├── testset/            #   test authoring        (SCAFFOLD)
+│   ├── testset/            #   test authoring        (IMPLEMENTED)
 │   ├── session/            #   test execution        (SCAFFOLD)
 │   └── scoring/            #   scoring & feedback     (SCAFFOLD)
 │

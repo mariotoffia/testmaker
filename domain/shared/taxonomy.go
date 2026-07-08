@@ -18,6 +18,16 @@ const (
 	FamilySpeed     AbilityFamily = "speed"
 )
 
+// Valid reports whether the ability family is one of the known top-level families.
+func (f AbilityFamily) Valid() bool {
+	switch f {
+	case FamilyLogical, FamilyNumerical, FamilyVerbal, FamilySpatial, FamilySpeed:
+		return true
+	default:
+		return false
+	}
+}
+
 // TestTypeCode is a fine-grained item-type code (A1..E2) from the CLAUDE.md
 // taxonomy. The leading letter selects the AbilityFamily.
 type TestTypeCode string

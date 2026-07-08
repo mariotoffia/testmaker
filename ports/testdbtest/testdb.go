@@ -9,6 +9,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/mariotoffia/testmaker/domain/item"
 	"github.com/mariotoffia/testmaker/domain/session"
@@ -26,7 +27,9 @@ func RunTestRepositoryTests(t *testing.T, newRepo func() ports.TestRepository) {
 
 	t.Run("SaveThenGet", func(t *testing.T) {
 		repo := newRepo()
-		want := testset.TestSnapshot{ID: "gia", Title: "GIA"}
+		// a composite, timed, difficulty-ordered snapshot — every nested value
+		// object (sections, item refs, timing, derived families) must survive.
+		want := compositeTestSnapshot(t, "gia", "GIA")
 		if err := repo.SaveTest(ctx, want); err != nil {
 			t.Fatalf("save: %v", err)
 		}
@@ -34,8 +37,8 @@ func RunTestRepositoryTests(t *testing.T, newRepo func() ports.TestRepository) {
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
-		if got != want {
-			t.Fatalf("got %+v, want %+v", got, want)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("round-trip mismatch:\n got %+v\nwant %+v", got, want)
 		}
 	})
 
@@ -55,8 +58,12 @@ func RunTestRepositoryTests(t *testing.T, newRepo func() ports.TestRepository) {
 
 	t.Run("SaveReplacesSameID", func(t *testing.T) {
 		repo := newRepo()
-		mustSaveTest(t, repo, testset.TestSnapshot{ID: "gia", Title: "GIA"})
-		mustSaveTest(t, repo, testset.TestSnapshot{ID: "gia", Title: "GIA v2"})
+		mustSaveTest(t, repo, compositeTestSnapshot(t, "gia", "GIA"))
+		// replace with a snapshot that differs in every mutable field (title,
+		// policy, timing, sections); a store that forgets a column leaks the old
+		// value here.
+		replacement := adaptiveTestSnapshot(t, "gia", "GIA v2")
+		mustSaveTest(t, repo, replacement)
 		all, err := repo.ListTests(ctx, testset.TestFilter{})
 		if err != nil {
 			t.Fatalf("list: %v", err)
@@ -65,8 +72,8 @@ func RunTestRepositoryTests(t *testing.T, newRepo func() ports.TestRepository) {
 			t.Fatalf("expected 1 after replace, got %d", len(all))
 		}
 		got, _ := repo.GetTest(ctx, "gia")
-		if got.Title != "GIA v2" {
-			t.Fatalf("replace failed: %q", got.Title)
+		if !reflect.DeepEqual(got, replacement) {
+			t.Fatalf("replace failed:\n got %+v\nwant %+v", got, replacement)
 		}
 	})
 
@@ -79,31 +86,26 @@ func RunTestRepositoryTests(t *testing.T, newRepo func() ports.TestRepository) {
 		// insert out of id order; List must return them sorted by id, and every
 		// non-id field must survive the round-trip (a column dropped in the list
 		// query would pass an id-only check).
-		mustSaveTest(t, repo, testset.TestSnapshot{ID: "ravens", Title: "Raven"})
-		mustSaveTest(t, repo, testset.TestSnapshot{ID: "gia", Title: "GIA"})
-		mustSaveTest(t, repo, testset.TestSnapshot{ID: "matrigma", Title: "Matrigma"})
+		want := []testset.TestSnapshot{
+			compositeTestSnapshot(t, "gia", "GIA"),
+			compositeTestSnapshot(t, "matrigma", "Matrigma"),
+			compositeTestSnapshot(t, "ravens", "Raven"),
+		}
+		mustSaveTest(t, repo, want[2])
+		mustSaveTest(t, repo, want[0])
+		mustSaveTest(t, repo, want[1])
 		got, err := repo.ListTests(ctx, testset.TestFilter{})
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
-		want := []testset.TestSnapshot{
-			{ID: "gia", Title: "GIA"},
-			{ID: "matrigma", Title: "Matrigma"},
-			{ID: "ravens", Title: "Raven"},
-		}
-		if len(got) != len(want) {
-			t.Fatalf("got %+v, want %+v", got, want)
-		}
-		for i := range want {
-			if got[i] != want[i] {
-				t.Fatalf("list mismatch at %d: got %+v, want %+v", i, got[i], want[i])
-			}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("list mismatch:\n got %+v\nwant %+v", got, want)
 		}
 	})
 
 	t.Run("Delete", func(t *testing.T) {
 		repo := newRepo()
-		mustSaveTest(t, repo, testset.TestSnapshot{ID: "gia", Title: "GIA"})
+		mustSaveTest(t, repo, compositeTestSnapshot(t, "gia", "GIA"))
 		if err := repo.DeleteTest(ctx, "gia"); err != nil {
 			t.Fatalf("delete: %v", err)
 		}
@@ -118,13 +120,16 @@ func RunTestRepositoryTests(t *testing.T, newRepo func() ports.TestRepository) {
 
 	t.Run("StoredSnapshotIsolatedFromInput", func(t *testing.T) {
 		repo := newRepo()
-		snap := testset.TestSnapshot{ID: "gia", Title: "GIA"}
+		snap := compositeTestSnapshot(t, "gia", "GIA")
+		want := compositeTestSnapshot(t, "gia", "GIA")
 		mustSaveTest(t, repo, snap)
-		// mutating the input after Save must not change stored state
-		snap.Title = "mutated"
+		// mutating a nested slice field after Save must not change stored state;
+		// a store that aliased the caller's section/item slices would fail here.
+		snap.Sections[0].Items[0].ItemID = "mutated"
+		snap.Families[0] = "mutated"
 		got, _ := repo.GetTest(ctx, "gia")
-		if got.Title != "GIA" {
-			t.Fatalf("store aliased caller input: %q", got.Title)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("store aliased caller input:\n got %+v\nwant %+v", got, want)
 		}
 	})
 }
@@ -401,6 +406,72 @@ func mustSaveTest(t *testing.T, repo ports.TestRepository, snap testset.TestSnap
 	if err := repo.SaveTest(context.Background(), snap); err != nil {
 		t.Fatalf("save test %s: %v", snap.ID, err)
 	}
+}
+
+// compositeTestSnapshot builds a valid composite, timed, fixed-increasing test
+// snapshot via the real aggregate, so the conformance suite exercises the same
+// normalization (derived families, cloned sections) every store must preserve.
+// The id is woven into the item refs so distinct tests hold distinct sections.
+func compositeTestSnapshot(t *testing.T, id testset.TestID, title string) testset.TestSnapshot {
+	t.Helper()
+	p := string(id)
+	tst, err := testset.NewTest(testset.TestSpec{
+		ID:     id,
+		Title:  title,
+		Policy: testset.PolicyFixedIncreasing,
+		Timing: testset.Timing{Total: 30 * time.Minute},
+		Sections: []testset.Section{
+			{
+				Title:  "Reasoning",
+				Family: shared.FamilyLogical,
+				Timing: testset.Timing{Total: 6 * time.Minute, PerItem: 60 * time.Second},
+				Items: []testset.ItemRef{
+					{ItemID: p + "-log-1", Difficulty: 1},
+					{ItemID: p + "-log-2", Difficulty: 3},
+				},
+			},
+			{
+				Title:  "Numeric",
+				Family: shared.FamilyNumerical,
+				Timing: testset.Timing{Total: 6 * time.Minute},
+				Items: []testset.ItemRef{
+					{ItemID: p + "-num-1", Difficulty: 2},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build composite test %s: %v", id, err)
+	}
+	return tst.Snapshot()
+}
+
+// adaptiveTestSnapshot builds a single-section adaptive test snapshot (differs
+// from compositeTestSnapshot in policy, timing and shape) so replace tests can
+// prove every field is rewritten.
+func adaptiveTestSnapshot(t *testing.T, id testset.TestID, title string) testset.TestSnapshot {
+	t.Helper()
+	p := string(id)
+	tst, err := testset.NewTest(testset.TestSpec{
+		ID:     id,
+		Title:  title,
+		Policy: testset.PolicyAdaptive,
+		Timing: testset.Timing{PerItem: 45 * time.Second},
+		Sections: []testset.Section{
+			{
+				Title:  "Adaptive pool",
+				Family: shared.FamilySpatial,
+				Items: []testset.ItemRef{
+					{ItemID: p + "-sp-1", Difficulty: 5},
+					{ItemID: p + "-sp-2", Difficulty: 1},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build adaptive test %s: %v", id, err)
+	}
+	return tst.Snapshot()
 }
 
 func mustSaveItem(t *testing.T, repo ports.ItemRepository, snap item.ItemSnapshot) {
