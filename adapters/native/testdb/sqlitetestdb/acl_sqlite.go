@@ -279,10 +279,12 @@ func (s *Store) getItemRow(ctx context.Context, id item.ItemID) (item.ItemSnapsh
 // store and the in-Go memory store and asserts identical results, so any
 // divergence between this SQL and Matches fails the build.
 //
-// ponytail: one bind per filter value, no de-dup. The filter dimensions are
-// closed vocabularies (≤5 families, ≤19 test types, ≤3 origins, ≤3 redist), so a
-// meaningful filter is ~30 binds — far under SQLite's variable limit. De-dup or
-// chunk only if a caller is found passing pathologically repeated values.
+// Multi-value fields are de-duplicated (see toAnyStrings), so the bind count
+// tracks the number of distinct values, not the raw slice length. Real callers
+// filter over the closed vocabularies (≤5 families, ≤19 test types, ≤3 origins,
+// ≤3 redist ⇒ ~30 binds), far under SQLite's variable limit. The enum types are
+// string-backed and technically open, so only a caller inventing thousands of
+// distinct junk codes could approach the limit — and those match no valid row.
 func itemListQuery(f item.ItemFilter) (string, []any) {
 	var conds []string
 	var args []any
@@ -318,11 +320,27 @@ func itemListQuery(f item.ItemFilter) (string, []any) {
 }
 
 // toAnyStrings converts a slice of string-kinded values to the []any of bind
-// parameters an IN clause needs.
+// parameters an IN clause needs, dropping duplicates (first occurrence wins) so
+// the placeholder and bind count track the number of distinct values, not the
+// raw slice length, regardless of how many repeats a caller passes. IN is a set
+// test, so de-duplication never changes the result; it mirrors the slices.Contains
+// set semantics of item.ItemFilter.Matches.
 func toAnyStrings[T ~string](vs []T) []any {
-	out := make([]any, len(vs))
-	for i, v := range vs {
-		out[i] = string(v)
+	if len(vs) == 0 {
+		return nil
+	}
+	// Pre-size to the vocabulary, not len(vs): the output holds only distinct
+	// values, so a filter padded with many repeats must not reserve for the raw
+	// length. capHint exceeds every closed vocabulary (largest is ~19 test types).
+	const capHint = 32
+	seen := make(map[T]struct{}, min(len(vs), capHint))
+	out := make([]any, 0, min(len(vs), capHint))
+	for _, v := range vs {
+		if _, dup := seen[v]; dup {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, string(v))
 	}
 	return out
 }

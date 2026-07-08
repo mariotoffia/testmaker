@@ -409,6 +409,96 @@ func TestMigrationV2ToV3AddsQueryColumns(t *testing.T) {
 	}
 }
 
+// TestListNullDifficultyBandMirrorsGoZeroValue proves the COALESCE in the
+// difficulty predicates makes a row whose blob is missing Difficulty.Band — so
+// the generated difficulty_band column resolves to NULL — behave exactly as
+// item.ItemFilter.Matches treats it: the unmarshalled snapshot has Band == 0, so
+// a MaxDifficulty filter includes it and a MinDifficulty >= 1 filter excludes it.
+// Without COALESCE the NULL column would make both predicates UNKNOWN and wrongly
+// drop the row from the MaxDifficulty query. Such a blob is not producible via
+// NewItem/SaveItem (Band >= 1 is enforced and always marshalled); the test
+// hand-edits the JSON to lock the parity the COALESCE exists for, cross-checking
+// every expectation against Matches as the oracle.
+func TestListNullDifficultyBandMirrorsGoZeroValue(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "nullband.sqlite")
+
+	// Build a valid snapshot, then strip Difficulty.Band from its JSON so the
+	// generated column is NULL (json_extract of a missing path).
+	full := mustItemSnapshot(t) // family logical, band 3
+	blob, err := json.Marshal(full)
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(blob, &doc); err != nil {
+		t.Fatalf("unmarshal to map: %v", err)
+	}
+	diff, ok := doc["Difficulty"].(map[string]any)
+	if !ok {
+		t.Fatalf("Difficulty not an object: %T", doc["Difficulty"])
+	}
+	delete(diff, "Band")
+	stripped, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("re-marshal stripped: %v", err)
+	}
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	if _, err := raw.Exec(`CREATE TABLE items (id TEXT PRIMARY KEY, snapshot TEXT NOT NULL) STRICT`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed v2 items table: %v", err)
+	}
+	if _, err := raw.Exec(`INSERT INTO items (id, snapshot) VALUES (?, ?)`, string(full.ID), string(stripped)); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed row: %v", err)
+	}
+	if _, err := raw.Exec(`PRAGMA user_version = 2`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed user_version: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close raw: %v", err)
+	}
+
+	store := mustOpen(t, path) // runs migration 3 -> difficulty_band is NULL for this row
+
+	// The read-back snapshot's Band must be the JSON zero value; this is what
+	// Matches sees and what COALESCE must mirror.
+	oracle, err := store.GetItem(ctx, full.ID)
+	if err != nil {
+		t.Fatalf("get stripped item: %v", err)
+	}
+	if oracle.Difficulty.Band != 0 {
+		t.Fatalf("stripped Band = %d, want 0 (json zero value)", oracle.Difficulty.Band)
+	}
+
+	// MaxDifficulty: COALESCE(NULL,0) <= 5 -> 0 <= 5 -> included (mirrors Matches).
+	maxFilter := item.ItemFilter{MaxDifficulty: 5}
+	if !maxFilter.Matches(oracle) {
+		t.Fatalf("oracle: Matches(MaxDifficulty:5) = false, want true")
+	}
+	if list, err := store.ListItems(ctx, maxFilter); err != nil {
+		t.Fatalf("list MaxDifficulty: %v", err)
+	} else if len(list) != 1 || !reflect.DeepEqual(list[0], oracle) {
+		t.Fatalf("MaxDifficulty:5 returned %d rows, want the null-band row (COALESCE null->0)", len(list))
+	}
+
+	// MinDifficulty: COALESCE(NULL,0) >= 1 -> 0 >= 1 -> excluded (mirrors Matches).
+	minFilter := item.ItemFilter{MinDifficulty: 1}
+	if minFilter.Matches(oracle) {
+		t.Fatalf("oracle: Matches(MinDifficulty:1) = true, want false")
+	}
+	if list, err := store.ListItems(ctx, minFilter); err != nil {
+		t.Fatalf("list MinDifficulty: %v", err)
+	} else if len(list) != 0 {
+		t.Fatalf("MinDifficulty:1 returned %d rows, want 0", len(list))
+	}
+}
+
 // mustItemSnapshot builds a valid, fully-populated item snapshot via the real
 // aggregate for the reopen durability proof.
 func mustItemSnapshot(t *testing.T) item.ItemSnapshot {
