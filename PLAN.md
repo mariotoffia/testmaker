@@ -2666,7 +2666,7 @@ git commit -m "Block 14: per-IP token-bucket rate limiter on /api"
 
 ---
 
-### Task 12: Ingest concurrency semaphore (sync path)
+### Task 12: Ingest concurrency semaphore (sync path) ✅
 
 **Files:**
 - Create: `cmd/testmaker/semaphore.go`

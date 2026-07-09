@@ -219,6 +219,15 @@ func (s *server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
+	// Bound concurrent ingests: a full gate is a 429 rather than an unbounded fan
+	// of outbound fetches. Acquired after validation so a 404 never burns a slot.
+	if s.ingestSem != nil {
+		if !s.ingestSem.tryAcquire() {
+			writeAuthError(w, http.StatusTooManyRequests, "limit.ingest", "another ingest is in progress")
+			return
+		}
+		defer s.ingestSem.release()
+	}
 	rep, err := s.ingestSvc.Ingest(r.Context(), snap, req.Limit)
 	if err != nil {
 		s.writeError(w, r, err)
@@ -244,6 +253,15 @@ func (s *server) handleIngestLLM(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.writeError(w, r, err)
 		return
+	}
+	// Same concurrency gate as the deterministic ingest; here it also bounds paid
+	// LLM spend by capping how many extractions run at once.
+	if s.ingestSem != nil {
+		if !s.ingestSem.tryAcquire() {
+			writeAuthError(w, http.StatusTooManyRequests, "limit.ingest", "another ingest is in progress")
+			return
+		}
+		defer s.ingestSem.release()
 	}
 	model := req.Model
 	if model == "" {

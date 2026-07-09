@@ -69,6 +69,7 @@ type sourcingSetup struct {
 	normalizers map[source.SourceID]ingest.Normalizer
 	llm         *llmapp.Service
 	llmModel    string
+	maxIngest   int // > 0 ⇒ bound concurrent ingests (Task 12); 0 ⇒ ungated
 }
 
 // newSourcingHarness wires the full delivery surface (including catalogue + ingest)
@@ -98,6 +99,7 @@ func newSourcingHarness(t *testing.T, s sourcingSetup) (*httptest.Server, testDB
 	}
 	ts := httptest.NewServer(newServer(serverDeps{
 		db: db, blobs: blobs, catalog: cat, ingest: ing, llm: s.llm, llmModel: s.llmModel,
+		maxIngest: s.maxIngest,
 	}).routes())
 	t.Cleanup(ts.Close)
 	return ts, db

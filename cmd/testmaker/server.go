@@ -95,6 +95,7 @@ type server struct {
 	blobs     ports.BlobStore
 	auth      *authenticator // role checks; zero-value AuthConfig ⇒ enforced() false
 	log       *slog.Logger   // nil → s.logger() hands back a discard logger
+	ingestSem semaphore      // bounds concurrent ingests; nil when maxIngest ≤ 0 ⇒ ungated
 }
 
 // serverDeps bundles everything the delivery surface drives: the TestDb-backed
@@ -102,15 +103,16 @@ type server struct {
 // optional LLM service (nil disables the LLM ingest endpoint). Grouping them keeps
 // newServer's signature stable as the surface grows.
 type serverDeps struct {
-	db       testDB
-	blobs    ports.BlobStore
-	catalog  *catalog.Service
-	ingest   *ingest.Service
-	llm      *llmapp.Service
-	llmModel string
-	authCfg  AuthConfig  // zero value ⇒ Mode "" ⇒ auth off (what most tests construct)
-	clock    clock.Clock // nil → clock.System(); drives invite expiry
-	log      *slog.Logger
+	db        testDB
+	blobs     ports.BlobStore
+	catalog   *catalog.Service
+	ingest    *ingest.Service
+	llm       *llmapp.Service
+	llmModel  string
+	authCfg   AuthConfig  // zero value ⇒ Mode "" ⇒ auth off (what most tests construct)
+	clock     clock.Clock // nil → clock.System(); drives invite expiry
+	log       *slog.Logger
+	maxIngest int // > 0 ⇒ bound concurrent ingests with a semaphore; 0 ⇒ ungated
 }
 
 // newServer wires the delivery use-cases over one TestDb backend and one blob
@@ -129,6 +131,12 @@ func newServer(d serverDeps) *server {
 	if clk == nil {
 		clk = clock.System()
 	}
+	// Bound concurrent ingests only when configured (> 0); a nil semaphore leaves
+	// the ingest handlers ungated, which is what the zero-value test server wants.
+	var sem semaphore
+	if d.maxIngest > 0 {
+		sem = newSemaphore(d.maxIngest)
+	}
 	return &server{
 		gen:       authoring.NewService(gen, d.db.items, d.blobs),
 		author:    authoring.NewTestService(d.db.items, d.db.tests),
@@ -144,6 +152,7 @@ func newServer(d serverDeps) *server {
 		blobs:     d.blobs,
 		auth:      newAuthenticator(d.authCfg, clk),
 		log:       d.log,
+		ingestSem: sem,
 	}
 }
 
@@ -237,6 +246,7 @@ func runServer(addr string, cfg Config) (err error) {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	srv := newServer(serverDeps{
 		db: db, blobs: blobs, catalog: cat, ingest: ing, llm: llmSvc, llmModel: llmModel, log: logger,
+		maxIngest: cfg.Limits.MaxConcurrentIngests,
 	})
 	// Per-IP token-bucket rate limit on /api (0 rps in config ⇒ off). Nested
 	// inside the security headers so an over-limit 429 still carries them.
