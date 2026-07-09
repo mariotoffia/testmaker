@@ -135,6 +135,22 @@ func TestIngestNoNormalizer(t *testing.T) {
 	}
 }
 
+func TestIngestNoFetcherWinsWhenBothMissing(t *testing.T) {
+	// A source with neither a supporting fetcher nor a normalizer must report
+	// ErrNoFetcher (not ErrNoNormalizer): the fetcher check has precedence, and
+	// no fetch is attempted.
+	fetch := &fakeFetcher{supports: false}
+	svc := ingest.NewService(&fakeBank{}, fetch)
+
+	_, err := svc.Ingest(context.Background(), testSnap(), 0)
+	if !errors.Is(err, ingest.ErrNoFetcher) {
+		t.Fatalf("err = %v, want ErrNoFetcher (fetcher check has precedence)", err)
+	}
+	if fetch.calls != 0 {
+		t.Errorf("fetcher should not be called")
+	}
+}
+
 func TestIngestFetchError(t *testing.T) {
 	sentinel := errors.New("boom")
 	fetch := &fakeFetcher{supports: true, err: sentinel}

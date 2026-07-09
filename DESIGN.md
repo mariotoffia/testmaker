@@ -298,7 +298,7 @@ which then pass `item.NewItem` like any other input.
 
 ---
 
-## 6. LLM support 🚧 <a name="6-llm-support"></a> (port + prompts + service ✅; `openaicompat` backend ✅; prompt stores 🚧)
+## 6. LLM support ✅ <a name="6-llm-support"></a> (port + prompts + service ✅; `openaicompat` backend ✅; `memoryprompts`/`fileprompts` stores ✅; `app/ingest` extraction step ✅)
 
 Three pieces, innermost-out:
 
@@ -350,8 +350,8 @@ available to after-hooks and callers without a second lookup.
 
 | Adapter | Backing | Use |
 | --- | --- | --- |
-| `adapters/native/llm/memoryprompts` 🚧 | in-memory map | tests + conformance baseline |
-| `adapters/native/llm/fileprompts` 🚧 | one YAML per prompt under `data/prompts/` (`id`, `version`, `purpose`, `params`, `template`, `notes`); read/write | the default store — prompts are reviewable, diffable seed data |
+| `adapters/native/llm/memoryprompts` ✅ | in-memory map | tests + conformance baseline |
+| `adapters/native/llm/fileprompts` ✅ | one YAML per prompt under `data/prompts/` (`id`, `version`, `purpose`, `params`, `template`, `notes`); read/write | the default store — prompts are reviewable, diffable seed data |
 | sqlite (with Block 3 TestDb) 🚧 | table in the same database file | single-file deployments |
 | `adapters/aws/llm/*` 🚧 | DynamoDB via AWS SDK v2 | cloud persistence, if/when wanted |
 
@@ -392,15 +392,43 @@ model-management APIs are needed.
 - Wired in `cmd/testmaker` behind config — absent LLM config means the step
   is skipped, the CLI still runs.
 
+### First consumer: LLM extraction (`app/ingest.IngestLLM`) ✅
+
+The first step to consume the library. It fetches a source's unstructured
+payload (the same `ports.Fetcher` path as deterministic ingest), sends it as a
+user message under the stored `extraction`-purpose prompt
+(`data/prompts/extract-items.yaml`, applied automatically by
+`GenerateFor(PurposeExtraction, …)`) and the extraction JSON schema, then
+decodes the completion into item candidates. Every candidate passes the same
+`item.NewItem` gate as a normalizer's output — a candidate the model mis-shapes
+(too few options, an `answer_index` referencing no option, an out-of-range
+difficulty is clamped) is skipped, never stored unvalidated. Survivors are
+tagged `item.OriginGenerated` with the source's redistributability; the
+`Report` records the model and prompt provenance of the run. Malformed,
+undecodable output is `ingest.ErrExtractParse`; a non-empty candidate set with
+zero survivors is `ingest.ErrAllRejected` — the same fail-loud contract as
+deterministic ingest. Unit tests drive it through a fake `ports.LLM` (canned
+JSON); the CLI's `-ingest-llm` path and the `cmd/testmaker` integration tests
+exercise it against a canned cloud endpoint and a real local Ollama backend
+through the one `openaicompat` adapter.
+
 Design rules:
 
 - **LLM output is untrusted input.** Anything generated must pass the domain
   constructors (`item.NewItem`, key present, difficulty tagged) before it
   reaches a bank or an examinee; derivation failures fall back to the item
   bank — a session never blocks on a model.
-- **Provenance is recorded.** LLM-produced/translated items carry origin
-  metadata (model, prompt id + version) so psychometric calibration can treat
-  them as unnormed until validated.
+- **Provenance is recorded.** LLM-lifted items are tagged `item.OriginGenerated`
+  (a model transformation of the source text, not a verbatim source record), so
+  psychometric calibration can treat them as unnormed. The run's model + prompt
+  id/version are captured in the ingest `Report`, not (yet) as `item.Provenance`
+  fields — no calibration consumer reads per-item model/prompt metadata yet, so
+  those fields are deferred to the block that does (a documented `ponytail:`
+  upgrade path on `app/ingest.IngestLLM`; decision recorded in
+  [ADR-0004](docs/adr/0004-llm-extraction-provenance-in-report-not-item.md)).
+  Extracted item ids are content-addressed (`{SourceID}-llm-{sha256(stem+options)[:12]}`)
+  so re-extraction rewrites each candidate's own item instead of clobbering a
+  positional neighbour.
 - **Determinism in tests.** Unit tests use a fake `LLM` (canned responses);
   real backends are integration-only, consistent with the no-network rule in
   [TESTS.md](TESTS.md).

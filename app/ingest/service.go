@@ -77,24 +77,22 @@ func (s *Service) Register(id source.SourceID, n Normalizer) {
 func (s *Service) Ingest(ctx context.Context, snap source.Snapshot, limit int) (Report, error) {
 	rep := Report{SourceID: snap.ID}
 
-	var fetcher ports.Fetcher
-	for _, f := range s.fetchers {
-		if f.Supports(snap) {
-			fetcher = f
-			break
-		}
+	// Precedence matches the LLM path and the pre-refactor behaviour: a source
+	// with neither a fetcher nor a normalizer reports ErrNoFetcher first. Select
+	// (but do not yet call) the fetcher so the normalizer check can still win
+	// before any network work happens.
+	idx, err := s.fetcherIndex(snap)
+	if err != nil {
+		return rep, err
 	}
-	if fetcher == nil {
-		return rep, ErrNoFetcher.WithMessagef("no fetcher supports source %q (method %q)",
-			snap.ID, snap.Extraction.Method).With("source", string(snap.ID))
-	}
+
 	norm, ok := s.normalizers[snap.ID]
 	if !ok {
 		return rep, ErrNoNormalizer.WithMessagef("no normalizer registered for source %q", snap.ID).
 			With("source", string(snap.ID))
 	}
 
-	res, err := fetcher.Fetch(ctx, ports.FetchRequest{Source: snap, Limit: limit})
+	res, err := s.fetchers[idx].Fetch(ctx, ports.FetchRequest{Source: snap, Limit: limit})
 	if err != nil {
 		return rep, err
 	}
@@ -105,8 +103,41 @@ func (s *Service) Ingest(ctx context.Context, snap source.Snapshot, limit int) (
 	if err != nil {
 		return rep, err
 	}
-	rep.Normalized = len(specs)
+	if err := s.saveSpecs(ctx, specs, &rep); err != nil {
+		return rep, err
+	}
+	return rep, nil
+}
 
+// fetcherIndex returns the position of the first configured fetcher that
+// supports snap, without calling it. No supporting fetcher is ErrNoFetcher.
+func (s *Service) fetcherIndex(snap source.Snapshot) (int, error) {
+	for i, f := range s.fetchers {
+		if f.Supports(snap) {
+			return i, nil
+		}
+	}
+	return -1, ErrNoFetcher.WithMessagef("no fetcher supports source %q (method %q)",
+		snap.ID, snap.Extraction.Method).With("source", string(snap.ID))
+}
+
+// fetchFor selects the first configured fetcher that supports snap and pulls up
+// to limit raw items from it. No supporting fetcher is ErrNoFetcher.
+func (s *Service) fetchFor(ctx context.Context, snap source.Snapshot, limit int) (ports.FetchResult, error) {
+	idx, err := s.fetcherIndex(snap)
+	if err != nil {
+		return ports.FetchResult{}, err
+	}
+	return s.fetchers[idx].Fetch(ctx, ports.FetchRequest{Source: snap, Limit: limit})
+}
+
+// saveSpecs validates every spec through item.NewItem and stores the survivors,
+// updating rep's Normalized/Saved/Skipped counts. A spec NewItem rejects is
+// skipped (counted), not fatal; a repository write error aborts. A non-empty
+// spec set with zero survivors is ErrAllRejected — a broken mapping, not an
+// empty-but-fine run.
+func (s *Service) saveSpecs(ctx context.Context, specs []item.ItemSpec, rep *Report) error {
+	rep.Normalized = len(specs)
 	for _, spec := range specs {
 		it, verr := item.NewItem(spec)
 		if verr != nil {
@@ -116,7 +147,7 @@ func (s *Service) Ingest(ctx context.Context, snap source.Snapshot, limit int) (
 			continue
 		}
 		if err := s.bank.SaveItem(ctx, it.Snapshot()); err != nil {
-			return rep, err
+			return err
 		}
 		rep.Saved++
 	}
@@ -124,8 +155,8 @@ func (s *Service) Ingest(ctx context.Context, snap source.Snapshot, limit int) (
 	// non-empty spec set means the mapping is broken — fail loudly rather than
 	// report an empty success.
 	if rep.Normalized > 0 && rep.Saved == 0 {
-		return rep, ErrAllRejected.WithMessagef("source %q: %d spec(s) produced, all rejected", snap.ID, rep.Normalized).
-			With("source", string(snap.ID))
+		return ErrAllRejected.WithMessagef("source %q: %d spec(s) produced, all rejected", rep.SourceID, rep.Normalized).
+			With("source", string(rep.SourceID))
 	}
-	return rep, nil
+	return nil
 }
