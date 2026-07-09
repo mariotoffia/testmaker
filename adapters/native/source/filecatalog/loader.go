@@ -41,7 +41,25 @@ func (l *Loader) Load(_ context.Context) ([]source.Snapshot, error) {
 			return nil, fmt.Errorf("filecatalog: parse yaml %s: %w", l.path, err)
 		}
 	}
+	return snapshotsFrom(wire)
+}
 
+// ParseJSON parses a catalogue JSON document into validated source snapshots,
+// running every record through source.NewSource — the same gate Load applies to
+// a file. It does no I/O, so the delivery surface can validate an uploaded
+// catalogue body before writing it (DESIGN §7.2, POST /api/catalog).
+func ParseJSON(raw []byte) ([]source.Snapshot, error) {
+	var wire wireCatalog
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		return nil, fmt.Errorf("filecatalog: parse json: %w", err)
+	}
+	return snapshotsFrom(wire)
+}
+
+// snapshotsFrom validates every wire record through source.NewSource and returns
+// the resulting snapshots, failing on the first invalid record. Shared by Load
+// (file) and ParseJSON (in-memory body) so both apply the identical gate.
+func snapshotsFrom(wire wireCatalog) ([]source.Snapshot, error) {
 	out := make([]source.Snapshot, 0, len(wire.Sources))
 	for _, ws := range wire.Sources {
 		src, verr := source.NewSource(ws.toSpec())

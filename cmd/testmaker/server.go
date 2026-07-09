@@ -81,21 +81,22 @@ func openBlobStore(spec string) (ports.BlobStore, error) {
 // demo — lives in the composition root because it depends on app use-cases,
 // which no adapter is allowed to import.
 type server struct {
-	gen       *authoring.Service
-	author    *authoring.TestService
-	exec      ports.Executor
-	scorer    ports.Scorer
-	cat       *catalog.Service
-	ingestSvc *ingest.Service
-	items     ports.ItemRepository
-	llm       *llmapp.Service // nil when the deployment has no LLM backend configured
-	llmModel  string
-	tests     ports.TestRepository
-	sessions  ports.SessionRepository
-	blobs     ports.BlobStore
-	auth      *authenticator // role checks; zero-value AuthConfig ⇒ enforced() false
-	log       *slog.Logger   // nil → s.logger() hands back a discard logger
-	ingestSem semaphore      // bounds concurrent ingests; nil when maxIngest ≤ 0 ⇒ ungated
+	gen         *authoring.Service
+	author      *authoring.TestService
+	exec        ports.Executor
+	scorer      ports.Scorer
+	cat         *catalog.Service
+	ingestSvc   *ingest.Service
+	items       ports.ItemRepository
+	llm         *llmapp.Service // nil when the deployment has no LLM backend configured
+	llmModel    string
+	tests       ports.TestRepository
+	sessions    ports.SessionRepository
+	blobs       ports.BlobStore
+	auth        *authenticator // role checks; zero-value AuthConfig ⇒ enforced() false
+	log         *slog.Logger   // nil → s.logger() hands back a discard logger
+	ingestSem   semaphore      // bounds concurrent ingests; nil when maxIngest ≤ 0 ⇒ ungated
+	catalogPath string         // where POST /api/catalog persists an uploaded catalogue; "" ⇒ upload unsupported
 }
 
 // serverDeps bundles everything the delivery surface drives: the TestDb-backed
@@ -103,16 +104,17 @@ type server struct {
 // optional LLM service (nil disables the LLM ingest endpoint). Grouping them keeps
 // newServer's signature stable as the surface grows.
 type serverDeps struct {
-	db        testDB
-	blobs     ports.BlobStore
-	catalog   *catalog.Service
-	ingest    *ingest.Service
-	llm       *llmapp.Service
-	llmModel  string
-	authCfg   AuthConfig  // zero value ⇒ Mode "" ⇒ auth off (what most tests construct)
-	clock     clock.Clock // nil → clock.System(); drives invite expiry
-	log       *slog.Logger
-	maxIngest int // > 0 ⇒ bound concurrent ingests with a semaphore; 0 ⇒ ungated
+	db          testDB
+	blobs       ports.BlobStore
+	catalog     *catalog.Service
+	ingest      *ingest.Service
+	llm         *llmapp.Service
+	llmModel    string
+	authCfg     AuthConfig  // zero value ⇒ Mode "" ⇒ auth off (what most tests construct)
+	clock       clock.Clock // nil → clock.System(); drives invite expiry
+	log         *slog.Logger
+	maxIngest   int    // > 0 ⇒ bound concurrent ingests with a semaphore; 0 ⇒ ungated
+	catalogPath string // POST /api/catalog target; "" ⇒ upload returns 501
 }
 
 // newServer wires the delivery use-cases over one TestDb backend and one blob
@@ -138,21 +140,22 @@ func newServer(d serverDeps) *server {
 		sem = newSemaphore(d.maxIngest)
 	}
 	return &server{
-		gen:       authoring.NewService(gen, d.db.items, d.blobs),
-		author:    authoring.NewTestService(d.db.items, d.db.tests),
-		exec:      execution.NewService(clock.System(), d.db.items, d.db.sessions, execution.RandomIDs()),
-		scorer:    scoringapp.NewService(d.db.items, scoring.NormBook{}),
-		cat:       d.catalog,
-		ingestSvc: d.ingest,
-		items:     d.db.items,
-		llm:       d.llm,
-		llmModel:  d.llmModel,
-		tests:     d.db.tests,
-		sessions:  d.db.sessions,
-		blobs:     d.blobs,
-		auth:      newAuthenticator(d.authCfg, clk),
-		log:       d.log,
-		ingestSem: sem,
+		gen:         authoring.NewService(gen, d.db.items, d.blobs),
+		author:      authoring.NewTestService(d.db.items, d.db.tests),
+		exec:        execution.NewService(clock.System(), d.db.items, d.db.sessions, execution.RandomIDs()),
+		scorer:      scoringapp.NewService(d.db.items, scoring.NormBook{}),
+		cat:         d.catalog,
+		ingestSvc:   d.ingest,
+		items:       d.db.items,
+		llm:         d.llm,
+		llmModel:    d.llmModel,
+		tests:       d.db.tests,
+		sessions:    d.db.sessions,
+		blobs:       d.blobs,
+		auth:        newAuthenticator(d.authCfg, clk),
+		log:         d.log,
+		ingestSem:   sem,
+		catalogPath: d.catalogPath,
 	}
 }
 
@@ -169,11 +172,13 @@ func (s *server) routes() http.Handler {
 	// Operator-only: authoring, composition, item bank, sourcing.
 	mux.HandleFunc("POST /api/items/generate", s.requireOperator(s.handleGenerate))
 	mux.HandleFunc("POST /api/tests", s.requireOperator(s.handleCompose))
+	mux.HandleFunc("GET /api/tests", s.requireOperator(s.handleListTests))
 	mux.HandleFunc("GET /api/tests/{id}", s.requireOperator(s.handleGetTest))
 	mux.HandleFunc("POST /api/tests/{id}/sessions", s.requireOperator(s.handleStartSession))
 	mux.HandleFunc("POST /api/tests/{id}/invites", s.requireOperator(s.handleMintInvite))
 	mux.HandleFunc("GET /api/sources", s.requireOperator(s.handleListSources))
 	mux.HandleFunc("GET /api/sources/{id}", s.requireOperator(s.handleGetSource))
+	mux.HandleFunc("POST /api/catalog", s.requireOperator(s.handleUploadCatalog))
 	mux.HandleFunc("POST /api/catalog/sync", s.requireOperator(s.handleSyncCatalog))
 	mux.HandleFunc("GET /api/items", s.requireOperator(s.handleListItems))
 	mux.HandleFunc("GET /api/items/{id}", s.requireOperator(s.handleGetItem))
@@ -200,10 +205,11 @@ func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
 		"status":  "ok",
 		"endpoints": []string{
 			"GET /api", "GET /api/auth/whoami",
-			"GET /api/sources", "GET /api/sources/{id}", "POST /api/catalog/sync",
+			"GET /api/sources", "GET /api/sources/{id}",
+			"POST /api/catalog", "POST /api/catalog/sync",
 			"GET /api/items", "GET /api/items/{id}",
 			"POST /api/sources/{id}/ingest", "POST /api/sources/{id}/ingest-llm",
-			"POST /api/items/generate", "POST /api/tests", "GET /api/tests/{id}",
+			"POST /api/items/generate", "POST /api/tests", "GET /api/tests", "GET /api/tests/{id}",
 			"POST /api/tests/{id}/sessions", "POST /api/tests/{id}/invites",
 			"GET /api/invites/preview", "POST /api/invites/start",
 			"POST /api/sessions/{id}/answers",
@@ -268,8 +274,9 @@ func buildDeliveryHandler(cfg Config, logger *slog.Logger) (http.Handler, func()
 	}
 	srv := newServer(serverDeps{
 		db: db, blobs: blobs, catalog: cat, ingest: ing, llm: llmSvc, llmModel: llmModel, log: logger,
-		maxIngest: cfg.Limits.MaxConcurrentIngests,
-		authCfg:   cfg.Auth, // enforce the configured auth mode on the real -serve path
+		maxIngest:   cfg.Limits.MaxConcurrentIngests,
+		authCfg:     cfg.Auth, // enforce the configured auth mode on the real -serve path
+		catalogPath: cfg.Catalog,
 	})
 	// Per-IP token-bucket rate limit on /api (0 rps in config ⇒ off). Nested
 	// inside the security headers so an over-limit 429 still carries them.
@@ -367,6 +374,22 @@ func (s *server) handleCompose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, snap)
+}
+
+// handleListTests returns the composed-test catalogue, paginated (C5). TestFilter
+// is currently empty (no criteria), so this lists all tests; the repository sorts
+// by id, so pages are stable.
+func (s *server) handleListTests(w http.ResponseWriter, r *http.Request) {
+	tests, err := s.tests.ListTests(r.Context(), testset.TestFilter{})
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	limit, offset, ok := s.pageParams(w, r, r.URL.Query())
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, paginate(tests, limit, offset))
 }
 
 func (s *server) handleGetTest(w http.ResponseWriter, r *http.Request) {

@@ -2970,7 +2970,7 @@ git commit -m "Block 14: server-side LLM cost clamp via BeforeGenerate hook"
 
 # Phase 4 — Console API
 
-### Task 14: Pagination envelope on the list endpoints
+### Task 14: Pagination envelope on the list endpoints ✅
 
 **Files:**
 - Create: `cmd/testmaker/pagination.go`
@@ -3144,7 +3144,7 @@ git commit -m "Block 14: paginated envelope on /api/sources and /api/items"
 
 ---
 
-### Task 15: `GET /api/tests` list endpoint
+### Task 15: `GET /api/tests` list endpoint ✅
 
 The console's test list needs a paginated tests collection (only `GET
 /api/tests/{id}` exists today).
@@ -3236,7 +3236,7 @@ git commit -m "Block 14: GET /api/tests paginated list endpoint"
 
 ---
 
-### Task 16: `POST /api/catalog` upload + `filecatalog.ParseJSON` extraction
+### Task 16: `POST /api/catalog` upload + `filecatalog.ParseJSON` extraction ✅
 
 The console edits the catalogue; today only `POST /api/catalog/sync` reloads the
 deploy-time file. This adds a validated, atomic catalogue upload. The one

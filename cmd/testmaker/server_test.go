@@ -115,6 +115,42 @@ func seedAndCompose(t *testing.T, ts *httptest.Server, id string) (string, int) 
 	return string(test.ID), items
 }
 
+// TestListTestsPaginated proves GET /api/tests returns the composed-test
+// catalogue wrapped in the pagination envelope (C5). Two composed tests must
+// both surface in the page and count toward Total.
+func TestListTestsPaginated(t *testing.T) {
+	ts := newHarness(t)
+
+	// Seed one bank, then compose two tests from it (avoids a second same-seed
+	// generate saving zero duplicates).
+	resp := post(t, ts, "/api/items/generate", generateReq{TestType: "A2", Difficulty: 2, Count: 6, Seed: 1})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("generate = %d, want 200", resp.StatusCode)
+	}
+	_ = resp.Body.Close()
+	for _, id := range []string{"t-a", "t-b"} {
+		r := post(t, ts, "/api/tests", composeReq{
+			ID: id, Title: id, Policy: "fixed-increasing",
+			TotalSeconds: 600, PerItemSeconds: 60,
+			Sections: []sectionReq{{Title: "Logical", Family: "logical", TotalSeconds: 300, PerItemSeconds: 60}},
+		})
+		if r.StatusCode != http.StatusCreated {
+			t.Fatalf("compose %s = %d, want 201", id, r.StatusCode)
+		}
+		_ = r.Body.Close()
+	}
+
+	resp = get(t, ts, "/api/tests")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/tests = %d, want 200", resp.StatusCode)
+	}
+	var page pageEnvelope[testset.TestSnapshot]
+	decode(t, resp, &page)
+	if page.Total < 2 || len(page.Items) < 2 {
+		t.Fatalf("expected >=2 tests, got total=%d items=%d", page.Total, len(page.Items))
+	}
+}
+
 // TestDeliverySurfaceFullFlow drives the whole author -> take -> score path
 // through the HTTP surface and asserts each step succeeds and the session ends
 // completed and scorable.
