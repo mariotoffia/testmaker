@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/mariotoffia/testmaker/domain/clock"
 )
@@ -105,5 +106,27 @@ func TestInviteMintPreviewStartFlow(t *testing.T) {
 	if bad := authPost(t, ts.URL+"/api/sessions/"+start.Session.ID+"/answers", inv.Token,
 		answerReq{ItemID: "x", OptionID: "a"}); bad.StatusCode != http.StatusForbidden {
 		t.Fatalf("invite token on session verb → %d, want 403", bad.StatusCode)
+	}
+}
+
+// TestInvitePreviewReportsExpiry pins C7: the preview echoes the invite's real
+// expiry, not the Go zero time. Regression guard for a dropped exp claim.
+func TestInvitePreviewReportsExpiry(t *testing.T) {
+	ts, op, tid := seedTestForInvite(t)
+	var inv struct {
+		Token     string
+		ExpiresAt time.Time
+	}
+	decodeBody(t, authPost(t, ts.URL+"/api/tests/"+tid+"/invites", op, map[string]int{"expiresInSeconds": 600}), &inv)
+
+	var pv struct {
+		ExpiresAt time.Time `json:"expiresAt"`
+	}
+	decodeBody(t, authGet(t, ts.URL+"/api/invites/preview", inv.Token), &pv)
+	if pv.ExpiresAt.IsZero() {
+		t.Fatal("preview expiresAt is the zero time; C7 requires the real invite expiry")
+	}
+	if pv.ExpiresAt.Unix() != inv.ExpiresAt.Unix() {
+		t.Fatalf("preview expiresAt %v != minted %v", pv.ExpiresAt, inv.ExpiresAt)
 	}
 }

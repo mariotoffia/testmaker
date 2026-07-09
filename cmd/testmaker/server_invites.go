@@ -69,9 +69,10 @@ func (s *server) handleMintInvite(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, inviteResponse{Token: tok, URL: "/take#" + tok, ExpiresAt: exp})
 }
 
-// handleInvitePreview (invite) returns the redacted test summary. tid comes from
-// the verified invite, so a taker can only preview the invited test.
-func (s *server) handleInvitePreview(w http.ResponseWriter, r *http.Request, tid string) {
+// handleInvitePreview (invite) returns the redacted test summary. tid and exp
+// come from the verified invite, so a taker can only preview the invited test
+// and the preview echoes that invite's real expiry (C7).
+func (s *server) handleInvitePreview(w http.ResponseWriter, r *http.Request, tid string, exp time.Time) {
 	test, err := s.tests.GetTest(r.Context(), testset.TestID(tid))
 	if err != nil {
 		s.writeError(w, r, err)
@@ -80,6 +81,7 @@ func (s *server) handleInvitePreview(w http.ResponseWriter, r *http.Request, tid
 	pv := invitePreview{
 		TestID: tid, Title: test.Title, Policy: string(test.Policy),
 		TotalSeconds: int(test.Timing.Total / time.Second), PerItemSeconds: int(test.Timing.PerItem / time.Second),
+		ExpiresAt: exp,
 	}
 	for _, sec := range test.Sections {
 		pv.ItemCount += len(sec.Items)
@@ -92,8 +94,9 @@ func (s *server) handleInvitePreview(w http.ResponseWriter, r *http.Request, tid
 }
 
 // handleInviteStart (invite) starts a session for the invited test and returns
-// the opening Delivery plus a fresh session token.
-func (s *server) handleInviteStart(w http.ResponseWriter, r *http.Request, tid string) {
+// the opening Delivery plus a fresh session token. The invite expiry is not
+// needed once the session exists, so it is ignored here.
+func (s *server) handleInviteStart(w http.ResponseWriter, r *http.Request, tid string, _ time.Time) {
 	test, err := s.tests.GetTest(r.Context(), testset.TestID(tid))
 	if err != nil {
 		s.writeError(w, r, err)

@@ -109,19 +109,27 @@ func (a *authenticator) mintInvite(tid string, ttl time.Duration) (string, time.
 	return tok, exp, err
 }
 
-func (a *authenticator) verifyInvite(token string) (string, bool) {
+// verifyInviteClaims verifies an invite token and returns its full claims (test
+// id + expiry). The invite verbs need the expiry too (C7 preview echoes it), so
+// this is the primary verifier and verifyInvite is the tid-only convenience.
+func (a *authenticator) verifyInviteClaims(token string) (inviteClaims, bool) {
 	payload, ok := a.verify(token, invitePrefix)
 	if !ok {
-		return "", false
+		return inviteClaims{}, false
 	}
 	var c inviteClaims
 	if json.Unmarshal(payload, &c) != nil {
-		return "", false
+		return inviteClaims{}, false
 	}
 	if a.clk.Now().Unix() >= c.Exp {
-		return "", false
+		return inviteClaims{}, false
 	}
-	return c.TID, true
+	return c, true
+}
+
+func (a *authenticator) verifyInvite(token string) (string, bool) {
+	c, ok := a.verifyInviteClaims(token)
+	return c.TID, ok
 }
 
 func (a *authenticator) mintSession(sid string) (string, error) {
@@ -217,14 +225,14 @@ func (s *server) requireSession(next http.HandlerFunc) http.HandlerFunc {
 // where there is no secret, so it simply 401s — the invite flow is a token-mode
 // feature; an operator in none mode starts sessions directly). The verified
 // test id is handed to the wrapped handler so it need not re-parse the token.
-func (s *server) requireInvite(next func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+func (s *server) requireInvite(next func(w http.ResponseWriter, r *http.Request, tid string, exp time.Time)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		tid, ok := s.auth.verifyInvite(bearer(r))
+		c, ok := s.auth.verifyInviteClaims(bearer(r))
 		if !ok {
 			writeAuthError(w, http.StatusUnauthorized, "auth.required", "a valid invite is required")
 			return
 		}
-		next(w, r, tid)
+		next(w, r, c.TID, time.Unix(c.Exp, 0).UTC())
 	}
 }
 
