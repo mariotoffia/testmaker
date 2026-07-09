@@ -19,8 +19,6 @@ import (
 	"github.com/mariotoffia/testmaker/adapters/native/llm/openaicompat"
 	"github.com/mariotoffia/testmaker/adapters/native/source/filecatalog"
 	"github.com/mariotoffia/testmaker/adapters/native/source/memorycatalog"
-	"github.com/mariotoffia/testmaker/adapters/native/testdb/memorytestdb"
-	"github.com/mariotoffia/testmaker/adapters/native/testdb/sqlitetestdb"
 	"github.com/mariotoffia/testmaker/app/authoring"
 	"github.com/mariotoffia/testmaker/app/catalog"
 	"github.com/mariotoffia/testmaker/app/execution"
@@ -44,7 +42,16 @@ func main() {
 	genType := flag.String("generate", "", "if set to a figural test type (A1, A2, A3 or A4), procedurally generate a small batch of items into the bank")
 	authorTest := flag.Bool("author-test", false, "compose a composite, timed, difficulty-ordered test from the bank and store+reload it")
 	runTest := flag.Bool("run-test", false, "administer a composed test end-to-end (fixed + adaptive) under timing, grading answers and reporting the score")
+	serve := flag.String("serve", "", "if set to a listen address (e.g. :8080), run the HTTP delivery API (author/take/score) instead of the demo")
 	flag.Parse()
+
+	if *serve != "" {
+		if err := runServer(*serve, *testdbDSN); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	if err := run(context.Background(), *path, *testdbDSN, *llmPrompt, *ingestID, *genType, *authorTest, *runTest); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -54,33 +61,22 @@ func main() {
 
 func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType string, authorTest, runTest bool) (err error) {
 	// --- composition root: choose adapters, wire the service ---
-	// One concrete TestDb store backs all three repositories; it is exposed here
-	// as the separate ports the app depends on. The default is the dependency-free
-	// in-memory store.
-	memStore := memorytestdb.NewStore()
+	// One concrete TestDb store backs all three repositories (memory by default,
+	// sqlite behind a DSN); openTestDB is the only place that knows the backend.
 	var (
-		repo     ports.SourceRepository  = memorycatalog.NewStore()
-		loader   ports.CatalogLoader     = filecatalog.NewLoader(path)
-		fetcher  ports.Fetcher           = stubfetcher.NewFetcher()
-		testdb   ports.TestRepository    = memStore
-		itembank ports.ItemRepository    = memStore
-		sessions ports.SessionRepository = memStore
+		repo    ports.SourceRepository = memorycatalog.NewStore()
+		loader  ports.CatalogLoader    = filecatalog.NewLoader(path)
+		fetcher ports.Fetcher          = stubfetcher.NewFetcher()
 	)
-	// A sqlite DSN swaps in the durable adapter. Its *Store satisfies every
-	// TestDb port, so nothing below changes — the only place that knows the
-	// concrete backend is right here.
-	closeTestDB := func() error { return nil }
-	if testdbDSN != "" && testdbDSN != "memory" {
-		store, oerr := sqlitetestdb.Open(testdbDSN)
-		if oerr != nil {
-			return oerr
-		}
-		testdb, itembank, sessions, closeTestDB = store, store, store, store.Close
+	db, err := openTestDB(testdbDSN)
+	if err != nil {
+		return err
 	}
+	testdb, itembank, sessions := db.tests, db.items, db.sessions
 	// Surface a close failure (a file-backed store may have unflushed writes)
 	// alongside the real error rather than instead of it.
 	defer func() {
-		if cerr := closeTestDB(); cerr != nil {
+		if cerr := db.close(); cerr != nil {
 			err = errors.Join(err, cerr)
 		}
 	}()

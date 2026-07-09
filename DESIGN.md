@@ -104,7 +104,7 @@ satisfies its non-decreasing-difficulty invariant by construction.
 
 ---
 
-## 4. Execution & scoring — execution ✅ · scoring ✅
+## 4. Execution & scoring — execution ✅ · scoring ✅ · delivery ✅
 
 **Aggregate `session.Session`** ✅ — one attempt, a small clock-free state machine:
 
@@ -184,6 +184,69 @@ The reported IQ and percentile are **clamped** to a defensible range
 (`[40, 160]` and `[0.1, 99.9]`): a thin parametric norm extrapolated past ~±4 SD
 produces figures ("IQ 210", "percentile 100.0") no fixed-form test can support,
 so the tails are pinned rather than reported literally.
+
+### Optimistic concurrency (SessionRepository) ✅
+
+An attempt is a shared mutable resource the moment more than one request can
+touch it — two `Answer`s for the same presented item, or an `Answer` racing a
+`Complete`. A blind `SaveSession` upsert would let the last writer win and could
+even resurrect a completed attempt. So `SessionRepository.SaveSession` is a
+**compare-and-swap on `SessionSnapshot.Version`**: it stores only when the
+snapshot's version is exactly one past the stored version, otherwise it returns
+`session.ErrSessionConflict` (`ClassConflict`).
+
+The version is modelled as a **passthrough field on the `Session` aggregate**
+(never touched by a transition; carried through `Snapshot` /
+`RehydrateFromSnapshot`) rather than store bookkeeping, because that is the
+DDD-canonical home for an optimistic-lock token and it keeps the snapshot
+round-trip (`Rehydrate(snap).Snapshot()`, which the memory store uses to
+deep-copy) self-consistent. The executor increments it at each persist: `Start`
+writes version 1, every later `Answer`/`Complete` writes `loaded+1`. Two writers
+that both loaded version *v* both try to write *v+1*; the first wins, the second
+conflicts. Version 0 is the never-persisted marker and cannot be stored directly.
+
+This is enforced at the **store** (not the app), so it holds for every backend
+and every driving surface, and is proven once by the shared `ports/testdbtest`
+conformance suite (memory + sqlite) — both a sequential guard check and a
+*contended* test that races N writers at one version and asserts exactly one
+commits and the rest get `ErrSessionConflict`. In sqlite the version lives inside
+the JSON snapshot blob (no new column/migration); the swap is one **guarded
+conditional statement** — the first save is an `INSERT … ON CONFLICT DO NOTHING`
+and every later save an `UPDATE … WHERE json_extract(snapshot,'$.Version') = ?`
+on the prior version, with *zero rows changed* meaning conflict. A single
+INSERT/UPDATE holds SQLite's write lock for its whole duration, so the check and
+the write are atomic without a transaction and stay correct across a real
+connection pool. A file database therefore runs with **WAL + `busy_timeout` + a
+multi-connection pool** (a bare `:memory:` database keeps one connection, since
+each connection would otherwise get its own private database). Client-supplied
+`If-Match`/ETag propagation is the remaining upgrade path; today a driving surface
+derives the expected version from its own load.
+
+Because the guard lives in the statement rather than in a serialized connection,
+the CAS is correct independent of how tightly any caller serializes — that is its
+value as the **store's contract**. Within the single-process delivery surface
+that ships, the CAS is rarely the mechanism that *rejects* a live HTTP race (the
+executor's presented-item check usually fires first); its guarantee is the
+forward insurance that lets the execution use-case be exposed to a multi-instance
+/ multi-connection deployment (two `*Store` over one file, or two processes)
+without a redesign. That is why the guard is proven at the store
+(deterministically, under contention across a real pool) rather than only through
+the surface.
+
+### Delivery surface (HTTP) ✅
+
+Authoring, execution and scoring are exposed over stdlib `net/http`
+(`cmd/testmaker -serve <addr>`) so a user can author, take and be scored on a
+test through one interface. It sits in the **composition root**, not a new
+adapter module: the surface drives the `app` use-cases, and the layer graph
+forbids an adapter from importing `app`. Endpoints map one-to-one onto the
+use-cases (`/items/generate`, `/tests`, `/tests/{id}`, `/tests/{id}/sessions`,
+`/sessions/{id}/answers`, `/sessions/{id}/complete`, `/sessions/{id}/score`); a
+single `shared.TestmakerError`-class → HTTP-status map is the only transport
+translation, and request timing is carried in seconds so the wire format stays
+clock-free. Domain snapshots are marshalled directly (no parallel response-DTO
+layer), and norms — deployment configuration — default to empty, so the API
+returns raw scores plus feedback until a deployment supplies a norm book.
 
 ---
 

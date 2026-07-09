@@ -27,6 +27,7 @@ status.
 | Understanding bounded contexts and their relationships | [DDD.md](DDD.md) |
 | Naming a type, field, constant, enum value, or concept | [UBIQUITOUS.md](UBIQUITOUS.md) |
 | What is built vs. what comes next, and in what order | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) |
+| Why a specific design fork was taken (decision records) | [docs/adr/](docs/adr/README.md) |
 | Implementing one design item / plan block end-to-end | [§ Implementing a design item](#implementing-a-design-item) below |
 
 `ARCHITECTURE.md`, `DDD.md`, `UBIQUITOUS.md`, and `IMPLEMENTATION_PLAN.md` are

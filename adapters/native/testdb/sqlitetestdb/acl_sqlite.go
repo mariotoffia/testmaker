@@ -27,8 +27,9 @@ const driverName = "sqlite"
 //
 // Append-only: never edit a shipped migration, add a new one. This is the
 // upgrade path for the snapshot fields per block: item (Block 4) and test
-// (Block 7) migrated their scaffold tables to JSON documents below; session
-// (Block 8) is the next expected entry.
+// (Block 7) migrated their scaffold tables to JSON documents below, session
+// (Block 8) followed, and Block 10 backfills the session optimistic-version
+// field onto rows persisted before it existed.
 func schemaMigrations() [][]string {
 	return [][]string{
 		{
@@ -134,21 +135,54 @@ func schemaMigrations() [][]string {
 				snapshot TEXT NOT NULL
 			) STRICT`,
 		},
+		// Block 10 (delivery surface): SaveSession became an optimistic
+		// compare-and-swap on SessionSnapshot.Version, enforced in sqlite by a
+		// guarded conditional write (see saveSessionRow). The version lives inside
+		// the JSON snapshot, but the Block-8 build persisted session documents
+		// before that field existed, so a durable database can hold rows whose
+		// snapshot has no "Version" key. On those rows json_extract returns NULL,
+		// the guard matches nothing, and the session would be permanently
+		// un-writable (every Answer/Complete a 409). Unlike the scaffold tables
+		// above, the old shape IS forward-convertible: backfill the missing field
+		// to 1 (the first-persisted marker the CAS starts from) so the row keeps
+		// its data and becomes writable again. json_set only touches rows still
+		// missing the key, so new-shape rows and a fresh empty table are untouched.
+		{
+			`UPDATE sessions SET snapshot = json_set(snapshot, '$.Version', 1)
+			 WHERE json_extract(snapshot, '$.Version') IS NULL`,
+		},
 	}
 }
 
+// busyTimeoutMS is how long a contended writer waits for SQLite's write lock
+// before giving up. Generous: writes are one statement each, so the lock is
+// held only for that statement; 5s only ever matters on a badly overloaded box.
+const busyTimeoutMS = 5000
+
 // openDB opens the database at dsn and brings its schema up to date.
 //
-// ponytail: a single connection keeps a ":memory:" database alive across the
-// database/sql pool and serializes writes (SQLite allows one writer at a time),
-// which is all a test DB needs. Upgrade path if durability under concurrency
-// ever matters: WAL journal + busy_timeout + a real connection pool.
+// A file database runs with WAL journalling, a busy_timeout and a real
+// connection pool, so concurrent writers wait for the write lock instead of
+// failing with SQLITE_BUSY. SaveSession's compare-and-swap stays correct across
+// those connections because it is one guarded conditional statement (see
+// saveSessionRow), not a read-then-write that would need the pool serialized.
+//
+// A ":memory:" database keeps a single connection: a bare ":memory:" DSN gives
+// every connection its own private database, so a pool would read empty tables.
+// WAL is a file-journal mode and a no-op in memory. The guarded CAS still holds
+// under the one connection.
 func openDB(dsn string) (*sql.DB, error) {
+	inMemory := isMemoryDSN(dsn)
+	if !inMemory {
+		dsn = withPragmas(dsn)
+	}
 	db, err := sql.Open(driverName, dsn)
 	if err != nil {
 		return nil, ErrStore.WithMessagef("open %q", dsn).Wrap(err)
 	}
-	db.SetMaxOpenConns(1)
+	if inMemory {
+		db.SetMaxOpenConns(1)
+	}
 
 	ctx := context.Background()
 	if err := db.PingContext(ctx); err != nil {
@@ -160,6 +194,28 @@ func openDB(dsn string) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+// isMemoryDSN reports whether dsn addresses an in-memory database. A bare
+// ":memory:" (or the "mode=memory" URI form) cannot be shared across a
+// connection pool without shared-cache, so such a database is pinned to one
+// connection.
+func isMemoryDSN(dsn string) bool {
+	return strings.Contains(dsn, ":memory:") || strings.Contains(dsn, "mode=memory")
+}
+
+// withPragmas appends the per-connection pragmas that make a file database safe
+// under a real connection pool: WAL journalling (readers never block the
+// writer, and the write lock is durable) and a busy_timeout (a contended writer
+// waits for the lock instead of returning SQLITE_BUSY). modernc.org/sqlite
+// applies every _pragma query parameter to each connection it opens, which is
+// exactly what a per-connection setting like busy_timeout needs.
+func withPragmas(dsn string) string {
+	sep := "?"
+	if strings.Contains(dsn, "?") {
+		sep = "&"
+	}
+	return fmt.Sprintf("%s%s_pragma=busy_timeout(%d)&_pragma=journal_mode(WAL)", dsn, sep, busyTimeoutMS)
 }
 
 // migrate applies every not-yet-applied migration inside its own transaction and
@@ -457,18 +513,63 @@ func (s *Store) listItemRows(ctx context.Context, filter item.ItemFilter) ([]ite
 // back is reflect.DeepEqual to the one saved — the parity the conformance suite
 // asserts against the memory store. Unmarshalling allocates fresh slices, so a
 // returned snapshot never aliases stored bytes or caller input.
+//
+// The optimistic version (SessionSnapshot.Version) is the JSON document's own
+// field — no separate column. saveSessionRow performs the compare-and-swap in a
+// single guarded statement: the first save (version 1) is an INSERT that a
+// pre-existing row turns into a no-op, and every later save is a conditional
+// UPDATE that only matches while the row still holds the expected prior version,
+// read straight out of the snapshot with json_extract. A single INSERT/UPDATE
+// takes SQLite's write lock for its whole duration, so the check and the write
+// are atomic without a transaction and stay correct across the file database's
+// connection pool: zero rows changed means the caller's expected version no
+// longer holds — session.ErrSessionConflict, nothing written.
+//
+// Because the guard lives in the statement (not in a serialized connection), the
+// guarantee holds even across two *Store over the same file, or two processes.
+// A bare ":memory:" database is still process-local — each Open gets its own
+// private database — but that is inherent to ":memory:", not the CAS. The
+// contended CAS is pinned by ports/testdbtest's ConcurrentSaveAtSameVersion test
+// for both the memory and file backings.
+
+// firstVersion is the optimistic version of a session's first persisted
+// snapshot (stored-absent counts as 0, so the first save is one past it).
+const firstVersion = 1
 
 func (s *Store) saveSessionRow(ctx context.Context, snap session.SessionSnapshot) error {
 	blob, err := json.Marshal(snap)
 	if err != nil {
 		return ErrStore.WithMessagef("marshal session %q", snap.ID).Wrap(err)
 	}
-	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO sessions (id, snapshot) VALUES (?, ?)
-		 ON CONFLICT(id) DO UPDATE SET snapshot = excluded.snapshot`,
-		string(snap.ID), string(blob))
+
+	var res sql.Result
+	if snap.Version == firstVersion {
+		// First save: insert, but a row already at this id means another writer
+		// won the create race — DO NOTHING leaves it and reports zero changes.
+		res, err = s.db.ExecContext(ctx,
+			`INSERT INTO sessions (id, snapshot) VALUES (?, ?)
+			 ON CONFLICT(id) DO NOTHING`,
+			string(snap.ID), string(blob))
+	} else {
+		// Later save: swap the snapshot only while the row still holds the
+		// version this write follows (snap.Version-1). An absent row or an
+		// advanced version matches nothing and changes zero rows.
+		res, err = s.db.ExecContext(ctx,
+			`UPDATE sessions SET snapshot = ?
+			 WHERE id = ? AND json_extract(snapshot, '$.Version') = ?`,
+			string(blob), string(snap.ID), snap.Version-1)
+	}
 	if err != nil {
 		return ErrStore.WithMessagef("save session %q", snap.ID).Wrap(err)
+	}
+	changed, err := res.RowsAffected()
+	if err != nil {
+		return ErrStore.WithMessagef("save session %q", snap.ID).Wrap(err)
+	}
+	if changed == 0 {
+		return session.ErrSessionConflict.
+			WithMessagef("session %s: version %d does not follow the stored version", snap.ID, snap.Version).
+			With("id", string(snap.ID))
 	}
 	return nil
 }

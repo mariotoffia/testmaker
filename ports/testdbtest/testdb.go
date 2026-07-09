@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -331,8 +332,10 @@ func RunSessionRepositoryTests(t *testing.T, newRepo func() ports.SessionReposit
 	t.Run("SaveReplacesSameID", func(t *testing.T) {
 		repo := newRepo()
 		mustSaveSession(t, repo, sessionSnapshot(t, "sess-1", "gia"))
-		// a different plan under the same id must rewrite every field.
+		// a different plan under the same id must rewrite every field; the replace
+		// is the next optimistic version (2) past the stored one (1).
 		want := sessionSnapshot(t, "sess-1", "ravens")
+		want.Version = 2
 		mustSaveSession(t, repo, want)
 		got, err := repo.GetSession(ctx, "sess-1")
 		if err != nil {
@@ -340,6 +343,85 @@ func RunSessionRepositoryTests(t *testing.T, newRepo func() ports.SessionReposit
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("replace did not rewrite every field:\n got %+v\nwant %+v", got, want)
+		}
+	})
+
+	t.Run("OptimisticConcurrency", func(t *testing.T) {
+		repo := newRepo()
+		// a first save must start at version 1 (stored is absent == 0).
+		v1 := sessionSnapshot(t, "sess-1", "gia")
+		mustSaveSession(t, repo, v1)
+
+		// a stale writer still holding version 1 is rejected — this is the guard
+		// that stops two concurrent Answers (or an Answer racing a Complete) from
+		// last-writer-wins clobbering the attempt.
+		if err := repo.SaveSession(ctx, v1); !errors.Is(err, session.ErrSessionConflict) {
+			t.Fatalf("stale save: want ErrSessionConflict, got %v", err)
+		}
+		// the writer that advanced from the stored version (1 -> 2) succeeds.
+		next := sessionSnapshot(t, "sess-1", "gia")
+		next.Version = 2
+		mustSaveSession(t, repo, next)
+		if got, _ := repo.GetSession(ctx, "sess-1"); got.Version != 2 {
+			t.Fatalf("stored version = %d, want 2", got.Version)
+		}
+		// creating a brand-new id cannot jump ahead of version 1.
+		ahead := sessionSnapshot(t, "sess-2", "gia")
+		ahead.Version = 2
+		if err := repo.SaveSession(ctx, ahead); !errors.Is(err, session.ErrSessionConflict) {
+			t.Fatalf("create at version 2: want ErrSessionConflict, got %v", err)
+		}
+	})
+
+	t.Run("ConcurrentSaveAtSameVersionRecordsOnce", func(t *testing.T) {
+		repo := newRepo()
+		mustSaveSession(t, repo, sessionSnapshot(t, "sess-1", "gia")) // stored version 1
+
+		// The contended proof of the CAS: N writers that all loaded version 1
+		// race to save version 2. The store's compare-and-swap must let exactly
+		// one commit and reject the rest with ErrSessionConflict, whatever the
+		// goroutine scheduling — this is what stops two concurrent Answers (or an
+		// Answer racing a Complete) from clobbering the attempt. It is
+		// deterministic because each store's compare-and-swap is atomic (memory:
+		// under its mutex; sqlite: one guarded INSERT/UPDATE holding the write
+		// lock, so across the file backing's real connection pool only the first
+		// writer's UPDATE matches version 1), so the first writer advances stored
+		// to 2 and every later writer sees 2 and needs 3. The HTTP surface
+		// serializes too tightly to ever exercise the conflict path (a loser's own
+		// answer is rejected first because the session has advanced), so the
+		// deterministic guarantee is pinned here, at the store contract. Run under
+		// -race it also guards the critical section itself.
+		next := sessionSnapshot(t, "sess-1", "gia")
+		next.Version = 2 // read-only, shared: SaveSession never mutates its input.
+
+		const n = 16
+		errs := make([]error, n)
+		var wg sync.WaitGroup
+		wg.Add(n)
+		for i := range n {
+			go func(i int) {
+				defer wg.Done()
+				errs[i] = repo.SaveSession(ctx, next)
+			}(i)
+		}
+		wg.Wait()
+
+		winners, conflicts := 0, 0
+		for _, err := range errs {
+			switch {
+			case err == nil:
+				winners++
+			case errors.Is(err, session.ErrSessionConflict):
+				conflicts++
+			default:
+				t.Fatalf("unexpected save error: %v", err)
+			}
+		}
+		if winners != 1 || conflicts != n-1 {
+			t.Fatalf("contended CAS: %d winners / %d conflicts, want 1 / %d", winners, conflicts, n-1)
+		}
+		if got, _ := repo.GetSession(ctx, "sess-1"); got.Version != 2 {
+			t.Fatalf("stored version = %d, want 2", got.Version)
 		}
 	})
 
@@ -384,7 +466,7 @@ func RunSharedKeyspaceTests(t *testing.T, newStore func() TestDB) {
 	if err := s.SaveItem(ctx, mcItemSnapshot(t, "x", "A2", 3)); err != nil {
 		t.Fatalf("save item: %v", err)
 	}
-	if err := s.SaveSession(ctx, session.SessionSnapshot{ID: "x", TestID: "T"}); err != nil {
+	if err := s.SaveSession(ctx, session.SessionSnapshot{ID: "x", TestID: "T", Version: 1}); err != nil {
 		t.Fatalf("save session: %v", err)
 	}
 
@@ -531,7 +613,11 @@ func sessionSnapshot(t *testing.T, id session.SessionID, testID string) session.
 	if err := sess.Record(p+"-a", session.Answer{OptionID: "c"}, true, start.Add(15*time.Second)); err != nil {
 		t.Fatalf("record session %s: %v", id, err)
 	}
-	return sess.Snapshot()
+	snap := sess.Snapshot()
+	// A session that has been persisted once carries optimistic version 1 (the
+	// executor advances Version on every save; 0 marks a never-stored session).
+	snap.Version = 1
+	return snap
 }
 
 // mcItemSnapshot builds a valid multiple-choice item snapshot (non-nil option

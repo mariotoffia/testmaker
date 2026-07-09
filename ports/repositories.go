@@ -38,13 +38,22 @@ type TestRepository interface {
 
 // SessionRepository persists test-taking sessions (driven port).
 //
-// SaveSession is a blind upsert with no version guard: it is safe for the
-// single-active-attempt execution the CLI drives today, but concurrent writers
-// to one session id last-writer-wins. An optimistic-concurrency guard is a
-// Block 10 prerequisite (see IMPLEMENTATION_PLAN.md) before the execution
-// use-case is exposed to more than one request per attempt.
+// SaveSession is an optimistic compare-and-swap on the snapshot's Version: it
+// stores the snapshot only when Version is exactly one past the currently stored
+// version (a never-stored session starts at Version 1). A stale write — two
+// concurrent Answers, or an Answer racing a Complete, on one session id — fails
+// with session.ErrSessionConflict and nothing is written, so a completed attempt
+// can neither be clobbered nor resurrected. The caller reloads and retries. Both
+// memory and sqlite adapters implement it identically, proven by ports/testdbtest
+// (including a contended, concurrent CAS test). The memory store's guarantee is
+// process-local (it holds across goroutines within one store instance); the
+// sqlite store enforces the swap in a single guarded statement, so a file
+// database holds the guarantee across connections and processes sharing the file
+// (see the sqlite adapter's note).
 type SessionRepository interface {
-	// SaveSession inserts or replaces a session by id; an empty id is session.ErrInvalidSession.
+	// SaveSession stores snap under an optimistic version guard: it succeeds only
+	// when snap.Version == storedVersion+1 (storedVersion is 0 when absent),
+	// otherwise session.ErrSessionConflict. An empty id is session.ErrInvalidSession.
 	SaveSession(ctx context.Context, snap session.SessionSnapshot) error
 	// GetSession returns the session with the given id or session.ErrUnknownSession.
 	GetSession(ctx context.Context, id session.SessionID) (session.SessionSnapshot, error)

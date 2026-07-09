@@ -147,7 +147,7 @@ aggregates.
 | `PromptRepository` | driven | versioned prompt store for the LLM service | ✅ (port; adapters 🚧) |
 | `ItemRepository` | driven | item bank | ✅ (memory + sqlite) |
 | `TestRepository` | driven | "TestDb" — composed tests | ✅ (memory + sqlite) |
-| `SessionRepository` | driven | execution | ✅ (memory + sqlite; rich JSON snapshot) |
+| `SessionRepository` | driven | execution | ✅ (memory + sqlite; rich JSON snapshot; **optimistic-concurrency CAS** on `SessionSnapshot.Version`) |
 | `Generator` | driven | procedural item generation | ✅ (port; `rulegen` figural backend ✅) |
 | `Executor` | driving | administer a test | ✅ (`app/execution.Service`) |
 | `Scorer` | driving | score a completed session | ✅ (`app/scoring.Service`) |
@@ -273,7 +273,73 @@ under test. The `session` aggregate itself holds no clock — the executor passe
 
 ---
 
-## 9. Module layout
+## 9. Delivery surface (HTTP API) ✅
+
+Authoring, execution and scoring are exposed over HTTP by
+[`cmd/testmaker/server.go`](cmd/testmaker) (stdlib `net/http` only, the Go 1.22
+method+path router), reached with `testmaker -serve <addr>`.
+
+It lives in the **composition root, not a new adapter module**, on purpose: the
+surface is the *driving* side of the hexagon and depends on the `app`
+use-cases, and the layer graph forbids an adapter from importing `app`. `cmd` is
+the one ring allowed to import everything, so it is where net/http meets the
+use-cases. `openTestDB` is the single backend switch (memory default, sqlite
+behind a DSN), shared by the CLI demo and the server.
+
+```mermaid
+sequenceDiagram
+  participant HTTP as client
+  participant SRV as cmd/testmaker.server
+  participant EXE as app/execution.Service (Executor)
+  participant REPO as SessionRepository (memory/sqlite)
+  HTTP->>SRV: POST /sessions/{id}/answers
+  SRV->>EXE: Answer(ctx, id, itemID, ans)
+  EXE->>REPO: GetSession → grade → SaveSession (Version+1, CAS)
+  alt version matches
+    REPO-->>EXE: stored
+    EXE-->>SRV: Delivery (next item)
+    SRV-->>HTTP: 200 + snapshot
+  else concurrent writer won
+    REPO-->>EXE: ErrSessionConflict
+    EXE-->>SRV: conflict
+    SRV-->>HTTP: 409
+  end
+```
+
+Endpoints (whole author → take → score path): `POST /items/generate`,
+`POST /tests`, `GET /tests/{id}`, `POST /tests/{id}/sessions`,
+`POST /sessions/{id}/answers`, `POST /sessions/{id}/complete`,
+`GET /sessions/{id}/score`. A single `shared.TestmakerError` → status map
+(invalid→400, not_found→404, conflict→409, unavailable→503, unsupported→501,
+else 500) is the only transport translation; request timing is expressed in
+seconds so the wire format carries no clock types. Snapshots are marshalled
+directly (no response-DTO layer). Norms are deployment config, so the server
+runs with an empty norm book and returns raw scores + feedback.
+
+**Optimistic concurrency.** `SessionRepository.SaveSession` is a compare-and-swap
+on `SessionSnapshot.Version`: it stores only when the snapshot's version is
+exactly one past the stored version, else it returns `session.ErrSessionConflict`
+(→ 409). The version is a passthrough field on the `Session` aggregate (carried
+through `Snapshot`/`RehydrateFromSnapshot`), incremented by the executor at each
+persist. Concurrent `Answer`s — or an `Answer` racing a `Complete` — no longer
+last-writer-win or resurrect a completed attempt: the first writer wins, the rest
+get a conflict. Proven for both stores by the shared `ports/testdbtest`
+conformance suite and end-to-end (under `-race`) by the delivery surface's
+concurrent-answers-record-once test. In sqlite the swap is one guarded
+conditional statement (`INSERT … ON CONFLICT DO NOTHING` / `UPDATE … WHERE
+json_extract(snapshot,'$.Version') = ?`) that holds the write lock for its whole
+duration, so a file database runs with WAL + `busy_timeout` + a real connection
+pool and the guarantee holds across connections and processes sharing the file
+(see ADR-0002). Client-supplied `If-Match`/ETags are a documented upgrade path;
+today the server derives the expected version from its own load.
+
+Architecturally significant decisions — this optimistic-concurrency guard and its
+sqlite enforcement among them — are recorded as ADRs under
+[docs/adr/](docs/adr/README.md).
+
+---
+
+## 10. Module layout
 
 Multi-module `go.work` workspace. The root module holds the pure rings; each
 adapter and the CLI are separate modules so technology dependencies stay at the
@@ -300,7 +366,7 @@ testmaker/
 
 ---
 
-## 10. Error model
+## 11. Error model
 
 One structured error type, `shared.TestmakerError{Code, Class, Message, Cause,
 Context}`. Matching is by `Code` (so `errors.Is(err, source.ErrUnknownSource)`
@@ -312,7 +378,7 @@ caller how to react.
 
 ---
 
-## 11. Persistence
+## 12. Persistence
 
 Storage is a driven-port concern. Each repository has a memory adapter (default,
 dependency-free, used in tests) and — where durability matters — a **sqlite**
@@ -323,7 +389,7 @@ implementations (implementation blocks 1–3).
 
 ---
 
-## 12. Build, lint & CI
+## 13. Build, lint & CI
 
 `make check` = `build` + `lint` + `test` (the CI aggregate), run in CI by
 `.github/workflows/check.yml` on every push/PR. `lint` runs
@@ -332,15 +398,17 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) and [LINT.md](LINT.md).
 
 ---
 
-## 13. Status
+## 14. Status
 
 Implemented end-to-end: the **source catalogue** slice (domain, ports, app,
 memory + file adapters, stub fetcher, CLI) with the 81-source research catalogue
 as seed data, the **designer / generator** slice (native figural rule engine,
-authoring use-case, `-generate` CLI), and the **test-authoring** slice
+authoring use-case, `-generate` CLI), the **test-authoring** slice
 (`testset.Test` aggregate, `app/authoring.TestService` composing bank items into
 composed timed tests, persisted via the memory + sqlite `TestRepository`,
-`-author-test` CLI). Remaining bounded contexts are scaffolding —
+`-author-test` CLI), and the **delivery surface** (`-serve` HTTP API over the
+authoring / execution / scoring use-cases, with optimistic-concurrency-guarded
+sessions). Remaining bounded contexts are scaffolding —
 compiling package shells with `doc.go` and DTO stubs — filled in block by block.
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) is the authoritative per-block
 status; consult it rather than this paragraph for what is done.

@@ -298,7 +298,8 @@ func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 
 	// Open runs migrations 2 (RENAME items -> items_v1_legacy, CREATE new items),
 	// 3 (add item query columns), 4 (RENAME tests -> tests_v1_legacy, CREATE new
-	// tests) and 5 (RENAME sessions -> sessions_v1_legacy, CREATE new sessions).
+	// tests), 5 (RENAME sessions -> sessions_v1_legacy, CREATE new sessions) and 6
+	// (backfill the session version field, a no-op on the fresh empty table).
 	store := mustOpen(t, path)
 
 	// None of the v1 rows can become a valid snapshot, so every migration
@@ -349,8 +350,8 @@ func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 	if sessionTestID != "gia" {
 		t.Fatalf("legacy session row corrupted: test_id=%q", sessionTestID)
 	}
-	if version != 5 {
-		t.Fatalf("user_version = %d, want 5", version)
+	if version != 6 {
+		t.Fatalf("user_version = %d, want 6", version)
 	}
 
 	// The upgraded database's new items table is the JSON-blob shape and
@@ -370,6 +371,59 @@ func TestMigrationV1UpgradePreservesLegacyRows(t *testing.T) {
 	reopened := mustOpen(t, path)
 	if got, err := reopened.GetItem(ctx, want.ID); err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("item after second reopen: got %+v, err %v", got, err)
+	}
+}
+
+// TestMigrationV5ToV6BackfillsSessionVersion proves migration 6 rescues durable
+// session rows written by the Block-8 build, whose JSON snapshot predates the
+// optimistic-version field (Block 10). Without the backfill,
+// json_extract(snapshot,'$.Version') is NULL, the guarded compare-and-swap in
+// saveSessionRow matches nothing, and the session is permanently un-writable —
+// every Answer/Complete a conflict. Seeded at the frozen v5 shape (sessions is
+// id + snapshot) so Open runs only migration 6.
+func TestMigrationV5ToV6BackfillsSessionVersion(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "v5.sqlite")
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	for _, stmt := range []string{
+		`CREATE TABLE sessions (id TEXT PRIMARY KEY, snapshot TEXT NOT NULL) STRICT`,
+		// a Block-8 session document: a valid snapshot with no "Version" key.
+		`INSERT INTO sessions (id, snapshot) VALUES ('sess-old', '{"ID":"sess-old","TestID":"gia"}')`,
+		`PRAGMA user_version = 5`,
+	} {
+		if _, err := raw.Exec(stmt); err != nil {
+			_ = raw.Close()
+			t.Fatalf("seed v5: %v", err)
+		}
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close raw: %v", err)
+	}
+
+	store := mustOpen(t, path) // runs migration 6
+
+	// The backfilled row is still served and now starts at the first-persisted
+	// version instead of a NULL the CAS cannot read.
+	got, err := store.GetSession(ctx, "sess-old")
+	if err != nil {
+		t.Fatalf("get backfilled session: %v", err)
+	}
+	if got.Version != 1 {
+		t.Fatalf("backfilled version = %d, want 1", got.Version)
+	}
+	// And it is writable again: the CAS from version 1 -> 2 succeeds, which the
+	// pre-backfill NULL version would have rejected as a conflict.
+	next := got
+	next.Version = 2
+	if err := store.SaveSession(ctx, next); err != nil {
+		t.Fatalf("advance backfilled session: %v", err)
+	}
+	if again, _ := store.GetSession(ctx, "sess-old"); again.Version != 2 {
+		t.Fatalf("stored version after advance = %d, want 2", again.Version)
 	}
 }
 
@@ -587,5 +641,9 @@ func mustSessionSnapshot(t *testing.T) session.SessionSnapshot {
 	if err := sess.Record("log-1", session.Answer{OptionID: "c"}, true, start.Add(15*time.Second)); err != nil {
 		t.Fatalf("record session: %v", err)
 	}
-	return sess.Snapshot()
+	snap := sess.Snapshot()
+	// A persisted session carries optimistic version 1 (the first successful save);
+	// SaveSession's compare-and-swap rejects Version 0 as a never-stored marker.
+	snap.Version = 1
+	return snap
 }

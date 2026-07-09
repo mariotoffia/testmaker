@@ -28,6 +28,12 @@ type SessionSnapshot struct {
 	EndedAt   time.Time
 	Presented Presented
 	Responses []Response
+	// Version is the optimistic-concurrency version: 0 for a never-persisted
+	// session, then one higher on every successful SaveSession. A store treats
+	// SaveSession as a compare-and-swap on it — the write succeeds only when
+	// Version is exactly one past the stored version — so concurrent writers to
+	// one session id cannot last-writer-wins. See ports.SessionRepository.
+	Version int
 }
 
 // Snapshot returns the persistence/transport DTO for the aggregate, with every
@@ -46,6 +52,7 @@ func (s *Session) Snapshot() SessionSnapshot {
 		EndedAt:   normalizeTime(s.endedAt),
 		Presented: presented,
 		Responses: slices.Clone(s.responses),
+		Version:   s.version,
 	}
 }
 
@@ -66,6 +73,7 @@ func RehydrateFromSnapshot(snap SessionSnapshot) *Session {
 		endedAt:   snap.EndedAt,
 		presented: snap.Presented,
 		responses: slices.Clone(snap.Responses),
+		version:   snap.Version,
 	}
 }
 
