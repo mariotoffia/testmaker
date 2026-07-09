@@ -1382,7 +1382,7 @@ git commit -m "Block 14: baseline security-headers middleware"
 
 # Phase 2 — Access control
 
-### Task 7: The authenticator (token mint/verify — pure, injected clock)
+### Task 7: The authenticator (token mint/verify — pure, injected clock) ✅
 
 **Files:**
 - Create: `cmd/testmaker/auth.go`
@@ -1692,7 +1692,7 @@ git commit -m "Block 14: HMAC authenticator (operator token + invite/session cap
 
 ---
 
-### Task 8: Role middleware, whoami, and route guards
+### Task 8: Role middleware, whoami, and route guards ✅
 
 **Files:**
 - Modify: `cmd/testmaker/auth.go` (guard methods) — or `cmd/testmaker/auth_middleware.go` if `auth.go` nears 500 (`wc -l` first)
@@ -1977,7 +1977,7 @@ git commit -m "Block 14: role middleware, whoami, and per-route auth guards"
 
 ---
 
-### Task 9: Invite minting, preview, and token-issuing session start
+### Task 9: Invite minting, preview, and token-issuing session start ✅
 
 **Files:**
 - Create: `cmd/testmaker/server_invites.go`
@@ -2317,7 +2317,7 @@ git commit -m "Block 14: invite minting, redacted preview, token-issuing session
 
 ---
 
-### Task 10: Full-flow auth integration test (operator → invite → taker → score)
+### Task 10: Full-flow auth integration test (operator → invite → taker → score) ✅
 
 A single end-to-end test that proves the two roles compose across the whole
 take path — the guarantee the player UI depends on.
