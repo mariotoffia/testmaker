@@ -93,3 +93,89 @@ func TestTestmakerHomeUsesEnv(t *testing.T) {
 		t.Errorf("home = %q, want /opt/tm", home)
 	}
 }
+
+// TestLoadOrCreateConfigGeneratesSecretsInTokenMode proves a first run in token
+// mode mints an operator token + HMAC secret and persists them (0600), and that
+// numeric limit/LLM defaults are filled.
+func TestLoadOrCreateConfigGeneratesSecretsInTokenMode(t *testing.T) {
+	home := t.TempDir()
+	cfg, path, err := loadOrCreateConfig(home)
+	if err != nil {
+		t.Fatalf("loadOrCreateConfig: %v", err)
+	}
+	if cfg.Auth.Mode != "token" {
+		t.Fatalf("Auth.Mode = %q, want token (default)", cfg.Auth.Mode)
+	}
+	if cfg.Auth.OperatorToken == "" || cfg.Auth.Secret == "" {
+		t.Fatal("token mode must generate operatorToken and secret")
+	}
+	if cfg.Auth.OperatorToken == cfg.Auth.Secret {
+		t.Fatal("operatorToken and secret must be independently generated")
+	}
+	if cfg.Auth.InviteTTLSeconds != 86400 {
+		t.Errorf("InviteTTLSeconds = %d, want 86400", cfg.Auth.InviteTTLSeconds)
+	}
+	if cfg.Limits.RequestsPerSecond != 10 || cfg.Limits.Burst != 20 ||
+		cfg.Limits.MaxConcurrentIngests != 1 || cfg.Limits.IngestTimeoutSeconds != 600 {
+		t.Errorf("limits defaults wrong: %+v", cfg.Limits)
+	}
+	if cfg.Log.Level != "info" || cfg.LLM.MaxTokensCap != 4096 {
+		t.Errorf("log/llm defaults wrong: log=%+v llm.cap=%d", cfg.Log, cfg.LLM.MaxTokensCap)
+	}
+	// Reload must be stable — same secrets, no rewrite churn.
+	cfg2, _, err := loadOrCreateConfig(home)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if cfg2.Auth.OperatorToken != cfg.Auth.OperatorToken || cfg2.Auth.Secret != cfg.Auth.Secret {
+		t.Fatal("secrets changed on reload; they must be stable once written")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("config perm = %o, want 600 (holds secrets)", perm)
+	}
+}
+
+// TestApplyConfigDefaultsBackfillsOldFile proves a pre-Block-14 config (no auth/
+// limits sections) still loads: defaults fill in and secrets are generated.
+func TestApplyConfigDefaultsBackfillsOldFile(t *testing.T) {
+	home := t.TempDir()
+	old := `{"testdb":"/x.db","blobs":"/b","catalog":"/c.json","prompts":"/p"}`
+	path := filepath.Join(home, "config", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := loadOrCreateConfig(home)
+	if err != nil {
+		t.Fatalf("loadOrCreateConfig on old file: %v", err)
+	}
+	if cfg.TestDB != "/x.db" {
+		t.Errorf("existing value lost: TestDB = %q", cfg.TestDB)
+	}
+	if cfg.Auth.Mode != "token" || cfg.Auth.OperatorToken == "" {
+		t.Error("old file must gain token-mode defaults + generated secrets")
+	}
+}
+
+// TestNoneModeGeneratesNoSecrets proves auth.mode:none neither needs nor mints
+// secrets (the trusted-localhost / test posture).
+func TestNoneModeGeneratesNoSecrets(t *testing.T) {
+	home := t.TempDir()
+	seed := Config{Auth: AuthConfig{Mode: "none"}}
+	if err := writeConfig(filepath.Join(home, "config", "config.json"), seed); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := loadOrCreateConfig(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Auth.OperatorToken != "" || cfg.Auth.Secret != "" {
+		t.Fatal("none mode must not generate secrets")
+	}
+}
