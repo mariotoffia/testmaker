@@ -3,8 +3,7 @@
 Authoritative system-design narrative. The **layering rules themselves are
 enforced by [`.go-arch-lint.yml`](.go-arch-lint.yml)** — this document explains
 them; that file is the source of truth. Ubiquitous terms are defined in
-[UBIQUITOUS.md](UBIQUITOUS.md); the domain model in [DDD.md](DDD.md); the build
-order in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+[UBIQUITOUS.md](UBIQUITOUS.md); the domain model in [DDD.md](DDD.md).
 
 ---
 
@@ -128,8 +127,8 @@ flowchart LR
 
 The taxonomy (ability families + A1..E2 codes) and the inherited
 `Redistributable` value live in `domain/shared`, promoted from `domain/source`
-with the item-bank block; `domain/source` keeps type aliases so its public API
-is unchanged (see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)).
+with the item-bank context; `domain/source` keeps type aliases so its public API
+is unchanged.
 
 ---
 
@@ -154,7 +153,7 @@ aggregates.
 
 Ports are kept small (`interfacebloat max: 6`) and split read/write when a
 read-only consumer actually exists (YAGNI — the split is reintroduced with the
-first query-only surface, e.g. Block 10).
+first query-only surface; see [ROADMAP.md](ROADMAP.md) §5).
 
 LLM access is a **service, not a bare client**: `app/llm.Service` wraps a
 `ports.LLM` backend and a `ports.PromptRepository`, automatically applying the
@@ -366,7 +365,7 @@ testmaker/
   cmd/testmaker/                                          (own go.mod)
   data/catalog/sources.{json,yaml}                        seed catalogue
   data/prompts/*.yaml                                     seed LLM prompts (one per file)
-  ARCHITECTURE.md DDD.md UBIQUITOUS.md DESIGN.md IMPLEMENTATION_PLAN.md
+  ARCHITECTURE.md DDD.md UBIQUITOUS.md DESIGN.md ROADMAP.md
   DEVELOPMENT.md LINT.md TESTS.md AGENTS.md CLAUDE.md
   .go-arch-lint.yml .golangci.yml Makefile
 ```
@@ -392,7 +391,7 @@ dependency-free, used in tests) and — where durability matters — a **sqlite*
 adapter (`modernc.org/sqlite`, pure-Go, no cgo), both validated by the same
 conformance suite so they are provably interchangeable. The "TestDb" from
 CLAUDE.md is `TestRepository` with `memorytestdb` + `sqlitetestdb`
-implementations (implementation blocks 1–3).
+implementations.
 
 ---
 
@@ -402,20 +401,3 @@ implementations (implementation blocks 1–3).
 `.github/workflows/check.yml` on every push/PR. `lint` runs
 `gofmt`, `go vet`, **`go-arch-lint`** (layer graph) and **`golangci-lint`** (v2).
 See [DEVELOPMENT.md](DEVELOPMENT.md) and [LINT.md](LINT.md).
-
----
-
-## 14. Status
-
-Implemented end-to-end: the **source catalogue** slice (domain, ports, app,
-memory + file adapters, stub fetcher, CLI) with the 81-source research catalogue
-as seed data, the **designer / generator** slice (native figural rule engine,
-authoring use-case, `-generate` CLI), the **test-authoring** slice
-(`testset.Test` aggregate, `app/authoring.TestService` composing bank items into
-composed timed tests, persisted via the memory + sqlite `TestRepository`,
-`-author-test` CLI), and the **delivery surface** (`-serve` HTTP API over the
-authoring / execution / scoring use-cases, with optimistic-concurrency-guarded
-sessions). Remaining bounded contexts are scaffolding —
-compiling package shells with `doc.go` and DTO stubs — filled in block by block.
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) is the authoritative per-block
-status; consult it rather than this paragraph for what is done.

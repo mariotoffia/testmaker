@@ -5,7 +5,7 @@
 
 ## Context
 
-Block 12's LLM library adds an extraction path (`app/ingest.IngestLLM`): a
+The LLM library adds an extraction path (`app/ingest.IngestLLM`): a
 source's unstructured fetched payload is lifted by a model into structured item
 candidates, each validated through `item.NewItem` before it reaches the bank.
 An LLM-lifted item is a *model transformation* of source text — which model,
@@ -31,7 +31,7 @@ item.OriginGenerated` (the domain already counts LLM output as generated) and
 inherit the source's `Redistributable`, exactly like any other generated item.
 
 No consumer reads model/prompt provenance yet — the calibration step that would
-is unbuilt (Block-status in [IMPLEMENTATION_PLAN.md](../../IMPLEMENTATION_PLAN.md)).
+is unbuilt (a future direction; see [ROADMAP.md](../../ROADMAP.md) §3).
 Adding three persisted, never-read fields to the central item aggregate now
 would be speculative surface (YAGNI): every constructor, every snapshot, every
 adapter mapping would carry them with nothing consuming them.

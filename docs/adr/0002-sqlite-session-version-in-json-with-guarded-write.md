@@ -55,7 +55,7 @@ guarded write is still correct there under the one connection.
   backing through the real pool under `-race`; fault-injecting a blind write makes
   it fail deterministically (16 winners / 0 conflicts), so the guard is genuinely
   covered.
-- No schema migration was needed to *add* the field, but a Block-8 database
+- No schema migration was needed to *add* the field, but an earlier database
   persisted session documents before `Version` existed, so migration 6 backfills
   `$.Version = 1` onto any row still missing it (`json_set … WHERE json_extract
   … IS NULL`). Without it those durable rows would read as a NULL version the

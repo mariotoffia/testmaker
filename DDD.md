@@ -202,4 +202,4 @@ aliases so its callers are unchanged.
 - Model detail & mechanics: [DESIGN.md](DESIGN.md)
 - Layering & ports: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Terms: [UBIQUITOUS.md](UBIQUITOUS.md)
-- Build order: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
+- Future directions: [ROADMAP.md](ROADMAP.md)

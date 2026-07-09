@@ -11,7 +11,7 @@ Each use-case call in `app/execution` loads the session snapshot, applies a
 transition, and saves it back. With a plain last-writer-wins `SaveSession`, two
 requests that both load version *v* and both write would clobber each other — the
 second silently overwrites the first, and an `Answer` landing after a `Complete`
-could **resurrect** a finished attempt. The delivery surface (Block 10) makes
+could **resurrect** a finished attempt. The delivery surface makes
 these concurrent calls reachable.
 
 The guard has to hold for *every* backend (memory and sqlite) and *every* driving

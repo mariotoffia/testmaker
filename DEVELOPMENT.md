@@ -27,38 +27,49 @@ testmaker/
 ├── .golangci.yml           # golangci-lint v2 config (depguard mirrors the layers)
 │
 ├── domain/                 # Innermost ring — pure, stdlib-only. Bounded contexts:
-│   ├── shared/             #   shared kernel: TestmakerError + sentinels
-│   ├── source/             #   source catalogue      (IMPLEMENTED)
-│   ├── item/               #   item bank             (SCAFFOLD)
-│   ├── testset/            #   test authoring        (IMPLEMENTED)
-│   ├── session/            #   test execution        (SCAFFOLD)
-│   └── scoring/            #   scoring & feedback     (SCAFFOLD)
+│   ├── shared/             #   shared kernel: TestmakerError, sentinels, taxonomy
+│   ├── clock/              #   injected clock (no wall clock in the domain)
+│   ├── source/             #   source catalogue
+│   ├── prompt/             #   stored, versioned LLM prompt templates
+│   ├── item/               #   item bank
+│   ├── testset/            #   test authoring
+│   ├── session/            #   test execution
+│   └── scoring/            #   scoring & feedback
 │
 ├── ports/                  # Hexagon boundary — interfaces; imports domain only
 │   ├── sourcetest/         #   conformance suite for SourceRepository adapters
-│   └── testdbtest/         #   conformance suites for the TestDb repositories
+│   ├── testdbtest/         #   conformance suites for the TestDb repositories
+│   ├── generatortest/      #   conformance suite for Generator adapters
+│   ├── blobtest/           #   conformance suite for BlobStore adapters
+│   └── prompttest/         #   conformance suite for PromptRepository adapters
 │
 ├── app/                    # Application core (use-cases); imports domain + ports
-│   └── catalog/            #   source-catalogue service
+│   ├── catalog/            #   source-catalogue service
+│   ├── ingest/             #   fetch → normalize → validate → store (+ LLM extraction)
+│   ├── llm/                #   LLM service: prompt application + hooks
+│   ├── authoring/          #   item generation + test composition
+│   ├── execution/          #   Executor: administer an attempt
+│   └── scoring/            #   Scorer: score a completed session
 │
 ├── adapters/               # Port implementations (one go.mod per technology)
 │   └── native/
-│       ├── source/
-│       │   ├── memorycatalog/   # in-memory SourceRepository
-│       │   └── filecatalog/     # JSON/YAML CatalogLoader (yaml vendor)
-│       ├── testdb/
-│       │   ├── memorytestdb/    # in-memory Test/Item/SessionRepository
-│       │   └── sqlitetestdb/    # sqlite Test/Item/SessionRepository (modernc.org/sqlite)
-│       └── fetch/
-│           └── stubfetcher/     # no-op Fetcher (wires the fetch boundary)
+│       ├── source/{memorycatalog,filecatalog}/            # SourceRepository / CatalogLoader
+│       ├── testdb/{memorytestdb,sqlitetestdb}/            # Test/Item/SessionRepository
+│       ├── fetch/{stubfetcher,httpfetch,scrapefetch,apifetch}/  # Fetcher
+│       ├── blob/{memoryblob,fsblob}/                      # BlobStore
+│       ├── llm/{openaicompat,memoryprompts,fileprompts}/  # LLM + PromptRepository
+│       └── generate/rulegen/                              # Generator (native figural)
 │
-├── cmd/testmaker/          # Composition root — wires adapters into the service
-└── data/catalog/           # Research source catalogue (sources.json / sources.yaml)
+├── cmd/testmaker/          # Composition root — CLI demo + HTTP delivery API
+└── data/
+    ├── catalog/            # Research source catalogue (sources.json / sources.yaml)
+    └── prompts/            # Seed LLM prompts (one YAML per prompt)
 ```
 
-Only the **source catalogue** vertical slice is implemented end-to-end today
-(domain → ports → app → three adapters → cmd). Everything else is scaffolding
-that keeps the workspace compiling until its implementation block lands.
+The whole pipeline is implemented end-to-end (sourcing → item bank → authoring →
+execution → scoring → delivery). See
+[ARCHITECTURE.md §14](ARCHITECTURE.md#14-status) for the per-slice breakdown and
+[ROADMAP.md](ROADMAP.md) for what is deferred.
 
 ## Getting Started
 

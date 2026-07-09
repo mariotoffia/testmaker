@@ -5,12 +5,12 @@
 
 ## Context
 
-Block 11 gives figural items a home for their media. A generated matrix or
+The blob store gives figural items a home for their media. A generated matrix or
 figure-series item carries an SVG per stimulus grid and per option; rulegen emits
 each as a self-contained `data:image/svg+xml;base64,…` URI so an item is viewable
 with no external dependency (see [DESIGN.md](../../DESIGN.md) media decision).
 Persisting those inline blobs bloats every item and duplicates identical figures
-across items. Block 11 must move the bytes out of the item aggregate, behind a
+across items. That store must move the bytes out of the item aggregate, behind a
 port, and let the renderer resolve them back — without inverting the dependency
 rule (domain ← ports ← app ← adapters ← cmd) or coupling sibling adapters.
 

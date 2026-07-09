@@ -7,14 +7,13 @@ architected as Clean Architecture + Hexagonal + DDD. Layering, vocabulary, and
 lint rules are machine-enforced — this file routes you to the authoritative
 doc, it does not restate the rules.
 
-Two vertical slices are implemented end-to-end today: the **source catalogue**
-(`domain/source` → `ports` → `app/catalog` → `memorycatalog` / `filecatalog` /
-`stubfetcher` → `cmd/testmaker`) and the **designer / generator** (`domain/item`
-→ `ports` → `app/authoring` → `rulegen` → `cmd/testmaker`). The remaining
-bounded contexts (`testset`, `session`, `scoring`) are `SCAFFOLD` — just enough
-types for the workspace to compile until their block lands.
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) is the authoritative per-block
-status.
+Every bounded context is implemented end-to-end today. The full pipeline runs
+from cataloguing **sources**, through **fetching / generating** items into the
+bank, **composing** them into timed (fixed or adaptive) **tests**, to
+**administering and scoring** an attempt — exercised by the `cmd/testmaker` CLI
+demo and exposed as an HTTP API (`testmaker -serve`). See [DESIGN.md](DESIGN.md)
+for the current design and [ROADMAP.md](ROADMAP.md) for what is deliberately
+deferred.
 
 ## Where to look — task → doc
 
@@ -26,34 +25,12 @@ status.
 | Changing layering, dependencies, or adding an arch component | `.go-arch-lint.yml` (source of truth) + [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Understanding bounded contexts and their relationships | [DDD.md](DDD.md) |
 | Naming a type, field, constant, enum value, or concept | [UBIQUITOUS.md](UBIQUITOUS.md) |
-| What is built vs. what comes next, and in what order | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) |
 | Why a specific design fork was taken (decision records) | [docs/adr/](docs/adr/README.md) |
-| Implementing one design item / plan block end-to-end | [§ Implementing a design item](#implementing-a-design-item) below |
+| Component/model-level design, flows and mechanics | [DESIGN.md](DESIGN.md) |
+| Future directions / what is deliberately deferred | [ROADMAP.md](ROADMAP.md) |
 
-`ARCHITECTURE.md`, `DDD.md`, `UBIQUITOUS.md`, and `IMPLEMENTATION_PLAN.md` are
-the design docs at the repo root (present or added as the project fills in).
-
-## Implementing a design item
-
-When building one component/block from the design, read in this order before
-writing code:
-
-1. This file — layering, conventions, definition of done.
-2. The item's spec: its section in [DESIGN.md](DESIGN.md) and its block in
-   [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) (scope + "done when").
-3. [DEVELOPMENT.md](DEVELOPMENT.md) — the adapter-module checklist when the
-   item is a new module.
-4. [TESTS.md](TESTS.md) — every rule applies, including conformance suites
-   and the real-backend rules.
-5. The port it implements or consumes (read every field comment) and one
-   existing sibling as the pattern (`stubfetcher` = simple adapter,
-   `filecatalog` = file-backed adapter, `sqlitetestdb` = SQL-backed adapter with
-   the driver isolated in `acl_*.go`).
-
-Documentation is part of the item, in the same change: flip the item's
-status markers (🚧 → ✅) in DESIGN.md / ARCHITECTURE.md /
-IMPLEMENTATION_PLAN.md, write the package `doc.go`, and update any table row
-the item completes. Docs trailing code = not done.
+`ARCHITECTURE.md`, `DDD.md`, `UBIQUITOUS.md`, `DESIGN.md` and `ROADMAP.md` are
+the design docs at the repo root.
 
 ## Layer cheat-sheet
 

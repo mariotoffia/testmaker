@@ -2,10 +2,10 @@
 
 Component- and model-level design. [ARCHITECTURE.md](ARCHITECTURE.md) covers the
 ring structure and boundaries; this document covers **what each model holds, how
-the flows work, and the design decisions** behind them. Nothing here is an
-implementation; it is the spec the implementation blocks build against.
+the flows work, and the design decisions** behind them, as they stand in the
+implemented system. Future directions are in [ROADMAP.md](ROADMAP.md).
 
-Legend: ✅ implemented · 🚧 designed, scaffold only.
+Legend: ✅ implemented · 🚧 planned (see [ROADMAP.md](ROADMAP.md)).
 
 ---
 
@@ -56,8 +56,8 @@ Seed data: the 81-source research catalogue at `data/catalog/sources.json`
 | `AnswerFormat` | `multiple-choice` (4–6 `Option`s) · `open-numeric` · `true-false-cannotsay` |
 | `AnswerKey` | correct option id / numeric value (+ optional grading `Tolerance`) / verdict |
 | `Explanation` | shown after completion |
-| `Difficulty` | integer band (1..N); IRT `a/b/c` params deferred to adaptive delivery (Block 8) |
-| `Norms` | item p-value / response-time baseline deferred to scoring (Block 9) |
+| `Difficulty` | integer band (1..N); IRT `a/b/c` params deferred to psychometric calibration ([ROADMAP.md](ROADMAP.md) §3) |
+| `Norms` | item p-value / response-time baseline deferred to psychometric calibration ([ROADMAP.md](ROADMAP.md) §3) |
 
 Design decisions:
 
@@ -65,7 +65,7 @@ Design decisions:
   share the same shape; the difference is `TestType`, `Stimulus` media and
   `AnswerFormat`. This keeps the bank, generator and renderer uniform.
 - **Media by reference.** Figural items store media references (blob keys / URLs),
-  not bytes; a separate blob store adapter resolves them (Block 11, ✅). Keeps the
+  not bytes; a separate blob store adapter resolves them ✅. Keeps the
   item aggregate small and serializable. The reference is a **content ref** (sha256
   of content-type + bytes) minted by `ports.BlobStore.Put`; the generator emits
   self-contained `data:` URIs and the composition root offloads them to refs when a
@@ -253,7 +253,7 @@ returns raw scores plus feedback until a deployment supplies a norm book.
 
 ---
 
-## 5. Fetch & generation pipeline 🚧 (`direct-download` / `scrape-html` / `api` fetchers + `app/ingest` ✅; `generate` via `rulegen` + `app/authoring` ✅)
+## 5. Fetch & generation pipeline ✅ (`direct-download` / `scrape-html` / `api` fetchers + `app/ingest`; `generate` via `rulegen` + `app/authoring`; `headless-browser` / `git-clone` planned — [ROADMAP.md](ROADMAP.md) §2)
 
 The `Fetcher` port pulls `RawItem`s from a source; a **router** selects the
 concrete fetcher by `source.Extraction.Method` / `AccessClass`:
@@ -288,7 +288,7 @@ series, A4 odd-one-out) with ground-truth keys derived from the same rules that
 build each stimulus, an honest effective difficulty band, and rule metadata in
 the item `Explanation`. Figures render to self-contained SVG data-URIs — a
 deliberate bridge so a generated item needs no external engine and no blob
-store; with the Block 11 blob store now landed ✅, the composition root offloads
+store; with the blob store landed ✅, the composition root offloads
 the data-URI to a content ref through `ports.BlobStore` and the item shape
 (`MediaKind` + `MediaRef`) is unchanged. This resolves open question #299 toward
 native rules rather than shelling out to Sandia SGMT / matRiks / RAVEN-family /
@@ -359,7 +359,7 @@ available to after-hooks and callers without a second lookup.
 | --- | --- | --- |
 | `adapters/native/llm/memoryprompts` ✅ | in-memory map | tests + conformance baseline |
 | `adapters/native/llm/fileprompts` ✅ | one YAML per prompt under `data/prompts/` (`id`, `version`, `purpose`, `params`, `template`, `notes`); read/write | the default store — prompts are reviewable, diffable seed data |
-| sqlite (with Block 3 TestDb) 🚧 | table in the same database file | single-file deployments |
+| sqlite 🚧 ([ROADMAP.md](ROADMAP.md) §4) | table in the same database file | single-file deployments |
 | `adapters/aws/llm/*` 🚧 | DynamoDB via AWS SDK v2 | cloud persistence, if/when wanted |
 
 Both first adapters are validated by one `ports/prompttest` conformance suite
@@ -460,35 +460,11 @@ Design rules:
 
 ---
 
-## 8. Open design questions (resolve per block)
+## 8. Design decisions of record
 
-- Taxonomy home: **resolved (Block 4)** — promoted to `domain/shared`, not a
-  dedicated `domain/taxonomy` package.
-- Blob/media storage port shape (local FS vs S3) and item media addressing —
-  **resolved (Block 11)**: a 2-method `ports.BlobStore` (`Put`/`Get`) over a
-  `Blob{Bytes, ContentType}`, **content-addressed** (ref = sha256 of
-  content-type + bytes). Native `memoryblob` (runtime default) and `fsblob`
-  ("local FS first") adapters ship now; S3 is a later `adapters/aws/blob/*` behind
-  the same port. Media addressing: the generator emits self-contained `data:` SVG
-  URIs, the composition root offloads them to content refs when a store is wired
-  (`app/authoring`), and the renderer resolves them back via `GET /media/{ref}`.
-- IRT vs classical difficulty for the first adaptive implementation —
-  **resolved (Block 9)**: classical staircase for both delivery (Block 8) and
-  scoring. The adaptive ability estimate is the transformed up/down (reversal-mean)
-  estimator over `Difficulty.Band`; IRT/MLE theta is the upgrade path once the
-  bank is calibrated with item parameters.
-- Norm-table representation and where population norms are sourced/stored —
-  **resolved (Block 9)**: a parametric normal model `NormTable{Mean, SD}` of the
-  scored dimension, keyed per test in a `NormBook` provided at the composition
-  root. Percentile = `100·Φ(z)`, IQ = `round(100 + 15·z)`; no per-point table is
-  needed. Durable norm persistence (a repository/adapter) and empirical/piecewise
-  tables are deferred until a test ships published norms.
-- Generator integration: shell out to external engines vs port Go rule logic —
-  **resolved (Block 6)**: native Go rule logic (`adapters/native/generate/rulegen`).
-  No external engine earned its IP and process overhead for the figural families;
-  keys are ground-truth by construction and figures render to SVG data-URIs.
-- LLM: response caching/cost budget, prompt versioning, and an eval harness for
-  derived-item quality — settle when the first real LLM step lands (Block 12).
-
-These are recorded here so the relevant implementation block can settle them with
-context rather than up front.
+The forks taken along the way — optimistic-concurrency CAS on the session store,
+the content-addressed blob store and media offload, and LLM-extraction provenance
+in the ingest report rather than on the item — are captured as dated decision
+records under [docs/adr/](docs/adr/README.md). Deferred directions (IRT
+calibration, durable/empirical norms, LLM caching and eval) live in
+[ROADMAP.md](ROADMAP.md).
