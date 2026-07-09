@@ -2,14 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"os"
-	"strconv"
 
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/apifetch"
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch"
@@ -134,7 +130,7 @@ func (s *server) handleListSources(w http.ResponseWriter, r *http.Request) {
 	}
 	sources, err := s.cat.List(r.Context(), filter)
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, sources)
@@ -145,7 +141,7 @@ func (s *server) handleListSources(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleGetSource(w http.ResponseWriter, r *http.Request) {
 	snap, err := s.cat.Get(r.Context(), source.SourceID(r.PathValue("id")))
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, snap)
@@ -155,7 +151,7 @@ func (s *server) handleGetSource(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleSyncCatalog(w http.ResponseWriter, r *http.Request) {
 	n, err := s.cat.Sync(r.Context())
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"synced": n})
@@ -179,11 +175,11 @@ func (s *server) handleListItems(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("testType"); v != "" {
 		filter.TestTypes = []shared.TestTypeCode{shared.TestTypeCode(v)}
 	}
-	minD, ok := intParam(w, q, "minDifficulty")
+	minD, ok := s.intParam(w, r, q, "minDifficulty")
 	if !ok {
 		return
 	}
-	maxD, ok := intParam(w, q, "maxDifficulty")
+	maxD, ok := s.intParam(w, r, q, "maxDifficulty")
 	if !ok {
 		return
 	}
@@ -191,7 +187,7 @@ func (s *server) handleListItems(w http.ResponseWriter, r *http.Request) {
 
 	items, err := s.items.ListItems(r.Context(), filter)
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -201,7 +197,7 @@ func (s *server) handleListItems(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 	snap, err := s.items.GetItem(r.Context(), item.ItemID(r.PathValue("id")))
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, snap)
@@ -215,17 +211,17 @@ func (s *server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 // rejects every spec is a 400 — all via the ingest service's own error classes.
 func (s *server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	var req ingestReq
-	if !decodeOptionalJSON(w, r, &req) {
+	if !s.decodeOptionalJSON(w, r, &req) {
 		return
 	}
 	snap, err := s.cat.Get(r.Context(), source.SourceID(r.PathValue("id")))
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	rep, err := s.ingestSvc.Ingest(r.Context(), snap, req.Limit)
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, rep)
@@ -237,16 +233,16 @@ func (s *server) handleIngest(w http.ResponseWriter, r *http.Request) {
 // fetch limit. The extracted items are tagged with the source's first test type.
 func (s *server) handleIngestLLM(w http.ResponseWriter, r *http.Request) {
 	if s.llm == nil {
-		writeError(w, errLLMUnconfigured)
+		s.writeError(w, r, errLLMUnconfigured)
 		return
 	}
 	var req ingestLLMReq
-	if !decodeOptionalJSON(w, r, &req) {
+	if !s.decodeOptionalJSON(w, r, &req) {
 		return
 	}
 	snap, err := s.cat.Get(r.Context(), source.SourceID(r.PathValue("id")))
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	model := req.Model
@@ -269,37 +265,11 @@ func (s *server) handleIngestLLM(w http.ResponseWriter, r *http.Request) {
 		Limit:     req.Limit,
 	})
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, rep)
 }
 
-// --- helpers ---
-
-// decodeOptionalJSON decodes an optional JSON body: an empty body leaves dst at
-// its zero value (ingest's limit/model are all optional, so a bodyless POST is
-// valid). Malformed JSON is a 400.
-func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
-	if err := json.NewDecoder(r.Body).Decode(dst); err != nil && !errors.Is(err, io.EOF) {
-		writeError(w, fmt.Errorf("%w: %s", shared.ErrInvalid, err))
-		return false
-	}
-	return true
-}
-
-// intParam reads an optional integer query parameter: absent is (0, true); a
-// non-integer value writes a 400 and returns (0, false) so the handler can bail.
-func intParam(w http.ResponseWriter, q url.Values, key string) (int, bool) {
-	v := q.Get(key)
-	if v == "" {
-		return 0, true
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		writeError(w, shared.ErrInvalid.WithMessagef("query %q must be an integer, got %q", key, v))
-		return 0, false
-	}
-	return n, true
-}
+// The decodeOptionalJSON/intParam helpers moved to server_http.go (as *server
+// methods, so a decode/parse failure routes through the same safe s.writeError).
