@@ -1,9 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -93,6 +93,7 @@ type server struct {
 	tests     ports.TestRepository
 	sessions  ports.SessionRepository
 	blobs     ports.BlobStore
+	log       *slog.Logger // nil → s.logger() hands back a discard logger
 }
 
 // serverDeps bundles everything the delivery surface drives: the TestDb-backed
@@ -106,6 +107,7 @@ type serverDeps struct {
 	ingest   *ingest.Service
 	llm      *llmapp.Service
 	llmModel string
+	log      *slog.Logger
 }
 
 // newServer wires the delivery use-cases over one TestDb backend and one blob
@@ -133,6 +135,7 @@ func newServer(d serverDeps) *server {
 		tests:     d.db.tests,
 		sessions:  d.db.sessions,
 		blobs:     d.blobs,
+		log:       d.log,
 	}
 }
 
@@ -208,11 +211,18 @@ func runServer(addr string, cfg Config) (err error) {
 		return err
 	}
 
+	// Structured logging: JSON to stderr at the configured level (unknown → Info).
+	// The request-log middleware wraps the whole mux and measures duration through
+	// the injected clock, so no handler reads the wall clock directly.
+	level := slog.LevelInfo
+	_ = level.UnmarshalText([]byte(cfg.Log.Level)) // unknown → Info (level unchanged)
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+	srv := newServer(serverDeps{
+		db: db, blobs: blobs, catalog: cat, ingest: ing, llm: llmSvc, llmModel: llmModel, log: logger,
+	})
 	httpSrv := &http.Server{
-		Addr: addr,
-		Handler: newServer(serverDeps{
-			db: db, blobs: blobs, catalog: cat, ingest: ing, llm: llmSvc, llmModel: llmModel,
-		}).routes(),
+		Addr:              addr,
+		Handler:           withRequestLog(withSecurityHeaders(srv.routes()), logger, clock.System()),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	fmt.Fprintf(os.Stderr, "testmaker: serving delivery API on %s (testdb=%s, blobs=%s)\n", addr, cfg.TestDB, cfg.Blobs)
@@ -260,7 +270,7 @@ type answerReq struct {
 
 func (s *server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	var req generateReq
-	if !decodeJSON(w, r, &req) {
+	if !s.decodeJSON(w, r, &req) {
 		return
 	}
 	rep, err := s.gen.Generate(r.Context(), ports.GenerateSpec{
@@ -270,7 +280,7 @@ func (s *server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		Seed:       req.Seed,
 	})
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, rep)
@@ -278,7 +288,7 @@ func (s *server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleCompose(w http.ResponseWriter, r *http.Request) {
 	var req composeReq
-	if !decodeJSON(w, r, &req) {
+	if !s.decodeJSON(w, r, &req) {
 		return
 	}
 	sections := make([]authoring.SectionSpec, len(req.Sections))
@@ -299,12 +309,12 @@ func (s *server) handleCompose(w http.ResponseWriter, r *http.Request) {
 		Sections: sections,
 	})
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	snap, err := s.tests.GetTest(r.Context(), id)
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, snap)
@@ -313,7 +323,7 @@ func (s *server) handleCompose(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleGetTest(w http.ResponseWriter, r *http.Request) {
 	snap, err := s.tests.GetTest(r.Context(), testset.TestID(r.PathValue("id")))
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, snap)
@@ -322,12 +332,12 @@ func (s *server) handleGetTest(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleStartSession(w http.ResponseWriter, r *http.Request) {
 	test, err := s.tests.GetTest(r.Context(), testset.TestID(r.PathValue("id")))
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	d, err := s.exec.Start(r.Context(), test)
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, d)
@@ -335,7 +345,7 @@ func (s *server) handleStartSession(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	var req answerReq
-	if !decodeJSON(w, r, &req) {
+	if !s.decodeJSON(w, r, &req) {
 		return
 	}
 	d, err := s.exec.Answer(r.Context(), session.SessionID(r.PathValue("id")), req.ItemID, session.Answer{
@@ -344,7 +354,7 @@ func (s *server) handleAnswer(w http.ResponseWriter, r *http.Request) {
 		Verdict:  req.Verdict,
 	})
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, d)
@@ -353,7 +363,7 @@ func (s *server) handleAnswer(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleComplete(w http.ResponseWriter, r *http.Request) {
 	snap, err := s.exec.Complete(r.Context(), session.SessionID(r.PathValue("id")))
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, snap)
@@ -362,12 +372,12 @@ func (s *server) handleComplete(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleScore(w http.ResponseWriter, r *http.Request) {
 	snap, err := s.sessions.GetSession(r.Context(), session.SessionID(r.PathValue("id")))
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	score, err := s.scorer.Score(r.Context(), snap)
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, score)
@@ -386,7 +396,7 @@ func (s *server) handleScore(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleMedia(w http.ResponseWriter, r *http.Request) {
 	blob, err := s.blobs.Get(r.Context(), r.PathValue("ref"))
 	if err != nil {
-		writeError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 	w.Header().Set("Content-Type", blob.ContentType)
@@ -407,47 +417,5 @@ func timing(total, perItem int) testset.Timing {
 	}
 }
 
-// maxRequestBody caps a request body on this unauthenticated surface so a large
-// or slow-drip POST cannot exhaust memory; the JSON payloads here are all small.
-const maxRequestBody = 1 << 20 // 1 MiB
-
-// decodeJSON reads the request body into dst, writing a 400 and returning false
-// on malformed or over-large input so a handler can bail with a single guard.
-func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
-	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
-		writeError(w, fmt.Errorf("%w: %s", shared.ErrInvalid, err))
-		return false
-	}
-	return true
-}
-
-// writeJSON encodes v as the response body with the given status.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-// writeError maps a domain error class onto an HTTP status (falling back to 500)
-// and returns the error message as JSON. It is the single translation point
-// between shared.TestmakerError and the transport.
-func writeError(w http.ResponseWriter, err error) {
-	status := http.StatusInternalServerError
-	var terr *shared.TestmakerError
-	if errors.As(err, &terr) {
-		switch terr.Class {
-		case shared.ClassInvalid:
-			status = http.StatusBadRequest
-		case shared.ClassNotFound:
-			status = http.StatusNotFound
-		case shared.ClassConflict:
-			status = http.StatusConflict
-		case shared.ClassUnavailable:
-			status = http.StatusServiceUnavailable
-		case shared.ClassUnsupported:
-			status = http.StatusNotImplemented
-		}
-	}
-	writeJSON(w, status, map[string]string{"error": err.Error()})
-}
+// timing lives above; the JSON/error/body helpers now live in server_http.go so
+// server.go stays under the per-file cap as the route table grows.
