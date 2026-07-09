@@ -33,6 +33,10 @@ func (s *server) handleUploadCatalog(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, fmt.Errorf("%w: %s", shared.ErrInvalid, perr))
 		return
 	}
+	// ponytail: no lock around write+sync. atomicWrite's rename keeps the file
+	// always-valid, so the worst a concurrent upload can do on this single-tenant
+	// operator console is serve the other request's (equally valid) catalogue. Add
+	// a per-server mutex if multi-operator writes ever become real.
 	if werr := atomicWrite(s.catalogPath, raw); werr != nil {
 		s.writeError(w, r, werr)
 		return
