@@ -14,11 +14,12 @@ import (
 // default to per-user paths under the home, never the working directory, so an
 // installed binary run from anywhere is self-contained.
 type Config struct {
-	TestDB  string    `json:"testdb"`
-	Blobs   string    `json:"blobs"`
-	Catalog string    `json:"catalog"`
-	Prompts string    `json:"prompts"`
-	LLM     LLMConfig `json:"llm"`
+	TestDB  string     `json:"testdb"`
+	Blobs   string     `json:"blobs"`
+	Catalog string     `json:"catalog"`
+	Prompts string     `json:"prompts"`
+	LLM     LLMConfig  `json:"llm"`
+	Auth    AuthConfig `json:"auth"`
 }
 
 // LLMConfig configures the optional LLM backend used by the ingest-llm endpoint.
@@ -29,6 +30,16 @@ type LLMConfig struct {
 	APIKey     string `json:"apiKey"`
 	Model      string `json:"model"`
 	AuthScheme string `json:"authScheme"`
+}
+
+// AuthConfig configures delivery-surface access control (ADR-0006). Zero value
+// = auth off, which is what tests construct; loadOrCreateConfig defaults Mode
+// to "token" for real deployments (Task 4 in PLAN.md).
+type AuthConfig struct {
+	Mode             string `json:"mode"`
+	OperatorToken    string `json:"operatorToken"`
+	Secret           string `json:"secret"`
+	InviteTTLSeconds int    `json:"inviteTTLSeconds"`
 }
 
 // testmakerHome resolves the per-user home directory: $TESTMAKER_HOME if set, else
