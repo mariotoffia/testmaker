@@ -2444,7 +2444,7 @@ git commit -m "Block 14: full two-role take-path integration test"
 
 # Phase 3 — Limits
 
-### Task 11: Per-IP rate limiter (hand-rolled token bucket, injected clock)
+### Task 11: Per-IP rate limiter (hand-rolled token bucket, injected clock) ✅
 
 Kept dependency-free on purpose: the token math is a handful of lines, the whole
 module has only yaml + sqlite as vendors, and an injected clock makes it

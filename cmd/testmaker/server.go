@@ -238,9 +238,15 @@ func runServer(addr string, cfg Config) (err error) {
 	srv := newServer(serverDeps{
 		db: db, blobs: blobs, catalog: cat, ingest: ing, llm: llmSvc, llmModel: llmModel, log: logger,
 	})
+	// Per-IP token-bucket rate limit on /api (0 rps in config ⇒ off). Nested
+	// inside the security headers so an over-limit 429 still carries them.
+	var limiter *rateLimiter
+	if cfg.Limits.RequestsPerSecond > 0 {
+		limiter = newRateLimiter(cfg.Limits.RequestsPerSecond, cfg.Limits.Burst, clock.System())
+	}
 	httpSrv := &http.Server{
 		Addr:              addr,
-		Handler:           withRequestLog(withSecurityHeaders(srv.routes()), logger, clock.System()),
+		Handler:           withRequestLog(withSecurityHeaders(withRateLimit(srv.routes(), limiter)), logger, clock.System()),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	fmt.Fprintf(os.Stderr, "testmaker: serving delivery API on %s (testdb=%s, blobs=%s)\n", addr, cfg.TestDB, cfg.Blobs)
