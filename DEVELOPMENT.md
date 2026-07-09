@@ -100,6 +100,21 @@ Run the composition-root demo directly:
 go run ./cmd/testmaker -catalog data/catalog/sources.json
 ```
 
+Run the HTTP delivery API:
+
+```bash
+make serve                              # go install + run on :8080
+make serve SERVE_ADDR=:9000             # different port
+make serve TESTMAKER_HOME=/srv/testmaker  # different config/data home
+```
+
+`make serve` `go install`s the CLI, seeds the home dir with the catalogue/prompts,
+and runs the global binary. The server is **config-driven**: on first run it writes
+`$TESTMAKER_HOME/config/config.json` (default `~/.testmaker`) with defaults, and
+keeps the sqlite db + blob store under `$TESTMAKER_HOME/data` — never the working
+directory. An explicit `-testdb` / `-blobs` / `-catalog` / `-prompts` flag
+overrides the matching config value for that run.
+
 ## Layer / Dependency Rules
 
 Dependencies point **inward only**. The rule is enforced twice: by

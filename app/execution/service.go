@@ -135,6 +135,13 @@ func (s *Service) persistAndDeliver(ctx context.Context, sess *session.Session) 
 		if err != nil {
 			return ports.Delivery{}, err
 		}
+		// The delivered item is what the taker sees; it must never carry the answer
+		// key or the post-completion explanation — that would let a taker read the
+		// correct answer for the item in front of them. Grading is unaffected: the
+		// executor reads the key from the bank when an answer arrives, not from this
+		// presentation copy.
+		content.AnswerKey = item.AnswerKey{}
+		content.Explanation = ""
 		d.Item = &content
 	}
 	if err := s.repo.SaveSession(ctx, d.Session); err != nil {

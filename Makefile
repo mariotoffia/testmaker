@@ -7,6 +7,17 @@ ARCHLINT      ?= go-arch-lint
 MODULES       := $(shell find . -name go.mod -not -path '*/.*' -exec dirname {} \;)
 REPORTS       := reports
 
+# `make serve` runtime config. Config + mutable state (sqlite db, figural-media
+# blobs) live under a per-user home, never the working directory. Override either.
+TESTMAKER_HOME ?= $(HOME)/.testmaker
+SERVE_ADDR     ?= :8080
+
+# Where `go install` drops the binary (GOBIN, else GOPATH/bin).
+GOBIN_DIR      := $(shell $(GO) env GOBIN)
+ifeq ($(strip $(GOBIN_DIR)),)
+GOBIN_DIR      := $(shell $(GO) env GOPATH)/bin
+endif
+
 # Pinned tool versions (installed by `make install`).
 GOLANGCI_VERSION := v2.12.2
 ARCHLINT_VERSION := v1.15.0
@@ -27,6 +38,16 @@ build:
 test:
 	@mkdir -p $(REPORTS)
 	@for m in $(MODULES); do echo "== test $$m =="; (cd $$m && $(GO) test -short -race -timeout 120s ./...) || exit 1; done
+
+## serve: go install the CLI, seed the home dir, and run the global binary's HTTP API on SERVE_ADDR (default :8080)
+.PHONY: serve
+serve:
+	$(GO) install ./cmd/testmaker
+	@mkdir -p "$(TESTMAKER_HOME)/data/catalog" "$(TESTMAKER_HOME)/data/prompts" "$(TESTMAKER_HOME)/data/blobs"
+	@cp -n data/catalog/sources.json "$(TESTMAKER_HOME)/data/catalog/" 2>/dev/null || true
+	@for f in data/prompts/*.yaml; do cp -n "$$f" "$(TESTMAKER_HOME)/data/prompts/" 2>/dev/null || true; done
+	@echo "serving on $(SERVE_ADDR); TESTMAKER_HOME=$(TESTMAKER_HOME) (config + data + seeds); binary $(GOBIN_DIR)/testmaker"
+	TESTMAKER_HOME="$(TESTMAKER_HOME)" "$(GOBIN_DIR)/testmaker" -serve "$(SERVE_ADDR)"
 
 ## fmt: format all Go files in place (the only auto-fix)
 .PHONY: fmt

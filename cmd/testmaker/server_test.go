@@ -11,6 +11,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher"
+	"github.com/mariotoffia/testmaker/adapters/native/source/memorycatalog"
+	"github.com/mariotoffia/testmaker/app/catalog"
+	"github.com/mariotoffia/testmaker/app/ingest"
 	"github.com/mariotoffia/testmaker/domain/item"
 	"github.com/mariotoffia/testmaker/domain/scoring"
 	"github.com/mariotoffia/testmaker/domain/session"
@@ -40,7 +44,12 @@ func newHarnessWithStores(t *testing.T) (*httptest.Server, testDB, ports.BlobSto
 	if err != nil {
 		t.Fatalf("openBlobStore: %v", err)
 	}
-	ts := httptest.NewServer(newServer(db, blobs).routes())
+	cat := catalog.NewService(memorycatalog.NewStore(), fakeLoader{})
+	if _, err := cat.Sync(context.Background()); err != nil {
+		t.Fatalf("catalog sync: %v", err)
+	}
+	ing := ingest.NewService(db.items, stubfetcher.NewFetcher())
+	ts := httptest.NewServer(newServer(serverDeps{db: db, blobs: blobs, catalog: cat, ingest: ing}).routes())
 	t.Cleanup(ts.Close)
 	return ts, db, blobs
 }
@@ -224,6 +233,43 @@ func TestDeliverySurfaceConcurrentAnswersRecordOnce(t *testing.T) {
 	}
 	if success != 1 {
 		t.Fatalf("recorded %d successful answers, want exactly 1 under optimistic concurrency", success)
+	}
+}
+
+// TestRootIndex proves GET / returns a 200 API index (so hitting the server root
+// confirms it is up and lists the endpoints) while an unknown path still 404s —
+// i.e. the root pattern is anchored and does not swallow every unmatched request.
+func TestRootIndex(t *testing.T) {
+	ts := newHarness(t)
+
+	resp, err := http.Get(ts.URL + "/")
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET / = %d, want 200", resp.StatusCode)
+	}
+	var idx struct {
+		Service   string
+		Endpoints []string
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&idx); err != nil {
+		t.Fatalf("decode index: %v", err)
+	}
+	if idx.Service != "testmaker" || len(idx.Endpoints) == 0 {
+		t.Fatalf("index = %+v, want a service name and a non-empty endpoint list", idx)
+	}
+
+	// An unknown path must still be a 404: the root handler must be anchored to "/"
+	// (GET /{$}), not a catch-all that intercepts every unmatched GET.
+	other, err := http.Get(ts.URL + "/does-not-exist")
+	if err != nil {
+		t.Fatalf("GET unknown: %v", err)
+	}
+	_ = other.Body.Close()
+	if other.StatusCode != http.StatusNotFound {
+		t.Fatalf("GET /does-not-exist = %d, want 404 (root must not catch-all)", other.StatusCode)
 	}
 }
 

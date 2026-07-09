@@ -63,7 +63,11 @@ type Generator interface {
 // means untimed. It is advisory to a renderer; the executor itself enforces only
 // the global budget, abandoning a session whose total time has run out.
 type Delivery struct {
-	Session  session.SessionSnapshot
+	Session session.SessionSnapshot
+	// Item is the presentation view handed to the taker: stem, options and media,
+	// but with AnswerKey and Explanation stripped by the executor so a taker cannot
+	// read the correct answer for the item in front of them. Grading reads the key
+	// from the bank, never from here.
 	Item     *item.ItemSnapshot
 	Deadline time.Time
 }

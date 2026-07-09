@@ -56,8 +56,8 @@ Seed data: the 81-source research catalogue at `data/catalog/sources.json`
 | `AnswerFormat` | `multiple-choice` (4–6 `Option`s) · `open-numeric` · `true-false-cannotsay` |
 | `AnswerKey` | correct option id / numeric value (+ optional grading `Tolerance`) / verdict |
 | `Explanation` | shown after completion |
-| `Difficulty` | integer band (1..N); IRT `a/b/c` params deferred to psychometric calibration ([ROADMAP.md](ROADMAP.md) §3) |
-| `Norms` | item p-value / response-time baseline deferred to psychometric calibration ([ROADMAP.md](ROADMAP.md) §3) |
+| `Difficulty` | integer band (1..N); IRT `a/b/c` params deferred to psychometric calibration ([ROADMAP.md](ROADMAP.md) §4) |
+| `Norms` | item p-value / response-time baseline deferred to psychometric calibration ([ROADMAP.md](ROADMAP.md) §4) |
 
 Design decisions:
 
@@ -238,22 +238,44 @@ the surface.
 
 ### Delivery surface (HTTP) ✅
 
-Authoring, execution and scoring are exposed over stdlib `net/http`
-(`cmd/testmaker -serve <addr>`) so a user can author, take and be scored on a
-test through one interface. It sits in the **composition root**, not a new
-adapter module: the surface drives the `app` use-cases, and the layer graph
-forbids an adapter from importing `app`. Endpoints map one-to-one onto the
-use-cases (`/items/generate`, `/tests`, `/tests/{id}`, `/tests/{id}/sessions`,
-`/sessions/{id}/answers`, `/sessions/{id}/complete`, `/sessions/{id}/score`); a
-single `shared.TestmakerError`-class → HTTP-status map is the only transport
-translation, and request timing is carried in seconds so the wire format stays
-clock-free. Domain snapshots are marshalled directly (no parallel response-DTO
-layer), and norms — deployment configuration — default to empty, so the API
-returns raw scores plus feedback until a deployment supplies a norm book.
+The whole pipeline is exposed over stdlib `net/http` (`cmd/testmaker -serve
+<addr>`) so a user can catalogue, ingest, author, take and be scored through one
+interface. It sits in the **composition root**, not a new adapter module: the
+surface drives the `app` use-cases, and the layer graph forbids an adapter from
+importing `app`. Endpoints map onto the use-cases — sourcing / ingest / bank
+(`/sources`, `/sources/{id}`, `/catalog/sync`, `/items`, `/items/{id}`,
+`/sources/{id}/ingest`, `/sources/{id}/ingest-llm`) and authoring → delivery
+(`/items/generate`, `/tests`, `/tests/{id}`, `/tests/{id}/sessions`,
+`/sessions/{id}/answers`, `/sessions/{id}/complete`, `/sessions/{id}/score`,
+`/media/{ref}`); a single `shared.TestmakerError`-class → HTTP-status map is the
+only transport translation, and request timing is carried in seconds so the wire
+format stays clock-free. Domain snapshots are marshalled directly (no parallel
+response-DTO layer), and norms — deployment configuration — default to empty, so
+the API returns raw scores plus feedback until a deployment supplies a norm book.
+The sourcing/ingest use-cases are wired into the server just as the CLI wires them
+(each adapter bound to its port first, keeping the graph app → ports); the
+deterministic ingest endpoints are synchronous, mirroring the CLI.
+
+The surface is **unauthenticated and single-tenant by design** — one mux serves
+operator and taker. The session `Delivery.Item` handed to a taker is
+**key-redacted** — the executor strips `AnswerKey` and `Explanation` from the
+presented item, so a taker cannot read the answer to the item in front of them.
+What still needs hardening before multi-user or taker-facing exposure: the
+operator `GET /items` returns the full `item.ItemSnapshot` (answer keys and all),
+and the ingest endpoints trigger outbound fetches and paid LLM calls
+unauthenticated. Auth over the operator/bank view + rate/cost limits are the top
+hardening step ([ROADMAP.md](ROADMAP.md) §1).
+
+The server is **configuration-driven**: `testmaker -serve` reads its settings (db,
+blob and catalogue/prompt locations, optional LLM backend) from a config file
+created with defaults under `~/.testmaker` on first run, an explicit CLI flag
+overriding the matching value. Mutable state and the seed catalogue/prompts
+default to per-user paths under that home, never the working directory, so an
+installed binary is self-contained (`make serve`).
 
 ---
 
-## 5. Fetch & generation pipeline ✅ (`direct-download` / `scrape-html` / `api` fetchers + `app/ingest`; `generate` via `rulegen` + `app/authoring`; `headless-browser` / `git-clone` planned — [ROADMAP.md](ROADMAP.md) §2)
+## 5. Fetch & generation pipeline ✅ (`direct-download` / `scrape-html` / `api` fetchers + `app/ingest`; `generate` via `rulegen` + `app/authoring`; `headless-browser` / `git-clone` planned — [ROADMAP.md](ROADMAP.md) §3)
 
 The `Fetcher` port pulls `RawItem`s from a source; a **router** selects the
 concrete fetcher by `source.Extraction.Method` / `AccessClass`:
@@ -359,7 +381,7 @@ available to after-hooks and callers without a second lookup.
 | --- | --- | --- |
 | `adapters/native/llm/memoryprompts` ✅ | in-memory map | tests + conformance baseline |
 | `adapters/native/llm/fileprompts` ✅ | one YAML per prompt under `data/prompts/` (`id`, `version`, `purpose`, `params`, `template`, `notes`); read/write | the default store — prompts are reviewable, diffable seed data |
-| sqlite 🚧 ([ROADMAP.md](ROADMAP.md) §4) | table in the same database file | single-file deployments |
+| sqlite 🚧 ([ROADMAP.md](ROADMAP.md) §5) | table in the same database file | single-file deployments |
 | `adapters/aws/llm/*` 🚧 | DynamoDB via AWS SDK v2 | cloud persistence, if/when wanted |
 
 Both first adapters are validated by one `ports/prompttest` conformance suite

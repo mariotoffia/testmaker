@@ -31,7 +31,7 @@ item.OriginGenerated` (the domain already counts LLM output as generated) and
 inherit the source's `Redistributable`, exactly like any other generated item.
 
 No consumer reads model/prompt provenance yet — the calibration step that would
-is unbuilt (a future direction; see [ROADMAP.md](../../ROADMAP.md) §3).
+is unbuilt (a future direction; see [ROADMAP.md](../../ROADMAP.md) §4).
 Adding three persisted, never-read fields to the central item aggregate now
 would be speculative surface (YAGNI): every constructor, every snapshot, every
 adapter mapping would carry them with nothing consuming them.

@@ -55,7 +55,24 @@ func main() {
 	flag.Parse()
 
 	if *serve != "" {
-		if err := runServer(*serve, *testdbDSN, *blobsSpec); err != nil {
+		// The server is config-driven: settings come from the config file (created
+		// with defaults under ~/.testmaker on first run), and an explicitly-passed
+		// flag overrides the corresponding config value for this run.
+		err := serveWithConfig(*serve, func(cfg *Config) {
+			flag.Visit(func(f *flag.Flag) {
+				switch f.Name {
+				case "testdb":
+					cfg.TestDB = *testdbDSN
+				case "blobs":
+					cfg.Blobs = *blobsSpec
+				case "catalog":
+					cfg.Catalog = *path
+				case "prompts":
+					cfg.Prompts = *promptsDir
+				}
+			})
+		})
+		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
@@ -675,6 +692,25 @@ func newLLMBackend() (*openaicompat.Client, bool, error) {
 		BaseURL:    baseURL,
 		APIKey:     os.Getenv("TESTMAKER_LLM_API_KEY"),
 		AuthScheme: openaicompat.AuthScheme(os.Getenv("TESTMAKER_LLM_AUTH_SCHEME")),
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	return client, true, nil
+}
+
+// newLLMBackendFrom builds the LLM backend from the config's LLM section, falling
+// back to the TESTMAKER_LLM_* environment when that section is empty (no BaseURL)
+// — so an API key can stay in the environment instead of on disk. The bool reports
+// whether a backend is configured.
+func newLLMBackendFrom(cfg LLMConfig) (*openaicompat.Client, bool, error) {
+	if cfg.BaseURL == "" {
+		return newLLMBackend()
+	}
+	client, err := openaicompat.New(openaicompat.Config{
+		BaseURL:    cfg.BaseURL,
+		APIKey:     cfg.APIKey,
+		AuthScheme: openaicompat.AuthScheme(cfg.AuthScheme),
 	})
 	if err != nil {
 		return nil, false, err

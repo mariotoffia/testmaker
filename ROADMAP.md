@@ -7,12 +7,117 @@ is wanted, and how it would be built against the current ports so nothing here
 needs a redesign to land — only a new adapter or a swapped algorithm behind an
 existing seam.
 
-Ordering is by dependency, not priority: an item lower in the list generally
-assumes the ports and data from the ones above are in place.
+**§1 is the recommended immediate next step** — a web UI over the delivery
+API, with the surface hardening (authentication, rate/cost limits) it
+requires as a built-in precondition. The rest are ordered by dependency: an
+item lower in the list generally assumes the ports and data from the ones
+above are in place.
 
 ---
 
-## 1. Cloud persistence (AWS SDK v2)
+## 1. Web UI (operator console + test player)
+
+**Status:** the whole pipeline is exposed over HTTP (`testmaker -serve`) —
+cataloguing, ingesting, filling, authoring, administering and scoring all have
+endpoints ([DESIGN.md](DESIGN.md) §4, [ARCHITECTURE.md](ARCHITECTURE.md) §9) —
+but it is **JSON-only**: `GET /` returns an endpoint index, nothing renders in a
+browser. This item puts a real web application on top of that API.
+
+**What.** One web app with two faces, both driven entirely by the existing
+delivery API:
+
+- **Operator console** — the authoring/administration side:
+  - browse the source catalogue (`GET /sources`), inspect a source, trigger
+    ingest and LLM ingest with progress/result feedback;
+  - browse and search the item bank (`GET /items`), preview any item the way a
+    taker would see it — including figural stems/options rendered from
+    `GET /media/{ref}`;
+  - generate items (`POST /items/generate`) and compose tests
+    (`POST /tests`): pick families, counts, timing policy (fixed order vs
+    adaptive), section layout.
+- **Test player** — the taker side, and the reason this is an app rather than a
+  set of forms:
+  - start a session, present one item at a time with the **global and
+    per-item countdown timers** the domain already enforces (e.g. adaptive
+    60 s/item), rendering figural items (matrices, series) as images/SVG;
+  - answer capture for all three item formats (multiple choice 4–6 options,
+    open numeric, true/false/cannot-say), keyboard-first navigation — speeded
+    tests live or die on input latency;
+  - complete → score report: raw score, percentile band, IQ-style scaled
+    score, per-item review with explanations (`GET /sessions/{id}/score`).
+
+```mermaid
+flowchart LR
+  spa["React SPA<br/>(operator console + test player)"] -->|"JSON"| api["testmaker -serve<br/>(existing delivery API)"]
+  api -->|"go:embed static files"| spa
+```
+
+**Tech strategy.** **Vite + React + TypeScript SPA, built with Bun, embedded
+into the Go binary via `go:embed`** — the server gains one static-file route;
+deployment stays a single binary with no Node/Bun at runtime. Rationale:
+
+- **The test player is genuinely client-heavy.** Millisecond-visible countdown
+  timers, per-item deadlines, instant answer feedback in adaptive mode, and
+  keyboard-driven speeded navigation are client-state problems. Server-rendered
+  Go templates + htmx handle CRUD consoles well but are the wrong tool for a
+  strictly-speeded test player — the htmx camp itself concedes the
+  client-heavy, real-time case to SPAs
+  ([Go/templ/htmx overview](https://medium.com/@iamsiddharths/building-reactive-uis-with-go-templ-and-htmx-a-simpler-path-beyond-spas-17e7dad2c7a2)).
+- **LLM-assisted development is materially better in React/TS.** The training
+  corpus for React/TypeScript dwarfs Go templating; practitioners report LLMs
+  are "very good" with React precisely because of example volume, while the
+  Go+templates+htmx experience is "serviceable, but much less smooth" — models
+  fall back to emitting walls of plain HTML instead of reusing components
+  ([six months with the GoTH stack](https://thefridaydeploy.substack.com/p/my-6-months-with-the-goth-stack-building),
+  [why TypeScript for LLM-based coding](https://medium.com/@tl_99311/why-i-choose-typescript-for-llm-based-coding-19cbb19f3fa2)).
+  Since this repo is largely LLM-built, that quality gap is a first-order
+  input, not a taste question.
+- **Architecture fit.** The SPA is just another client of the JSON port — a
+  delivery adapter concern. Nothing inward of `cmd` changes; the Go side only
+  adds `go:embed` + a fallback route next to the existing mux.
+
+Pure-Go alternative (templ/htmx) is acknowledged and rejected for the player;
+it would be acceptable for the operator console alone, but splitting the app
+across two UI stacks is worse than one SPA.
+
+### Precondition: delivery-surface hardening (auth, limits)
+
+The API ships **unauthenticated and single-tenant by design**, and the same
+mux serves both operator and taker. Before the UI is exposed beyond a trusted
+localhost operator, the surface must be hardened — all at the composition root
+(middleware around the mux, no domain change):
+
+- **Auth + roles.** `item.ItemSnapshot` carries `AnswerKey`/`Explanation`; the
+  taker's session `Delivery.Item` is already key-redacted, but the operator
+  bank view (`GET /items*`) returns full snapshots — it must sit behind an
+  operator credential, with session verbs open to an authenticated taker. The
+  UI's two faces map 1:1 onto these two roles.
+
+```mermaid
+flowchart LR
+  op["operator console"] --> mw["auth + role check"]
+  player["test player"] --> mw
+  mw --> full["full ItemSnapshot<br/>(with AnswerKey)"]
+  mw --> safe["redacted item<br/>(no key / explanation)"]
+```
+
+- **Rate + cost limits.** `POST /sources/{id}/ingest[-llm]` triggers outbound
+  fetches and paid LLM calls whose `model`/`maxTokens` the caller controls —
+  add a request limiter on mutating POSTs and a server-side clamp on LLM
+  parameters (overlaps §5). A request-body cap already ships.
+- **Pagination** — `limit`/`offset` on `GET /items` and `GET /sources`, which
+  the console's bank browser needs anyway.
+- **Error hygiene** — `writeError` returns the `TestmakerError` code + generic
+  message and logs detail, so failures stop echoing paths/backend URLs.
+- **Async ingest** (deferred until the UI makes long runs visible) —
+  `202 Accepted` + job id polled via `GET /jobs/{id}` if a fetch/LLM run
+  outlives one request; shipped endpoints stay synchronous until then.
+- **`POST /catalog`** accepting a catalogue body (today `POST /catalog/sync`
+  only reloads the deploy-time file), so the console can edit the catalogue.
+
+---
+
+## 2. Cloud persistence (AWS SDK v2)
 
 **What.** Durable, multi-instance storage for the item bank, composed tests,
 sessions, blobs and prompts, hosted on AWS instead of local memory/sqlite/FS.
@@ -61,7 +166,7 @@ interchangeable". Wiring is one backend switch in `cmd/testmaker` (`openTestDB` 
 
 ---
 
-## 2. Remaining fetch methods (headless-browser, git-clone)
+## 3. Remaining fetch methods (headless-browser, git-clone)
 
 **What.** Two `Fetcher` adapters that cover the source-extraction methods the
 catalogue names but no adapter implements yet: `headless-browser` (JavaScript /
@@ -91,7 +196,7 @@ normalizers do now.
 
 ---
 
-## 3. Psychometric calibration & IRT
+## 4. Psychometric calibration & IRT
 
 **What.** Replace the classical, uncalibrated psychometrics with
 item-response-theory (IRT) calibration: real item parameters, IRT-based adaptive
@@ -136,11 +241,11 @@ flowchart LR
   composite the classical model omits.
 
 This is the single largest initiative and depends on real captured response data,
-so it naturally follows a deployment that collects it (see §1).
+so it naturally follows a deployment that collects it (see §2).
 
 ---
 
-## 4. LLM hardening
+## 5. LLM hardening
 
 **What.** Production-grade controls around the LLM extraction/derivation path:
 response caching, cost/token budgets, a derived-item quality eval harness, a
@@ -178,7 +283,7 @@ needs guardrails, not just the port.
 
 ---
 
-## 5. Multi-instance delivery hardening
+## 6. Multi-instance delivery hardening
 
 **What.** The HTTP delivery-surface refinements a multi-instance deployment
 wants: client-supplied `If-Match`/ETag concurrency, and read/write port splits
@@ -204,4 +309,4 @@ exists.
   interface-size rule currently keeps collapsed.
 
 These are small, independent, and gated on a real multi-instance deployment
-(§1) making them worthwhile.
+(§2) making them worthwhile.

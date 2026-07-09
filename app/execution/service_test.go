@@ -144,6 +144,51 @@ func numItem(t *testing.T, id string, band int, key, tol float64) item.ItemSnaps
 
 // --- fixed-policy end-to-end -------------------------------------------------
 
+// TestDeliveredItemHidesAnswerKey proves the item handed to the taker in a
+// Delivery carries neither the answer key nor the explanation: a taker must not be
+// able to read the correct answer for the item they are about to answer. Grading
+// still works because the executor reads the key from the bank, not from what it
+// hands back.
+func TestDeliveredItemHidesAnswerKey(t *testing.T) {
+	ctx := context.Background()
+	it, ierr := item.NewItem(item.ItemSpec{
+		ID:           "log-1",
+		Provenance:   item.Provenance{SourceID: "rulegen", Origin: item.OriginGenerated, Redistributable: shared.RedistYes},
+		TestType:     "A2",
+		Stimulus:     []item.StimulusPart{{Text: "which figure continues?"}},
+		AnswerFormat: item.FormatMultipleChoice,
+		Options: []item.Option{
+			{ID: "a", Text: "A"}, {ID: "b", Text: "B"}, {ID: "c", Text: "C"}, {ID: "d", Text: "D"},
+		},
+		AnswerKey:   item.AnswerKey{OptionID: "c"},
+		Explanation: "the answer is C because the figure rotates 90 degrees",
+		Difficulty:  item.Difficulty{Band: 1},
+	})
+	if ierr != nil {
+		t.Fatalf("build item: %v", ierr)
+	}
+	bank := seededBank(t, it.Snapshot(), mcItem(t, "log-2", 2, "b"))
+	svc := execution.NewService(clock.NewFake(epoch), bank, newFakeSessions(), counterIDs())
+
+	d, err := svc.Start(ctx, fixedTest(t, "log-1", "log-2"))
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if d.Item == nil {
+		t.Fatal("no item delivered")
+	}
+	if d.Item.AnswerKey != (item.AnswerKey{}) {
+		t.Errorf("delivered item leaked the answer key: %+v", d.Item.AnswerKey)
+	}
+	if d.Item.Explanation != "" {
+		t.Errorf("delivered item leaked the explanation: %q", d.Item.Explanation)
+	}
+	// The taker still receives everything needed to answer: stem + options.
+	if len(d.Item.Options) != 4 || len(d.Item.Stimulus) == 0 {
+		t.Errorf("delivered item is missing stem/options: %+v", d.Item)
+	}
+}
+
 func TestStartDeliversFirstItemAndDeadline(t *testing.T) {
 	ctx := context.Background()
 	bank := seededBank(t, mcItem(t, "log-1", 1, "a"), mcItem(t, "log-2", 2, "b"))

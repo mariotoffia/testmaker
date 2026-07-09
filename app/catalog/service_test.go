@@ -97,6 +97,38 @@ func TestSyncUpsertsEverySource(t *testing.T) {
 	}
 }
 
+// TestSyncPrunesRemovedSources proves Sync mirrors the catalogue authoritatively:
+// a source dropped from the file is deleted on the next sync, not left behind.
+func TestSyncPrunesRemovedSources(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeRepo()
+	loader := &fakeLoader{snaps: []source.Snapshot{
+		snap("a", source.RedistYes, false),
+		snap("b", source.RedistYes, false),
+	}}
+	svc := catalog.NewService(repo, loader)
+	if _, err := svc.Sync(ctx); err != nil {
+		t.Fatalf("first sync: %v", err)
+	}
+
+	// b is removed from the file; the re-sync must prune it.
+	loader.snaps = []source.Snapshot{snap("a", source.RedistYes, false)}
+	n, err := svc.Sync(ctx)
+	if err != nil {
+		t.Fatalf("second sync: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("Sync reported %d, want 1", n)
+	}
+	got, err := repo.List(ctx, source.SourceFilter{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "a" {
+		t.Fatalf("after prune repo holds %d source(s), want only [a]", len(got))
+	}
+}
+
 func TestSyncPropagatesLoaderError(t *testing.T) {
 	boom := errors.New("boom")
 	svc := catalog.NewService(newFakeRepo(), &fakeLoader{err: boom})

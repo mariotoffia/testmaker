@@ -58,7 +58,8 @@ data/prompts/      seed LLM prompts (one YAML per prompt)
 ```bash
 make install     # golangci-lint + go-arch-lint (pinned versions)
 make check       # build + lint (gofmt, vet, go-arch-lint, golangci) + unit tests
-go run ./cmd/testmaker --catalog data/catalog/sources.json
+go run ./cmd/testmaker --catalog data/catalog/sources.json   # the CLI demo
+make serve       # install + run the HTTP API (config + data under ~/.testmaker)
 ```
 
 That bare command loads the catalogue into the in-memory repository and reports
@@ -69,9 +70,12 @@ later stage of the pipeline is switched on by a flag — see the workflow below.
 
 One pipeline runs from cataloguing sources to scoring a taker's attempt. The
 `testmaker` CLI walks each stage (each gated by a flag) as a demo; `-serve`
-exposes the author → take → score path as an HTTP API for real takers. Storage is
-chosen once with `-testdb memory|<sqlite-dsn>` and `-blobs memory|<dir>`.
-(`testmaker` below is the built binary, or `go run ./cmd/testmaker`.)
+exposes the whole pipeline as an HTTP API (the same stages, over HTTP).
+(`testmaker` below is the built binary, or `go run ./cmd/testmaker`.) For the demo,
+storage is chosen with `-testdb memory|<sqlite-dsn>` and `-blobs memory|<dir>`; the
+**server** is config-driven — `make serve` installs the binary and runs it against
+a config file created under `~/.testmaker` on first run (settings + data live
+there, never the working directory).
 
 ```mermaid
 flowchart LR
@@ -114,21 +118,35 @@ testmaker -run-test      # CLI demo: drives a fixed and an adaptive attempt
 testmaker -serve :8080   # or expose the HTTP API for real takers
 ```
 
-Over HTTP the take path is:
+The same stages are available over HTTP (`-serve`):
 
 ```
-POST /items/generate          generate items into the bank
-POST /tests                   compose a test
-POST /tests/{id}/sessions     start an attempt (presents the first item)
-POST /sessions/{id}/answers   answer the presented item   (repeat)
-POST /sessions/{id}/complete  finish the attempt
-GET  /sessions/{id}/score     raw + band + IQ + speed + per-item feedback
-GET  /media/{ref}             resolve a figural-media blob
+GET  /sources[?generators=&family=&testType=&redistributable=]  list the catalogue
+GET  /sources/{id}                                              one source
+POST /catalog/sync                                              reload the catalogue
+POST /sources/{id}/ingest                                       deterministic fetch + normalize
+POST /sources/{id}/ingest-llm                                   LLM extraction (503 if no LLM)
+GET  /items[?family=&testType=&minDifficulty=&maxDifficulty=]   query the item bank
+GET  /items/{id}                                                one item
+POST /items/generate                                            generate items into the bank
+POST /tests                                                     compose a test
+POST /tests/{id}/sessions                                       start an attempt (first item)
+POST /sessions/{id}/answers                                     answer the presented item (repeat)
+POST /sessions/{id}/complete                                    finish the attempt
+GET  /sessions/{id}/score                                       raw + band + IQ + speed + feedback
+GET  /media/{ref}                                               resolve a figural-media blob
 ```
 
 **5 · Score & feedback** — the completed attempt yields a raw score, a percentile
 / IQ band from the deployment's norm book (raw-only when a test carries no norm),
 a first-class speed dimension, and per-item explanations.
+
+> **API posture.** `-serve` exposes the whole pipeline (stages 1–5). The session
+> item a taker receives is answer-key-redacted, but the surface is unauthenticated
+> and single-tenant by design — one mux serves operator and taker, and the operator
+> `GET /items` returns answer keys — so authentication over the bank view plus
+> rate/cost limits are the top hardening step before taker-facing exposure
+> ([ROADMAP.md](ROADMAP.md) §1).
 
 ## Development
 

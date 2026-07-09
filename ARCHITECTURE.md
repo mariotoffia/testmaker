@@ -153,7 +153,7 @@ aggregates.
 
 Ports are kept small (`interfacebloat max: 6`) and split read/write when a
 read-only consumer actually exists (YAGNI — the split is reintroduced with the
-first query-only surface; see [ROADMAP.md](ROADMAP.md) §5).
+first query-only surface; see [ROADMAP.md](ROADMAP.md) §6).
 
 LLM access is a **service, not a bare client**: `app/llm.Service` wraps a
 `ports.LLM` backend and a `ports.PromptRepository`, automatically applying the
@@ -310,15 +310,37 @@ sequenceDiagram
   end
 ```
 
-Endpoints (whole author → take → score path): `POST /items/generate`,
-`POST /tests`, `GET /tests/{id}`, `POST /tests/{id}/sessions`,
-`POST /sessions/{id}/answers`, `POST /sessions/{id}/complete`,
-`GET /sessions/{id}/score`. A single `shared.TestmakerError` → status map
-(invalid→400, not_found→404, conflict→409, unavailable→503, unsupported→501,
-else 500) is the only transport translation; request timing is expressed in
-seconds so the wire format carries no clock types. Snapshots are marshalled
-directly (no response-DTO layer). Norms are deployment config, so the server
-runs with an empty norm book and returns raw scores + feedback.
+Endpoints cover the **whole pipeline**. Sourcing / item bank: `GET /sources`,
+`GET /sources/{id}`, `POST /catalog/sync`, `GET /items`, `GET /items/{id}`,
+`POST /sources/{id}/ingest`, `POST /sources/{id}/ingest-llm`. Authoring →
+delivery: `POST /items/generate`, `POST /tests`, `GET /tests/{id}`,
+`POST /tests/{id}/sessions`, `POST /sessions/{id}/answers`,
+`POST /sessions/{id}/complete`, `GET /sessions/{id}/score`, `GET /media/{ref}`. A
+single `shared.TestmakerError` → status map (invalid→400, not_found→404,
+conflict→409, unavailable→503, unsupported→501, else 500) is the only transport
+translation; request timing is expressed in seconds so the wire format carries no
+clock types. Snapshots are marshalled directly (no response-DTO layer). Norms are
+deployment config, so the server runs with an empty norm book and returns raw
+scores + feedback. The sourcing/ingest use-cases (`app/catalog`, `app/ingest`)
+are wired into the server exactly as the CLI wires them — each adapter bound to
+its port first so the graph stays app → ports, never adapter → app.
+
+**Security posture — unauthenticated, single-tenant.** The surface has no
+authentication and one mux serves operator and taker, so as it stands it is a
+trusted-operator / localhost tool. The session `Delivery.Item` a taker receives is
+**key-redacted** (the executor strips `AnswerKey` / `Explanation`), so a taker
+cannot read the answer to the presented item. What remains before taker-facing or
+multi-user exposure: the operator `GET /items` still returns the full
+`item.ItemSnapshot` (keys included), and the ingest endpoints trigger outbound
+fetches and paid LLM calls unauthenticated. Auth over the operator/bank view +
+rate/cost limits are the top hardening item ([ROADMAP.md](ROADMAP.md) §1).
+
+**Configuration.** `testmaker -serve` is config-driven: it reads its settings from
+a config file created with defaults under `~/.testmaker` on first run (an explicit
+flag overrides the matching value), and mutable state (db, blobs) plus the seed
+catalogue/prompts default to per-user paths under that home — so `make serve`
+(which `go install`s the binary and runs it globally) is self-contained, never
+writing to the working directory.
 
 **Optimistic concurrency.** `SessionRepository.SaveSession` is a compare-and-swap
 on `SessionSnapshot.Version`: it stores only when the snapshot's version is

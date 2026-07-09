@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/mariotoffia/testmaker/adapters/native/blob/fsblob"
@@ -14,7 +15,10 @@ import (
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/memorytestdb"
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/sqlitetestdb"
 	"github.com/mariotoffia/testmaker/app/authoring"
+	"github.com/mariotoffia/testmaker/app/catalog"
 	"github.com/mariotoffia/testmaker/app/execution"
+	"github.com/mariotoffia/testmaker/app/ingest"
+	llmapp "github.com/mariotoffia/testmaker/app/llm"
 	scoringapp "github.com/mariotoffia/testmaker/app/scoring"
 	"github.com/mariotoffia/testmaker/domain/clock"
 	"github.com/mariotoffia/testmaker/domain/scoring"
@@ -42,6 +46,15 @@ func openTestDB(dsn string) (testDB, error) {
 		mem := memorytestdb.NewStore()
 		return testDB{tests: mem, items: mem, sessions: mem, close: func() error { return nil }}, nil
 	}
+	// A file-backed sqlite db needs its parent directory to exist — the driver
+	// creates the file but not the directory. Create it (as fsblob.Open does for
+	// blobs) so a config-driven server is self-sufficient when run directly, not
+	// only via `make serve`. A bare filename or ":memory:" has dir "." — a no-op.
+	if dir := filepath.Dir(dsn); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return testDB{}, fmt.Errorf("create db dir %q: %w", dir, err)
+		}
+	}
 	store, err := sqlitetestdb.Open(dsn)
 	if err != nil {
 		return testDB{}, err
@@ -68,13 +81,31 @@ func openBlobStore(spec string) (ports.BlobStore, error) {
 // demo — lives in the composition root because it depends on app use-cases,
 // which no adapter is allowed to import.
 type server struct {
-	gen      *authoring.Service
-	author   *authoring.TestService
-	exec     ports.Executor
-	scorer   ports.Scorer
-	tests    ports.TestRepository
-	sessions ports.SessionRepository
+	gen       *authoring.Service
+	author    *authoring.TestService
+	exec      ports.Executor
+	scorer    ports.Scorer
+	cat       *catalog.Service
+	ingestSvc *ingest.Service
+	items     ports.ItemRepository
+	llm       *llmapp.Service // nil when the deployment has no LLM backend configured
+	llmModel  string
+	tests     ports.TestRepository
+	sessions  ports.SessionRepository
+	blobs     ports.BlobStore
+}
+
+// serverDeps bundles everything the delivery surface drives: the TestDb-backed
+// repositories, the blob store, the catalogue and ingest use-cases, and an
+// optional LLM service (nil disables the LLM ingest endpoint). Grouping them keeps
+// newServer's signature stable as the surface grows.
+type serverDeps struct {
+	db       testDB
 	blobs    ports.BlobStore
+	catalog  *catalog.Service
+	ingest   *ingest.Service
+	llm      *llmapp.Service
+	llmModel string
 }
 
 // newServer wires the delivery use-cases over one TestDb backend and one blob
@@ -84,19 +115,24 @@ type server struct {
 // the normed band unset until a deployment supplies real norms. The blob store
 // backs both the offload side (authoring rewrites inline media to content refs)
 // and the resolve side (GET /media/{ref}).
-func newServer(db testDB, blobs ports.BlobStore) *server {
+func newServer(d serverDeps) *server {
 	// Bind the generator to its port before injection so the composition wiring
 	// reads as ports-only (mirrors main.go and keeps the arch graph clean: the
 	// rulegen adapter never appears to depend on app).
 	var gen ports.Generator = rulegen.New()
 	return &server{
-		gen:      authoring.NewService(gen, db.items, blobs),
-		author:   authoring.NewTestService(db.items, db.tests),
-		exec:     execution.NewService(clock.System(), db.items, db.sessions, execution.RandomIDs()),
-		scorer:   scoringapp.NewService(db.items, scoring.NormBook{}),
-		tests:    db.tests,
-		sessions: db.sessions,
-		blobs:    blobs,
+		gen:       authoring.NewService(gen, d.db.items, d.blobs),
+		author:    authoring.NewTestService(d.db.items, d.db.tests),
+		exec:      execution.NewService(clock.System(), d.db.items, d.db.sessions, execution.RandomIDs()),
+		scorer:    scoringapp.NewService(d.db.items, scoring.NormBook{}),
+		cat:       d.catalog,
+		ingestSvc: d.ingest,
+		items:     d.db.items,
+		llm:       d.llm,
+		llmModel:  d.llmModel,
+		tests:     d.db.tests,
+		sessions:  d.db.sessions,
+		blobs:     d.blobs,
 	}
 }
 
@@ -105,6 +141,9 @@ func newServer(db testDB, blobs ports.BlobStore) *server {
 // r.PathValue.
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
+	// "/{$}" anchors to the exact root so unknown paths still 404 (a bare "/" would
+	// be a catch-all).
+	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("POST /items/generate", s.handleGenerate)
 	mux.HandleFunc("POST /tests", s.handleCompose)
 	mux.HandleFunc("GET /tests/{id}", s.handleGetTest)
@@ -113,15 +152,42 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /sessions/{id}/complete", s.handleComplete)
 	mux.HandleFunc("GET /sessions/{id}/score", s.handleScore)
 	mux.HandleFunc("GET /media/{ref}", s.handleMedia)
+	// Sourcing front half: catalogue, ingest, and item-bank query.
+	mux.HandleFunc("GET /sources", s.handleListSources)
+	mux.HandleFunc("GET /sources/{id}", s.handleGetSource)
+	mux.HandleFunc("POST /catalog/sync", s.handleSyncCatalog)
+	mux.HandleFunc("GET /items", s.handleListItems)
+	mux.HandleFunc("GET /items/{id}", s.handleGetItem)
+	mux.HandleFunc("POST /sources/{id}/ingest", s.handleIngest)
+	mux.HandleFunc("POST /sources/{id}/ingest-llm", s.handleIngestLLM)
 	return mux
+}
+
+// handleIndex serves a small JSON index at the root, so hitting the server confirms
+// it is up and lists the available endpoints. There is no HTML UI yet — the web UI
+// (operator console + test player) is ROADMAP §1.
+func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"service": "testmaker",
+		"status":  "ok",
+		"endpoints": []string{
+			"GET /sources", "GET /sources/{id}", "POST /catalog/sync",
+			"GET /items", "GET /items/{id}",
+			"POST /sources/{id}/ingest", "POST /sources/{id}/ingest-llm",
+			"POST /items/generate", "POST /tests", "GET /tests/{id}",
+			"POST /tests/{id}/sessions", "POST /sessions/{id}/answers",
+			"POST /sessions/{id}/complete", "GET /sessions/{id}/score",
+			"GET /media/{ref}",
+		},
+	})
 }
 
 // runServer opens the TestDb and blob-store backends and serves the delivery API
 // on addr until the process is stopped. Timing values in requests are expressed
 // in seconds so the wire format stays clock-free; the executor enforces them
 // through the injected clock.
-func runServer(addr, dsn, blobsSpec string) (err error) {
-	db, err := openTestDB(dsn)
+func runServer(addr string, cfg Config) (err error) {
+	db, err := openTestDB(cfg.TestDB)
 	if err != nil {
 		return err
 	}
@@ -131,17 +197,24 @@ func runServer(addr, dsn, blobsSpec string) (err error) {
 		}
 	}()
 
-	blobs, err := openBlobStore(blobsSpec)
+	blobs, err := openBlobStore(cfg.Blobs)
+	if err != nil {
+		return err
+	}
+
+	cat, ing, llmSvc, llmModel, err := wireSourcing(db.items, cfg.Catalog, cfg.Prompts, cfg.LLM)
 	if err != nil {
 		return err
 	}
 
 	httpSrv := &http.Server{
-		Addr:              addr,
-		Handler:           newServer(db, blobs).routes(),
+		Addr: addr,
+		Handler: newServer(serverDeps{
+			db: db, blobs: blobs, catalog: cat, ingest: ing, llm: llmSvc, llmModel: llmModel,
+		}).routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	fmt.Fprintf(os.Stderr, "testmaker: serving delivery API on %s (testdb=%s, blobs=%s)\n", addr, dsn, blobsSpec)
+	fmt.Fprintf(os.Stderr, "testmaker: serving delivery API on %s (testdb=%s, blobs=%s)\n", addr, cfg.TestDB, cfg.Blobs)
 	if lerr := httpSrv.ListenAndServe(); lerr != nil && !errors.Is(lerr, http.ErrServerClosed) {
 		return fmt.Errorf("serve %s: %w", addr, lerr)
 	}
@@ -333,9 +406,14 @@ func timing(total, perItem int) testset.Timing {
 	}
 }
 
+// maxRequestBody caps a request body on this unauthenticated surface so a large
+// or slow-drip POST cannot exhaust memory; the JSON payloads here are all small.
+const maxRequestBody = 1 << 20 // 1 MiB
+
 // decodeJSON reads the request body into dst, writing a 400 and returning false
-// on malformed input so a handler can bail with a single guard.
+// on malformed or over-large input so a handler can bail with a single guard.
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
 		writeError(w, fmt.Errorf("%w: %s", shared.ErrInvalid, err))
 		return false

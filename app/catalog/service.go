@@ -28,6 +28,25 @@ func (s *Service) Sync(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	loaded := make(map[source.SourceID]struct{}, len(snaps))
+	for _, snap := range snaps {
+		loaded[snap.ID] = struct{}{}
+	}
+	// Prune sources no longer in the file so Sync mirrors the catalogue
+	// authoritatively rather than only upserting: a removed source is deleted, not
+	// left stale in the repository.
+	current, err := s.repo.List(ctx, source.SourceFilter{})
+	if err != nil {
+		return 0, err
+	}
+	for _, c := range current {
+		if _, keep := loaded[c.ID]; keep {
+			continue
+		}
+		if err := s.repo.Delete(ctx, c.ID); err != nil {
+			return 0, err
+		}
+	}
 	for _, snap := range snaps {
 		if err := s.repo.Put(ctx, snap); err != nil {
 			return 0, err
