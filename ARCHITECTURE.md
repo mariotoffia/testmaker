@@ -142,7 +142,7 @@ aggregates.
 | --- | --- | --- | --- |
 | `SourceRepository` | driven | catalogue app service | ✅ |
 | `CatalogLoader` | driven | ingest a catalogue file | ✅ |
-| `Fetcher` | driven | pull raw items from a source | ✅ (stub + `httpfetch` direct-download) |
+| `Fetcher` | driven | pull raw items from a source | ✅ (stub + `httpfetch` direct-download + `scrapefetch` scrape-html + `apifetch` api) |
 | `LLM` | driven | extraction / translation / derivation steps | ✅ (port; `openaicompat` backend ✅) |
 | `PromptRepository` | driven | versioned prompt store for the LLM service | ✅ (port; `memoryprompts` + `fileprompts` ✅) |
 | `ItemRepository` | driven | item bank | ✅ (memory + sqlite) |
@@ -180,9 +180,11 @@ one shared conformance suite (see [TESTS.md](TESTS.md)).
 | source | file | `adapters/native/source/filecatalog` | `CatalogLoader` (JSON/YAML) | ✅ |
 | fetch | stub | `adapters/native/fetch/stubfetcher` | `Fetcher` | ✅ |
 | fetch | direct-download | `adapters/native/fetch/httpfetch` | `Fetcher` | ✅ |
+| fetch | scrape-html | `adapters/native/fetch/scrapefetch` | `Fetcher` | ✅ |
+| fetch | api | `adapters/native/fetch/apifetch` | `Fetcher` | ✅ |
 | testdb | memory | `adapters/native/testdb/memorytestdb` | `TestRepository` + `ItemRepository` + `SessionRepository` | ✅ |
 | testdb | sqlite | `adapters/native/testdb/sqlitetestdb` | `TestRepository` + `ItemRepository` + `SessionRepository` | ✅ |
-| fetch | download/scrape/headless/generate | `adapters/native/fetch/*` | `Fetcher` | ✅ direct-download (`httpfetch`); scrape/headless/generate 🚧 |
+| fetch | download/scrape/headless/api/generate | `adapters/native/fetch/*` | `Fetcher` | ✅ direct-download (`httpfetch`), scrape-html (`scrapefetch`), api (`apifetch`); headless 🚧 |
 | generate | rulegen (native figural) | `adapters/native/generate/rulegen` | `Generator` | ✅ figural (A1/A2/A3/A4); external engines not needed |
 | llm | openaicompat | `adapters/native/llm/openaicompat` | `LLM` | ✅ |
 | llm | bedrock | `adapters/aws/llm/bedrock` | `LLM` | 🚧 (optional) |
@@ -357,7 +359,7 @@ testmaker/
   app/{catalog,ingest,llm,authoring,execution,scoring}/
   adapters/native/source/{memorycatalog,filecatalog}/   (own go.mod each)
   adapters/native/testdb/{memorytestdb,sqlitetestdb}/     (own go.mod each)
-  adapters/native/fetch/{stubfetcher,httpfetch}/          (own go.mod each)
+  adapters/native/fetch/{stubfetcher,httpfetch,scrapefetch,apifetch}/  (own go.mod each)
   adapters/native/blob/{memoryblob,fsblob}/              (own go.mod each)
   adapters/native/llm/{openaicompat,memoryprompts,fileprompts}/  (own go.mod each)
   adapters/native/generate/rulegen/                      (own go.mod)

@@ -14,7 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mariotoffia/testmaker/adapters/native/fetch/apifetch"
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch"
+	"github.com/mariotoffia/testmaker/adapters/native/fetch/scrapefetch"
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher"
 	"github.com/mariotoffia/testmaker/adapters/native/generate/rulegen"
 	"github.com/mariotoffia/testmaker/adapters/native/llm/fileprompts"
@@ -41,7 +43,8 @@ func main() {
 	path := flag.String("catalog", "data/catalog/sources.json", "path to the source catalogue (json or yaml)")
 	testdbDSN := flag.String("testdb", "memory", `TestDb backend: "memory" or a sqlite DSN (a file path or ":memory:")`)
 	llmPrompt := flag.String("llm-prompt", "", "if set (and TESTMAKER_LLM_BASE_URL is configured), send this prompt to the LLM backend")
-	ingestID := flag.String("ingest", "", "if set to a catalogue source id (e.g. openpsych-viqt), fetch and ingest its items into the bank")
+	ingestID := flag.String("ingest", "", "if set to a catalogue source id (e.g. openpsych-viqt or asvab-official), fetch and ingest its items into the bank")
+	fetchAPIID := flag.String("fetch-api", "", "if set to an api catalogue source id (e.g. wikimedia-commons), fetch its JSON endpoint and preview the parsed media (no scored items)")
 	ingestLLMID := flag.String("ingest-llm", "", "if set to a catalogue source id (and TESTMAKER_LLM_BASE_URL is configured), fetch its payload and lift items with the LLM extraction step")
 	promptsDir := flag.String("prompts", "data/prompts", "directory of the file-backed prompt store (one YAML per prompt)")
 	genType := flag.String("generate", "", "if set to a figural test type (A1, A2, A3 or A4), procedurally generate a small batch of items into the bank")
@@ -62,7 +65,7 @@ func main() {
 	if err := run(context.Background(), runConfig{
 		path: *path, testdbDSN: *testdbDSN, blobsSpec: *blobsSpec, llmPrompt: *llmPrompt,
 		promptsDir: *promptsDir, ingestID: *ingestID, ingestLLMID: *ingestLLMID,
-		genType: *genType, authorTest: *authorTest, runTest: *runTest,
+		fetchAPIID: *fetchAPIID, genType: *genType, authorTest: *authorTest, runTest: *runTest,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -72,8 +75,8 @@ func main() {
 // runConfig carries the parsed flags into run so the composition root's signature
 // stays readable as the demo surface grows.
 type runConfig struct {
-	path, testdbDSN, blobsSpec, llmPrompt, promptsDir, ingestID, ingestLLMID, genType string
-	authorTest, runTest                                                               bool
+	path, testdbDSN, blobsSpec, llmPrompt, promptsDir, ingestID, ingestLLMID, fetchAPIID, genType string
+	authorTest, runTest                                                                           bool
 }
 
 func run(ctx context.Context, cfg runConfig) (err error) {
@@ -129,6 +132,9 @@ func run(ctx context.Context, cfg runConfig) (err error) {
 		return err
 	}
 	if err := ingestDemo(ctx, svc, itembank, cfg.ingestID); err != nil {
+		return err
+	}
+	if err := fetchAPIDemo(ctx, svc, cfg.fetchAPIID); err != nil {
 		return err
 	}
 	if err := ingestLLMDemo(ctx, svc, itembank, cfg.promptsDir, cfg.ingestLLMID); err != nil {
@@ -438,14 +444,14 @@ func itemBankDemo(ctx context.Context, bank ports.ItemRepository) error {
 
 // ingestDemo wires the real fetch → normalize → validate → store pipeline. With
 // no -ingest flag the step is skipped. When a source id is given, it looks the
-// source up in the catalogue, fetches its artifacts through the httpfetch
-// adapter (falling back to the stub for unsupported methods), normalizes them
-// into validated bank items and reports the per-stage counts. The composition
-// root is the only place that knows the concrete fetchers and per-source
-// normalizers.
+// source up in the catalogue, fetches its artifacts through the matching fetcher
+// — httpfetch for a direct download, scrapefetch for an HTML source, with the
+// stub as a fallback for unsupported methods — normalizes them into validated
+// bank items and reports the per-stage counts. The composition root is the only
+// place that knows the concrete fetchers and per-source normalizers.
 func ingestDemo(ctx context.Context, cat *catalog.Service, bank ports.ItemRepository, sourceID string) error {
 	if sourceID == "" {
-		fmt.Println("\nIngest: not requested (pass -ingest <source-id>, e.g. openpsych-viqt); skipping.")
+		fmt.Println("\nIngest: not requested (pass -ingest <source-id>, e.g. openpsych-viqt or asvab-official); skipping.")
 		return nil
 	}
 
@@ -458,10 +464,12 @@ func ingestDemo(ctx context.Context, cat *catalog.Service, bank ports.ItemReposi
 	// root) so the wiring is an app→ports dependency, not adapter→app.
 	var (
 		downloader ports.Fetcher = httpfetch.New()
+		scraper    ports.Fetcher = scrapefetch.New()
 		stub       ports.Fetcher = stubfetcher.NewFetcher()
 	)
-	svc := ingest.NewService(bank, downloader, stub)
+	svc := ingest.NewService(bank, downloader, scraper, stub)
 	svc.Register(ingest.VIQTSourceID, ingest.VIQTNormalizer)
+	svc.Register(ingest.ASVABSourceID, ingest.ASVABNormalizer)
 
 	rep, err := svc.Ingest(ctx, snap, 0)
 	if err != nil {
@@ -469,6 +477,50 @@ func ingestDemo(ctx context.Context, cat *catalog.Service, bank ports.ItemReposi
 	}
 	fmt.Printf("\nIngest demo (%s): fetched %d artifact(s), normalized %d, saved %d, skipped %d — %s\n",
 		rep.SourceID, rep.Fetched, rep.Normalized, rep.Saved, rep.Skipped, rep.Note)
+	return nil
+}
+
+// fetchAPIDemo is the Block 13 api-half "done when": it fetches an api source's
+// JSON endpoint through the apifetch adapter and previews what it returns. For
+// Wikimedia Commons the response is parsed into figure references (title, URL,
+// MIME, license); these are media-only — they carry no answer key and so are not
+// turned into scored bank items here. Other api sources report their raw
+// artifact count. The composition root is the only place that knows the concrete
+// fetcher and the per-source parser.
+func fetchAPIDemo(ctx context.Context, cat *catalog.Service, sourceID string) error {
+	if sourceID == "" {
+		fmt.Println("\nFetch (api): not requested (pass -fetch-api <source-id>, e.g. wikimedia-commons); skipping.")
+		return nil
+	}
+	snap, err := cat.Get(ctx, source.SourceID(sourceID))
+	if err != nil {
+		return err
+	}
+
+	var api ports.Fetcher = apifetch.New()
+	res, err := api.Fetch(ctx, ports.FetchRequest{Source: snap, Limit: 10})
+	if err != nil {
+		return err
+	}
+
+	if sourceID != ingest.WikimediaSourceID {
+		fmt.Printf("\nFetch (api) demo (%s): fetched %d JSON artifact(s) — %s\n", res.SourceID, len(res.Items), res.Note)
+		return nil
+	}
+
+	figures, err := ingest.WikimediaFigures(res.Items)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\nFetch (api) demo (%s): %d figure(s) parsed (media-only, no scored items) — %s\n",
+		res.SourceID, len(figures), res.Note)
+	for i, f := range figures {
+		if i >= 5 {
+			fmt.Printf("  … and %d more\n", len(figures)-5)
+			break
+		}
+		fmt.Printf("  - %s [%s, %s]\n", f.Title, f.MIME, f.License)
+	}
 	return nil
 }
 

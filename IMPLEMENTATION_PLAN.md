@@ -69,7 +69,7 @@ shared package; back it with the memory + sqlite `ItemRepository`.
 **Depends on:** Blocks 1–3.
 **Done when:** items can be created (validated), stored, queried by family/type/difficulty, and carry provenance + redistributability.
 
-## Block 5 — Fetch pipeline + ingestion ✅ (`direct-download` + `app/ingest` ✅; scrape-html / api / headless / generate 🚧)
+## Block 5 — Fetch pipeline + ingestion ✅ (`direct-download` + `app/ingest` ✅; scrape-html / api ✅ in Block 13; headless / generate 🚧)
 
 **Goal:** replace the stub with real `Fetcher` adapters routed by
 `source.Extraction.Method` (direct-download, scrape-html, api first; headless
@@ -85,9 +85,10 @@ optionally via an LLM extraction step (Block 12) for unstructured payloads.
 vocabulary set (45 items) is fetched from its data zip and ingested as
 synonym multiple-choice items with keys (from the codebook) and difficulty
 bands (p-values from the 12k-row response CSV). `go run ./cmd/testmaker
--ingest openpsych-viqt` runs it. The `scrape-html`, `api`, `headless-browser`,
-`git-clone`, and `generate` branches remain 🚧 (no ingested source needs them
-yet); `stubfetcher` stays as the unsupported-method fallback.
+-ingest openpsych-viqt` runs it. The `scrape-html` and `api` branches land in
+Block 13; the `headless-browser`, `git-clone`, and `generate` fetch branches
+remain 🚧 (no ingested source needs them yet); `stubfetcher` stays as the
+unsupported-method fallback.
 
 ## Block 6 — Designer / generator ✅ (`rulegen` native figural generator + `app/authoring` ✅; external rule-engine adapters not needed)
 
@@ -292,6 +293,36 @@ consumers. Design rules in [DESIGN.md](DESIGN.md#6-llm-support) §6.
 **Depends on:** Block 5 (first consumer); port, prompt domain and service already in place.
 **Done when:** an unstructured fetched payload is lifted into valid, provenance-tagged item candidates through a local (Ollama) and a cloud backend using the same adapter, with the prompt loaded from the file store.
 
+## Block 13 — Remaining fetch branches (scrape-html + api) ✅
+
+**Goal:** replace the `scrape-html` and `api` 🚧 stubs left by Block 5 with real
+`Fetcher` adapters and prove each end to end with a normalizer, keeping every
+test offline-deterministic.
+**Touches:** `adapters/native/fetch/{scrapefetch,apifetch}`, `app/ingest`,
+`cmd/testmaker`, `data/catalog/*`, `.go-arch-lint.yml`, `go.work`.
+**Depends on:** Blocks 4, 5.
+**Done when:** a real `scrape-html` source is fetched and ingested into the bank
+with keys, and a real `api` source is fetched and parsed, both offline-proven
+and behind an env-gated live test.
+**Done:** `adapters/native/fetch/scrapefetch` implements the `scrape-html`
+`Fetcher` (stdlib `net/http`, size-capped, ctx-honoured — GETs each page and
+inlines the HTML) and `adapters/native/fetch/apifetch` implements the `api`
+`Fetcher` (filters a source's URLs to JSON endpoints, GETs them, and
+`json.Valid`-gates the payload). The **asvab-official** normalizer
+(`app/ingest/asvab.go`) scrapes the public-domain official ASVAB sample
+subtests, joining each question's visible answer labels to the quiz's
+base64-encoded answer-key config to emit keyed multiple-choice items — Word
+Knowledge→C3 (synonyms), Paragraph Comprehension→C1 (reading), Arithmetic
+Reasoning / Mathematics Knowledge→B2 (calculation); ASVAB is unnormed so items
+take a fixed difficulty band. The **wikimedia-commons** parser
+(`app/ingest/wikimedia.go`) reads MediaWiki `imageinfo` JSON into licensed
+figure references (media only — no answer keys). `go run ./cmd/testmaker
+-ingest asvab-official` and `-fetch-api wikimedia-commons` run them; an offline
+`httptest` e2e plus env-gated `TESTMAKER_FETCH_LIVE` live tests cover both.
+Ponytail ceilings (documented inline): the ASVAB scraper is regex-over-HTML
+(brittle to markup changes, re-provable against the cached fixtures) and its
+difficulty band is fixed rather than normed.
+
 ---
 
 ## Cross-cutting (fold into blocks as needed)
@@ -307,6 +338,7 @@ consumers. Design rules in [DESIGN.md](DESIGN.md#6-llm-support) §6.
 ```
 0 ✅ ──► 1 ✅ ──► 2 ✅ ──► 3 ✅
               │      └─► 4 ──► 5 ──► 12
+              │           │    └──► 13
               │           ├──► 6
               │           └──► 7 ──► 8 ──► 9 ──► 10
                                      11 ◄─ 4

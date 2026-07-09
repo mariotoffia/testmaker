@@ -6,7 +6,9 @@ require (
 	github.com/mariotoffia/testmaker v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/blob/fsblob v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/blob/memoryblob v0.0.0
+	github.com/mariotoffia/testmaker/adapters/native/fetch/apifetch v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch v0.0.0
+	github.com/mariotoffia/testmaker/adapters/native/fetch/scrapefetch v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/generate/rulegen v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/llm/fileprompts v0.0.0
@@ -39,6 +41,10 @@ replace github.com/mariotoffia/testmaker/adapters/native/blob/fsblob => ../../ad
 replace github.com/mariotoffia/testmaker/adapters/native/blob/memoryblob => ../../adapters/native/blob/memoryblob
 
 replace github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch => ../../adapters/native/fetch/httpfetch
+
+replace github.com/mariotoffia/testmaker/adapters/native/fetch/scrapefetch => ../../adapters/native/fetch/scrapefetch
+
+replace github.com/mariotoffia/testmaker/adapters/native/fetch/apifetch => ../../adapters/native/fetch/apifetch
 
 replace github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher => ../../adapters/native/fetch/stubfetcher
 
