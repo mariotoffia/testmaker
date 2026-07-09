@@ -2,30 +2,47 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/mariotoffia/testmaker/domain/item"
 	"github.com/mariotoffia/testmaker/domain/scoring"
 	"github.com/mariotoffia/testmaker/domain/session"
+	"github.com/mariotoffia/testmaker/domain/shared"
 	"github.com/mariotoffia/testmaker/domain/testset"
 	"github.com/mariotoffia/testmaker/ports"
 )
 
 // newHarness wires the delivery surface over the dependency-free in-memory
-// TestDb and returns a running httptest server.
+// TestDb and blob store and returns a running httptest server.
 func newHarness(t *testing.T) *httptest.Server {
+	t.Helper()
+	ts, _, _ := newHarnessWithStores(t)
+	return ts
+}
+
+// newHarnessWithStores is newHarness that also hands back the backing TestDb and
+// blob store, so a white-box test can read an item's offloaded media ref and
+// resolve it through the /media endpoint.
+func newHarnessWithStores(t *testing.T) (*httptest.Server, testDB, ports.BlobStore) {
 	t.Helper()
 	db, err := openTestDB("memory")
 	if err != nil {
 		t.Fatalf("openTestDB: %v", err)
 	}
-	ts := httptest.NewServer(newServer(db).routes())
+	blobs, err := openBlobStore("memory")
+	if err != nil {
+		t.Fatalf("openBlobStore: %v", err)
+	}
+	ts := httptest.NewServer(newServer(db, blobs).routes())
 	t.Cleanup(ts.Close)
-	return ts
+	return ts, db, blobs
 }
 
 func post(t *testing.T, ts *httptest.Server, path string, body any) *http.Response {
@@ -232,4 +249,84 @@ func TestDeliverySurfaceErrors(t *testing.T) {
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown test status = %d, want 404", resp.StatusCode)
 	}
+}
+
+// TestMediaEndpointRoundTrip proves the renderer resolves a figural item's media
+// through the blob port: generating A2 (matrix) items offloads their inline SVG
+// data URIs to the store as content refs, and GET /media/{ref} returns those
+// bytes with the stored content type. An unknown ref is a 404.
+func TestMediaEndpointRoundTrip(t *testing.T) {
+	ts, db, _ := newHarnessWithStores(t)
+
+	resp := post(t, ts, "/items/generate", generateReq{TestType: "A2", Difficulty: 2, Count: 3, Seed: 1})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("generate status = %d, want 200", resp.StatusCode)
+	}
+	_ = resp.Body.Close()
+
+	items, err := db.items.ListItems(context.Background(), item.ItemFilter{TestTypes: []shared.TestTypeCode{"A2"}})
+	if err != nil {
+		t.Fatalf("list items: %v", err)
+	}
+	ref := firstMediaRef(items)
+	if ref == "" {
+		t.Fatal("no offloaded media ref found on generated A2 items")
+	}
+	if strings.HasPrefix(ref, "data:") {
+		t.Fatalf("media ref was not offloaded to the blob store: %q", ref)
+	}
+
+	mresp, err := http.Get(ts.URL + "/media/" + ref)
+	if err != nil {
+		t.Fatalf("GET media: %v", err)
+	}
+	defer func() { _ = mresp.Body.Close() }()
+	if mresp.StatusCode != http.StatusOK {
+		t.Fatalf("media status = %d, want 200", mresp.StatusCode)
+	}
+	if ct := mresp.Header.Get("Content-Type"); ct != "image/svg+xml" {
+		t.Fatalf("media content type = %q, want image/svg+xml", ct)
+	}
+	// SVG is script-executable, so the media endpoint must pin the type and
+	// sandbox it — otherwise stored media is an XSS vector on the assessment origin.
+	if got := mresp.Header.Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+	if got := mresp.Header.Get("Content-Security-Policy"); got == "" {
+		t.Fatal("media response has no Content-Security-Policy")
+	}
+	body, err := io.ReadAll(mresp.Body)
+	if err != nil {
+		t.Fatalf("read media: %v", err)
+	}
+	if len(body) == 0 {
+		t.Fatal("media body is empty")
+	}
+
+	uresp, err := http.Get(ts.URL + "/media/deadbeefunknownref")
+	if err != nil {
+		t.Fatalf("GET unknown media: %v", err)
+	}
+	_ = uresp.Body.Close()
+	if uresp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown media status = %d, want 404", uresp.StatusCode)
+	}
+}
+
+// firstMediaRef returns the first non-empty media ref across the items' stimulus
+// and option parts, or "" when none carry media.
+func firstMediaRef(items []item.ItemSnapshot) string {
+	for _, it := range items {
+		for _, p := range it.Stimulus {
+			if p.MediaRef != "" {
+				return p.MediaRef
+			}
+		}
+		for _, o := range it.Options {
+			if o.MediaRef != "" {
+				return o.MediaRef
+			}
+		}
+	}
+	return ""
 }

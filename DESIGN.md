@@ -65,8 +65,11 @@ Design decisions:
   share the same shape; the difference is `TestType`, `Stimulus` media and
   `AnswerFormat`. This keeps the bank, generator and renderer uniform.
 - **Media by reference.** Figural items store media references (blob keys / URLs),
-  not bytes; a separate blob store adapter resolves them. Keeps the item
-  aggregate small and serializable.
+  not bytes; a separate blob store adapter resolves them (Block 11, ✅). Keeps the
+  item aggregate small and serializable. The reference is a **content ref** (sha256
+  of content-type + bytes) minted by `ports.BlobStore.Put`; the generator emits
+  self-contained `data:` URIs and the composition root offloads them to refs when a
+  store is wired, and the renderer resolves them back through the same port.
 - **Provenance carries the license.** An item never loses the redistributability
   of its source, so export/publish paths can filter on it.
 - **The taxonomy is promoted to a shared package.** It now lives in
@@ -277,13 +280,14 @@ engine that emits figural items on demand (A1 figure-series, A2 matrix, A3 →
 series, A4 odd-one-out) with ground-truth keys derived from the same rules that
 build each stimulus, an honest effective difficulty band, and rule metadata in
 the item `Explanation`. Figures render to self-contained SVG data-URIs — a
-deliberate temporary bridge so a generated item needs no external engine and no
-blob store; when the Block 11 blob store lands, the composition root swaps the
-data-URI for a blob key and the item shape (`MediaKind` + `MediaRef`) is
-unchanged. This resolves open question #299 toward native rules rather than
-shelling out to Sandia SGMT / matRiks / RAVEN-family / Bongard-LOGO. The
-**`app/authoring`** use-case stores a generated batch and also exposes a manual
-`Author` path onto the same item bank.
+deliberate bridge so a generated item needs no external engine and no blob
+store; with the Block 11 blob store now landed ✅, the composition root offloads
+the data-URI to a content ref through `ports.BlobStore` and the item shape
+(`MediaKind` + `MediaRef`) is unchanged. This resolves open question #299 toward
+native rules rather than shelling out to Sandia SGMT / matRiks / RAVEN-family /
+Bongard-LOGO. The **`app/authoring`** use-case stores a generated batch (offloading
+inline media to the blob store when wired) and also exposes a manual `Author`
+path onto the same item bank.
 
 Design decision: fetchers return a loose `RawItem` (id, stem, media refs, raw
 map) rather than a validated `Item`, keeping the messy edge out of the domain;
@@ -425,7 +429,14 @@ Design rules:
 
 - Taxonomy home: **resolved (Block 4)** — promoted to `domain/shared`, not a
   dedicated `domain/taxonomy` package.
-- Blob/media storage port shape (local FS vs S3) and item media addressing.
+- Blob/media storage port shape (local FS vs S3) and item media addressing —
+  **resolved (Block 11)**: a 2-method `ports.BlobStore` (`Put`/`Get`) over a
+  `Blob{Bytes, ContentType}`, **content-addressed** (ref = sha256 of
+  content-type + bytes). Native `memoryblob` (runtime default) and `fsblob`
+  ("local FS first") adapters ship now; S3 is a later `adapters/aws/blob/*` behind
+  the same port. Media addressing: the generator emits self-contained `data:` SVG
+  URIs, the composition root offloads them to content refs when a store is wired
+  (`app/authoring`), and the renderer resolves them back via `GET /media/{ref}`.
 - IRT vs classical difficulty for the first adaptive implementation —
   **resolved (Block 9)**: classical staircase for both delivery (Block 8) and
   scoring. The adaptive ability estimate is the transformed up/down (reversal-mean)

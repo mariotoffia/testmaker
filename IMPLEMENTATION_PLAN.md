@@ -223,13 +223,53 @@ root.
   [ADR-0001](docs/adr/0001-optimistic-concurrency-cas-on-sessionrepository.md) /
   [ADR-0002](docs/adr/0002-sqlite-session-version-in-json-with-guarded-write.md).
 
-## Block 11 — Media / blob storage 🚧
+## Block 11 — Media / blob storage ✅
 
 **Goal:** a storage port + adapter (local FS first, S3/AWS SDK v2 later) for
 figural item media referenced by `Stimulus`.
 **Touches:** new `ports.BlobStore`, `adapters/native/blob/*` (and later `adapters/aws/blob/*`).
 **Depends on:** Block 4.
-**Done when:** figural items resolve their media through the port in the renderer.
+**Done when:** figural items resolve their media through the port in the renderer. ✅
+**Delivered:**
+- `ports.BlobStore` (2 methods): `Put(Blob) (ref, err)` and `Get(ref) (Blob, err)`,
+  where `Blob{Bytes, ContentType}`. The store is **content-addressed**: the ref is
+  the sha256 of content-type + bytes, so identical media dedupe and the same bytes
+  under a different MIME never collide. Unknown ref → `shared.ErrNotFound`; empty
+  input → `shared.ErrInvalid`. It is an infrastructure port with no bounded
+  context (like `ports.RawItem`), so it needs no `domain/blob` package. Every
+  adapter is proven by the `ports/blobtest.RunBlobStoreTests` conformance suite.
+- Two native, stdlib-only adapters, each its own module:
+  `adapters/native/blob/memoryblob` (map + RWMutex + deep copy; the zero-config
+  runtime default, mirroring `memorytestdb`) and `adapters/native/blob/fsblob`
+  (`Open(dir)`, one file per blob as `<content-type>\n<bytes>`; the plan's "local
+  FS first"). S3 is a later `adapters/aws/blob/*` behind the same port.
+- **Put side (offload):** `app/authoring.Service` gained an optional `ports.BlobStore`.
+  The generator (`rulegen`) still emits self-contained `data:` SVG URIs, so an item
+  is viewable with no store; when a blob store is wired, `Generate`/`Author`
+  offload those inline bytes to content refs before persisting (`offloadMedia`),
+  keeping stored items small. A nil store keeps items inline — offload is a no-op —
+  and a non-`data:` ref (an external URL or an already-offloaded ref) passes
+  through untouched, so offload is idempotent.
+- **Get side (renderer):** the HTTP delivery surface serves `GET /media/{ref}`,
+  resolving an item's figural media ref back to bytes through the same port and
+  writing them with the stored content type. `openBlobStore` is the single backend
+  switch (memory default / directory → fsblob), and a `-blobs` flag selects it for
+  both the server and the CLI generate demo, which resolves one generated item's
+  ref through the store to prove the round-trip.
+- Proven end-to-end by `cmd/testmaker/server_test.go`
+  (`TestMediaEndpointRoundTrip`): generating A2 matrix items offloads their SVG to
+  the store and `GET /media/{ref}` returns the bytes with `image/svg+xml` (pinned
+  with `nosniff` + a sandbox CSP); an unknown ref is a 404. Offload itself is
+  unit-tested in `app/authoring` against a fake store (inline media rewritten, nil
+  store left inline, Put errors aborting the run, non-`data:` refs untouched).
+- The load-bearing choices — content addressing, the authoring-time offload seam,
+  and the hardened same-origin media serving — are recorded in
+  [ADR-0003](docs/adr/0003-content-addressed-blob-store-and-media-offload.md).
+  `fsblob` writes atomically (temp file + rename) so a crash can never leave a
+  truncated blob under a content ref; the `/media/{ref}` route validates fsblob
+  refs as 64-hex so it is not path-traversable. Accepted gaps (no read-time
+  verification, no blob GC/`Delete`, refs the renderer must tell apart from inline
+  `data:` URIs) are documented in the ADR.
 
 ## Block 12 — LLM library 🚧 (port + prompts + service + `openaicompat` backend ✅)
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch"
@@ -43,23 +44,24 @@ func main() {
 	authorTest := flag.Bool("author-test", false, "compose a composite, timed, difficulty-ordered test from the bank and store+reload it")
 	runTest := flag.Bool("run-test", false, "administer a composed test end-to-end (fixed + adaptive) under timing, grading answers and reporting the score")
 	serve := flag.String("serve", "", "if set to a listen address (e.g. :8080), run the HTTP delivery API (author/take/score) instead of the demo")
+	blobsSpec := flag.String("blobs", "memory", `blob store backend for figural media: "memory" or a directory path (filesystem)`)
 	flag.Parse()
 
 	if *serve != "" {
-		if err := runServer(*serve, *testdbDSN); err != nil {
+		if err := runServer(*serve, *testdbDSN, *blobsSpec); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	if err := run(context.Background(), *path, *testdbDSN, *llmPrompt, *ingestID, *genType, *authorTest, *runTest); err != nil {
+	if err := run(context.Background(), *path, *testdbDSN, *blobsSpec, *llmPrompt, *ingestID, *genType, *authorTest, *runTest); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType string, authorTest, runTest bool) (err error) {
+func run(ctx context.Context, path, testdbDSN, blobsSpec, llmPrompt, ingestID, genType string, authorTest, runTest bool) (err error) {
 	// --- composition root: choose adapters, wire the service ---
 	// One concrete TestDb store backs all three repositories (memory by default,
 	// sqlite behind a DSN); openTestDB is the only place that knows the backend.
@@ -80,6 +82,11 @@ func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType stri
 			err = errors.Join(err, cerr)
 		}
 	}()
+
+	blobs, err := openBlobStore(blobsSpec)
+	if err != nil {
+		return err
+	}
 
 	svc := catalog.NewService(repo, loader)
 
@@ -108,7 +115,7 @@ func run(ctx context.Context, path, testdbDSN, llmPrompt, ingestID, genType stri
 	if err := ingestDemo(ctx, svc, itembank, ingestID); err != nil {
 		return err
 	}
-	if err := generateDemo(ctx, itembank, genType); err != nil {
+	if err := generateDemo(ctx, itembank, blobs, genType); err != nil {
 		return err
 	}
 	if err := authorTestDemo(ctx, itembank, testdb, authorTest); err != nil {
@@ -380,7 +387,7 @@ func itemBankDemo(ctx context.Context, bank ports.ItemRepository) error {
 		ID:           "omib-1",
 		Provenance:   item.Provenance{SourceID: "omib", Origin: item.OriginFetched, Redistributable: shared.RedistConditional},
 		TestType:     "A2",
-		Stimulus:     []item.StimulusPart{{Text: "which figure continues the series?"}, {MediaKind: item.MediaGrid, MediaRef: "blob://omib-1"}},
+		Stimulus:     []item.StimulusPart{{Text: "which figure continues the series?"}, {MediaKind: item.MediaGrid, MediaRef: "https://cdn.example.test/omib/1.svg"}},
 		AnswerFormat: item.FormatMultipleChoice,
 		Options: []item.Option{
 			{ID: "a", Text: "A"}, {ID: "b", Text: "B"}, {ID: "c", Text: "C"}, {ID: "d", Text: "D"},
@@ -449,16 +456,19 @@ func ingestDemo(ctx context.Context, cat *catalog.Service, bank ports.ItemReposi
 // generateDemo wires the procedural generator (rulegen) through the authoring
 // use-case: with no -generate flag the step is skipped. When a figural test type
 // is given, it generates a small deterministic batch and stores it in the bank,
-// reporting the per-run counts. The composition root is the only place that
-// knows the concrete generator.
-func generateDemo(ctx context.Context, bank ports.ItemRepository, genType string) error {
+// reporting the per-run counts. The authoring service offloads each item's inline
+// figural media (data: URIs) into the blob store, so the demo then reloads one
+// item and resolves its media ref back through the same port — the Get side of
+// Block 11 — to prove the round-trip. The composition root is the only place that
+// knows the concrete generator and blob store.
+func generateDemo(ctx context.Context, bank ports.ItemRepository, blobs ports.BlobStore, genType string) error {
 	if genType == "" {
 		fmt.Println("\nGenerate: not requested (pass -generate <A1|A2|A3|A4>); skipping.")
 		return nil
 	}
 
 	var gen ports.Generator = rulegen.New()
-	svc := authoring.NewService(gen, bank)
+	svc := authoring.NewService(gen, bank, blobs)
 
 	rep, err := svc.Generate(ctx, ports.GenerateSpec{
 		TestType:   shared.TestTypeCode(genType),
@@ -471,7 +481,58 @@ func generateDemo(ctx context.Context, bank ports.ItemRepository, genType string
 	}
 	fmt.Printf("\nGenerate demo (%s): generated %d item(s), saved %d into the bank\n",
 		rep.TestType, rep.Generated, rep.Saved)
+
+	return resolveMediaDemo(ctx, bank, blobs, shared.TestTypeCode(genType))
+}
+
+// resolveMediaDemo reloads the just-generated items and resolves the first blob
+// ref it finds through the store, reporting the byte length — the renderer does
+// the same when serving GET /media/{ref}.
+func resolveMediaDemo(ctx context.Context, bank ports.ItemRepository, blobs ports.BlobStore, testType shared.TestTypeCode) error {
+	items, err := bank.ListItems(ctx, item.ItemFilter{TestTypes: []shared.TestTypeCode{testType}})
+	if err != nil {
+		return err
+	}
+	ref := firstOffloadedRef(items)
+	if ref == "" {
+		fmt.Println("Media demo: no figural media in this batch to resolve.")
+		return nil
+	}
+	blob, err := blobs.Get(ctx, ref)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Media demo: resolved ref %s… → %d bytes (%s) via the blob store\n",
+		ref[:min(12, len(ref))], len(blob.Bytes), blob.ContentType)
 	return nil
+}
+
+// firstOffloadedRef returns the first offloaded media ref across the items, or ""
+// when none carry figural media.
+func firstOffloadedRef(items []item.ItemSnapshot) string {
+	for _, it := range items {
+		if refs := mediaRefs(it); len(refs) > 0 {
+			return refs[0]
+		}
+	}
+	return ""
+}
+
+// mediaRefs collects the offloaded media refs of an item (skipping inline data
+// URIs and empty refs) so the demo can resolve one through the blob store.
+func mediaRefs(snap item.ItemSnapshot) []string {
+	var refs []string
+	for _, p := range snap.Stimulus {
+		if p.MediaRef != "" && !strings.HasPrefix(p.MediaRef, "data:") {
+			refs = append(refs, p.MediaRef)
+		}
+	}
+	for _, o := range snap.Options {
+		if o.MediaRef != "" && !strings.HasPrefix(o.MediaRef, "data:") {
+			refs = append(refs, o.MediaRef)
+		}
+	}
+	return refs
 }
 
 // llmDemo wires the OpenAI-compatible LLM adapter behind config: with no

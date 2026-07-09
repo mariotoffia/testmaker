@@ -25,15 +25,20 @@ type Report struct {
 
 // Service is the authoring use-case. It wires a procedural generator and the
 // item bank; the generator is optional (a nil generator still allows the manual
-// Author path).
+// Author path). An optional blob store, when wired, offloads inline figural
+// media (data: URIs) to content refs before an item is stored (see offloadMedia);
+// a nil store keeps items self-contained.
 type Service struct {
-	gen  ports.Generator
-	bank ports.ItemRepository
+	gen   ports.Generator
+	bank  ports.ItemRepository
+	blobs ports.BlobStore
 }
 
-// NewService wires the generator and item repository.
-func NewService(gen ports.Generator, bank ports.ItemRepository) *Service {
-	return &Service{gen: gen, bank: bank}
+// NewService wires the generator, item repository and (optional) blob store. Pass
+// a nil generator for an author-only service and a nil blob store to keep item
+// media inline.
+func NewService(gen ports.Generator, bank ports.ItemRepository, blobs ports.BlobStore) *Service {
+	return &Service{gen: gen, bank: bank, blobs: blobs}
 }
 
 // Generate produces a batch through the generator and stores every item,
@@ -53,7 +58,11 @@ func (s *Service) Generate(ctx context.Context, spec ports.GenerateSpec) (Report
 	rep.Generated = len(snaps)
 
 	for _, snap := range snaps {
-		if err := s.bank.SaveItem(ctx, snap); err != nil {
+		stored, oerr := s.offloadMedia(ctx, snap)
+		if oerr != nil {
+			return rep, oerr
+		}
+		if err := s.bank.SaveItem(ctx, stored); err != nil {
 			return rep, err
 		}
 		rep.Saved++
@@ -69,7 +78,11 @@ func (s *Service) Author(ctx context.Context, spec item.ItemSpec) (item.ItemID, 
 	if verr != nil {
 		return "", verr
 	}
-	if err := s.bank.SaveItem(ctx, it.Snapshot()); err != nil {
+	stored, oerr := s.offloadMedia(ctx, it.Snapshot())
+	if oerr != nil {
+		return "", oerr
+	}
+	if err := s.bank.SaveItem(ctx, stored); err != nil {
 		return "", err
 	}
 	return it.ID(), nil

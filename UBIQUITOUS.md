@@ -43,6 +43,8 @@ context. Terms marked 🚧 are designed but not yet implemented.
 | **Provenance** | The item's origin: `SourceID` + `fetched`/`generated`/`authored` + inherited redistributability. |
 | **Item filter** | Query criteria over the bank: ability family, test type, origin, redistributability, difficulty range. |
 | **RawItem** | A loose, unvalidated item pulled by a Fetcher before normalization into an `Item`. |
+| **Media ref** | A `Stimulus`/`Option` `MediaRef`: the key that resolves a figural part's bytes. Inline (`data:` URI, self-contained) or a **blob ref** once offloaded; the item shape (`MediaKind` + `MediaRef`) is the same either way. |
+| **Blob store** | Infrastructure port `ports.BlobStore` (`Put`/`Get` over a `Blob{Bytes, ContentType}`) that holds figural media out of the item aggregate. **Content-addressed**: the ref is the sha256 of content-type + bytes, so identical media dedupe. Native `memoryblob` (default) and `fsblob` back it; the renderer resolves refs via `GET /media/{ref}`. |
 
 ## Test authoring (`domain/testset`)
 

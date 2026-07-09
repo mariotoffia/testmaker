@@ -188,6 +188,9 @@ one shared conformance suite (see [TESTS.md](TESTS.md)).
 | llm | bedrock | `adapters/aws/llm/bedrock` | `LLM` | 🚧 (optional) |
 | llm | memory | `adapters/native/llm/memoryprompts` | `PromptRepository` | 🚧 |
 | llm | file | `adapters/native/llm/fileprompts` | `PromptRepository` (default) | 🚧 |
+| blob | memory | `adapters/native/blob/memoryblob` | `BlobStore` | ✅ |
+| blob | fs | `adapters/native/blob/fsblob` | `BlobStore` | ✅ |
+| blob | s3 | `adapters/aws/blob/s3blob` | `BlobStore` | 🚧 (later) |
 
 One OpenAI-compatible HTTP adapter (stdlib `net/http` + `encoding/json`, no
 vendor SDK) covers both cloud and local backends: OpenAI/Azure, and locally
@@ -350,11 +353,12 @@ testmaker/
   go.work                       workspace (lists every module)
   go.mod                        github.com/mariotoffia/testmaker (domain, ports, app)
   domain/{shared,clock,source,prompt,item,testset,session,scoring}/
-  ports/            + ports/{sourcetest,testdbtest,generatortest}/   (conformance suites)
+  ports/            + ports/{sourcetest,testdbtest,generatortest,blobtest}/   (conformance suites)
   app/{catalog,ingest,llm,authoring,execution,scoring}/
   adapters/native/source/{memorycatalog,filecatalog}/   (own go.mod each)
   adapters/native/testdb/{memorytestdb,sqlitetestdb}/     (own go.mod each)
   adapters/native/fetch/{stubfetcher,httpfetch}/          (own go.mod each)
+  adapters/native/blob/{memoryblob,fsblob}/              (own go.mod each)
   adapters/native/llm/openaicompat/                      (own go.mod)
   adapters/native/generate/rulegen/                      (own go.mod)
   cmd/testmaker/                                          (own go.mod)

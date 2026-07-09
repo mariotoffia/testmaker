@@ -8,6 +8,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/mariotoffia/testmaker/adapters/native/blob/fsblob"
+	"github.com/mariotoffia/testmaker/adapters/native/blob/memoryblob"
 	"github.com/mariotoffia/testmaker/adapters/native/generate/rulegen"
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/memorytestdb"
 	"github.com/mariotoffia/testmaker/adapters/native/testdb/sqlitetestdb"
@@ -47,6 +49,19 @@ func openTestDB(dsn string) (testDB, error) {
 	return testDB{tests: store, items: store, sessions: store, close: store.Close}, nil
 }
 
+// openBlobStore selects the BlobStore backend from a spec: the dependency-free
+// in-memory store by default (mirrors the memory TestDb), or the filesystem
+// adapter rooted at a directory. It is the Get side of Block 11's media port —
+// the renderer resolves an item's figural media ref back to bytes through it.
+//
+//nolint:ireturn // a composition-root factory for the BlobStore port; handing back the interface is the point.
+func openBlobStore(spec string) (ports.BlobStore, error) {
+	if spec == "" || spec == "memory" {
+		return memoryblob.NewStore(), nil
+	}
+	return fsblob.Open(spec)
+}
+
 // server is the HTTP delivery surface: it wires the authoring, execution and
 // scoring use-cases to net/http handlers so a client can author, take and be
 // scored on a test. It is the driving side of the hexagon, and — like the CLI
@@ -59,25 +74,29 @@ type server struct {
 	scorer   ports.Scorer
 	tests    ports.TestRepository
 	sessions ports.SessionRepository
+	blobs    ports.BlobStore
 }
 
-// newServer wires the delivery use-cases over one TestDb backend. It injects the
-// system clock into the executor and an empty norm book into the scorer: norms
-// are deployment configuration (a demo book is illustrative), so the API returns
-// raw scores and per-item feedback and leaves the normed band unset until a
-// deployment supplies real norms.
-func newServer(db testDB) *server {
+// newServer wires the delivery use-cases over one TestDb backend and one blob
+// store. It injects the system clock into the executor and an empty norm book
+// into the scorer: norms are deployment configuration (a demo book is
+// illustrative), so the API returns raw scores and per-item feedback and leaves
+// the normed band unset until a deployment supplies real norms. The blob store
+// backs both the offload side (authoring rewrites inline media to content refs)
+// and the resolve side (GET /media/{ref}).
+func newServer(db testDB, blobs ports.BlobStore) *server {
 	// Bind the generator to its port before injection so the composition wiring
 	// reads as ports-only (mirrors main.go and keeps the arch graph clean: the
 	// rulegen adapter never appears to depend on app).
 	var gen ports.Generator = rulegen.New()
 	return &server{
-		gen:      authoring.NewService(gen, db.items),
+		gen:      authoring.NewService(gen, db.items, blobs),
 		author:   authoring.NewTestService(db.items, db.tests),
 		exec:     execution.NewService(clock.System(), db.items, db.sessions, execution.RandomIDs()),
 		scorer:   scoringapp.NewService(db.items, scoring.NormBook{}),
 		tests:    db.tests,
 		sessions: db.sessions,
+		blobs:    blobs,
 	}
 }
 
@@ -93,14 +112,15 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /sessions/{id}/answers", s.handleAnswer)
 	mux.HandleFunc("POST /sessions/{id}/complete", s.handleComplete)
 	mux.HandleFunc("GET /sessions/{id}/score", s.handleScore)
+	mux.HandleFunc("GET /media/{ref}", s.handleMedia)
 	return mux
 }
 
-// runServer opens the TestDb backend and serves the delivery API on addr until
-// the process is stopped. Timing values in requests are expressed in seconds so
-// the wire format stays clock-free; the executor enforces them through the
-// injected clock.
-func runServer(addr, dsn string) (err error) {
+// runServer opens the TestDb and blob-store backends and serves the delivery API
+// on addr until the process is stopped. Timing values in requests are expressed
+// in seconds so the wire format stays clock-free; the executor enforces them
+// through the injected clock.
+func runServer(addr, dsn, blobsSpec string) (err error) {
 	db, err := openTestDB(dsn)
 	if err != nil {
 		return err
@@ -111,12 +131,17 @@ func runServer(addr, dsn string) (err error) {
 		}
 	}()
 
+	blobs, err := openBlobStore(blobsSpec)
+	if err != nil {
+		return err
+	}
+
 	httpSrv := &http.Server{
 		Addr:              addr,
-		Handler:           newServer(db).routes(),
+		Handler:           newServer(db, blobs).routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	fmt.Fprintf(os.Stderr, "testmaker: serving delivery API on %s (testdb=%s)\n", addr, dsn)
+	fmt.Fprintf(os.Stderr, "testmaker: serving delivery API on %s (testdb=%s, blobs=%s)\n", addr, dsn, blobsSpec)
 	if lerr := httpSrv.ListenAndServe(); lerr != nil && !errors.Is(lerr, http.ErrServerClosed) {
 		return fmt.Errorf("serve %s: %w", addr, lerr)
 	}
@@ -272,6 +297,29 @@ func (s *server) handleScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, score)
+}
+
+// handleMedia resolves a figural media ref back to its bytes through the blob
+// store — the renderer side of Block 11. An item's Stimulus/Option MediaRef
+// (rewritten to a content ref at authoring time) is fetched here and served with
+// its stored content type; an unknown ref surfaces as 404 via writeError.
+//
+// Stored media is served with a hardened posture: the content type comes from an
+// item producer and figural media is SVG (script-executable in a browser), so
+// nosniff pins the declared type and a locked-down CSP sandbox neutralizes any
+// script an SVG carries — the endpoint cannot become a stored-XSS vector on the
+// assessment origin even once caller-supplied media can be offloaded.
+func (s *server) handleMedia(w http.ResponseWriter, r *http.Request) {
+	blob, err := s.blobs.Get(r.Context(), r.PathValue("ref"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", blob.ContentType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(blob.Bytes)
 }
 
 // --- helpers ---
