@@ -137,7 +137,11 @@ func (s *server) handleListSources(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, sources)
+	limit, offset, ok := s.pageParams(w, r, q)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, paginate(sources, limit, offset))
 }
 
 // handleGetSource returns one catalogue source; an unknown id is a 404 via the
@@ -194,7 +198,11 @@ func (s *server) handleListItems(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	limit, offset, ok := s.pageParams(w, r, q)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, paginate(items, limit, offset))
 }
 
 // handleGetItem returns one bank item; an unknown id is a 404 via ErrUnknownItem.

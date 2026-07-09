@@ -123,38 +123,38 @@ func TestSourcesEndpointListsAndFilters(t *testing.T) {
 		srcSnap("closed-src", false, shared.RedistNo, "C3"),
 	}})
 
-	var all []source.Snapshot
+	var all pageEnvelope[source.Snapshot]
 	resp := get(t, ts, "/api/sources")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /sources status = %d, want 200", resp.StatusCode)
 	}
 	decode(t, resp, &all)
-	if len(all) != 3 {
-		t.Fatalf("GET /sources returned %d, want 3", len(all))
+	if len(all.Items) != 3 || all.Total != 3 {
+		t.Fatalf("GET /sources returned %d (total %d), want 3", len(all.Items), all.Total)
 	}
 
-	var gens []source.Snapshot
+	var gens pageEnvelope[source.Snapshot]
 	decode(t, get(t, ts, "/api/sources?generators=true"), &gens)
-	if len(gens) != 1 || gens[0].ID != "gen-src" {
-		t.Fatalf("generators filter = %v, want [gen-src]", srcIDs(gens))
+	if len(gens.Items) != 1 || gens.Items[0].ID != "gen-src" {
+		t.Fatalf("generators filter = %v, want [gen-src]", srcIDs(gens.Items))
 	}
 
-	var byType []source.Snapshot
+	var byType pageEnvelope[source.Snapshot]
 	decode(t, get(t, ts, "/api/sources?testType=B1"), &byType)
-	if len(byType) != 1 || byType[0].ID != "cond-src" {
-		t.Fatalf("testType filter = %v, want [cond-src]", srcIDs(byType))
+	if len(byType.Items) != 1 || byType.Items[0].ID != "cond-src" {
+		t.Fatalf("testType filter = %v, want [cond-src]", srcIDs(byType.Items))
 	}
 
-	var byFamily []source.Snapshot
+	var byFamily pageEnvelope[source.Snapshot]
 	decode(t, get(t, ts, "/api/sources?family=logical"), &byFamily)
-	if len(byFamily) != 1 || byFamily[0].ID != "gen-src" {
-		t.Fatalf("family filter = %v, want [gen-src] (A1 -> logical)", srcIDs(byFamily))
+	if len(byFamily.Items) != 1 || byFamily.Items[0].ID != "gen-src" {
+		t.Fatalf("family filter = %v, want [gen-src] (A1 -> logical)", srcIDs(byFamily.Items))
 	}
 
-	var reusable []source.Snapshot
+	var reusable pageEnvelope[source.Snapshot]
 	decode(t, get(t, ts, "/api/sources?redistributable=yes"), &reusable)
-	if len(reusable) != 1 || reusable[0].ID != "gen-src" {
-		t.Fatalf("redistributable filter = %v, want [gen-src]", srcIDs(reusable))
+	if len(reusable.Items) != 1 || reusable.Items[0].ID != "gen-src" {
+		t.Fatalf("redistributable filter = %v, want [gen-src]", srcIDs(reusable.Items))
 	}
 }
 
@@ -212,35 +212,35 @@ func TestItemsEndpointListsAndGets(t *testing.T) {
 		_ = resp.Body.Close()
 	}
 
-	var all []item.ItemSnapshot
+	var all pageEnvelope[item.ItemSnapshot]
 	decode(t, get(t, ts, "/api/items"), &all)
 
-	var items []item.ItemSnapshot
+	var items pageEnvelope[item.ItemSnapshot]
 	resp := get(t, ts, "/api/items?testType=A2")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /items = %d, want 200", resp.StatusCode)
 	}
 	decode(t, resp, &items)
-	if len(items) == 0 {
+	if len(items.Items) == 0 {
 		t.Fatalf("GET /items?testType=A2 returned 0 items")
 	}
-	if len(items) >= len(all) {
-		t.Fatalf("testType filter did not narrow: filtered %d vs total %d", len(items), len(all))
+	if items.Total >= all.Total {
+		t.Fatalf("testType filter did not narrow: filtered %d vs total %d", items.Total, all.Total)
 	}
-	for _, it := range items {
+	for _, it := range items.Items {
 		if it.TestType != "A2" {
 			t.Fatalf("testType=A2 filter leaked a %q item (%s)", it.TestType, it.ID)
 		}
 	}
 
 	var one item.ItemSnapshot
-	resp = get(t, ts, "/api/items/"+string(items[0].ID))
+	resp = get(t, ts, "/api/items/"+string(items.Items[0].ID))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /items/{id} = %d, want 200", resp.StatusCode)
 	}
 	decode(t, resp, &one)
-	if one.ID != items[0].ID {
-		t.Fatalf("got item %q, want %q", one.ID, items[0].ID)
+	if one.ID != items.Items[0].ID {
+		t.Fatalf("got item %q, want %q", one.ID, items.Items[0].ID)
 	}
 
 	resp = get(t, ts, "/api/items/does-not-exist")
@@ -454,13 +454,15 @@ func TestServerRealCatalogWiring(t *testing.T) {
 	}).routes())
 	t.Cleanup(ts.Close)
 
-	var sources []source.Snapshot
+	var sources pageEnvelope[source.Snapshot]
 	resp := get(t, ts, "/api/sources")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /sources = %d, want 200", resp.StatusCode)
 	}
 	decode(t, resp, &sources)
-	if len(sources) < 50 {
-		t.Fatalf("real catalogue served %d sources, want the full seed set (>=50)", len(sources))
+	// The default page caps at 50; the full seed set exceeds that, so assert on
+	// the unpaginated Total (matches before slicing) and a full first page.
+	if sources.Total < 50 || len(sources.Items) != 50 {
+		t.Fatalf("real catalogue served total=%d page=%d, want total>=50 and a full 50-item page", sources.Total, len(sources.Items))
 	}
 }
