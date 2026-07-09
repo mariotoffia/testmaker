@@ -218,35 +218,58 @@ func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
 // in seconds so the wire format stays clock-free; the executor enforces them
 // through the injected clock.
 func runServer(addr string, cfg Config) (err error) {
-	db, err := openTestDB(cfg.TestDB)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := db.close(); cerr != nil {
-			err = errors.Join(err, cerr)
-		}
-	}()
-
-	blobs, err := openBlobStore(cfg.Blobs)
-	if err != nil {
-		return err
-	}
-
-	cat, ing, llmSvc, llmModel, err := wireSourcing(db.items, cfg.Catalog, cfg.Prompts, cfg.LLM)
-	if err != nil {
-		return err
-	}
-
 	// Structured logging: JSON to stderr at the configured level (unknown → Info).
 	// The request-log middleware wraps the whole mux and measures duration through
 	// the injected clock, so no handler reads the wall clock directly.
 	level := slog.LevelInfo
 	_ = level.UnmarshalText([]byte(cfg.Log.Level)) // unknown → Info (level unchanged)
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+
+	handler, closeFn, err := buildDeliveryHandler(cfg, logger)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := closeFn(); cerr != nil {
+			err = errors.Join(err, cerr)
+		}
+	}()
+
+	httpSrv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	fmt.Fprintf(os.Stderr, "testmaker: serving delivery API on %s (auth=%s, testdb=%s, blobs=%s)\n", addr, cfg.Auth.Mode, cfg.TestDB, cfg.Blobs)
+	if lerr := httpSrv.ListenAndServe(); lerr != nil && !errors.Is(lerr, http.ErrServerClosed) {
+		return fmt.Errorf("serve %s: %w", addr, lerr)
+	}
+	return nil
+}
+
+// buildDeliveryHandler opens the backends, wires the use-cases, and assembles the
+// full middleware chain (auth guards in routes, then rate limit, security headers,
+// request log) into one http.Handler — everything runServer needs short of binding
+// the port. Split out so a test can drive the exact production wiring without a
+// live socket. The returned close func releases the TestDb backend; callers defer
+// it.
+func buildDeliveryHandler(cfg Config, logger *slog.Logger) (http.Handler, func() error, error) {
+	db, err := openTestDB(cfg.TestDB)
+	if err != nil {
+		return nil, nil, err
+	}
+	blobs, err := openBlobStore(cfg.Blobs)
+	if err != nil {
+		return nil, nil, errors.Join(err, db.close())
+	}
+	cat, ing, llmSvc, llmModel, err := wireSourcing(db.items, cfg.Catalog, cfg.Prompts, cfg.LLM)
+	if err != nil {
+		return nil, nil, errors.Join(err, db.close())
+	}
 	srv := newServer(serverDeps{
 		db: db, blobs: blobs, catalog: cat, ingest: ing, llm: llmSvc, llmModel: llmModel, log: logger,
 		maxIngest: cfg.Limits.MaxConcurrentIngests,
+		authCfg:   cfg.Auth, // enforce the configured auth mode on the real -serve path
 	})
 	// Per-IP token-bucket rate limit on /api (0 rps in config ⇒ off). Nested
 	// inside the security headers so an over-limit 429 still carries them.
@@ -254,16 +277,8 @@ func runServer(addr string, cfg Config) (err error) {
 	if cfg.Limits.RequestsPerSecond > 0 {
 		limiter = newRateLimiter(cfg.Limits.RequestsPerSecond, cfg.Limits.Burst, clock.System())
 	}
-	httpSrv := &http.Server{
-		Addr:              addr,
-		Handler:           withRequestLog(withSecurityHeaders(withRateLimit(srv.routes(), limiter)), logger, clock.System()),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	fmt.Fprintf(os.Stderr, "testmaker: serving delivery API on %s (testdb=%s, blobs=%s)\n", addr, cfg.TestDB, cfg.Blobs)
-	if lerr := httpSrv.ListenAndServe(); lerr != nil && !errors.Is(lerr, http.ErrServerClosed) {
-		return fmt.Errorf("serve %s: %w", addr, lerr)
-	}
-	return nil
+	handler := withRequestLog(withSecurityHeaders(withRateLimit(srv.routes(), limiter)), logger, clock.System())
+	return handler, db.close, nil
 }
 
 // --- request bodies (seconds for timing; ids arrive on the path) ---
