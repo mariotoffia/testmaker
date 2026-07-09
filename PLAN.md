@@ -2444,7 +2444,7 @@ git commit -m "Block 14: full two-role take-path integration test"
 
 # Phase 3 — Limits
 
-### Task 11: Per-IP rate limiter (hand-rolled token bucket, injected clock)
+### Task 11: Per-IP rate limiter (hand-rolled token bucket, injected clock) ✅
 
 Kept dependency-free on purpose: the token math is a handful of lines, the whole
 module has only yaml + sqlite as vendors, and an injected clock makes it
@@ -2666,7 +2666,7 @@ git commit -m "Block 14: per-IP token-bucket rate limiter on /api"
 
 ---
 
-### Task 12: Ingest concurrency semaphore (sync path)
+### Task 12: Ingest concurrency semaphore (sync path) ✅
 
 **Files:**
 - Create: `cmd/testmaker/semaphore.go`
@@ -2828,7 +2828,7 @@ git commit -m "Block 14: ingest concurrency semaphore (sync 429 when full)"
 
 ---
 
-### Task 13: LLM cost clamp (BeforeGenerate hook)
+### Task 13: LLM cost clamp (BeforeGenerate hook) ✅
 
 The first production consumer of the LLM service's designed `BeforeGenerate`
 hook: cap tokens and gate models server-side, so a caller-supplied
