@@ -3982,7 +3982,7 @@ git commit -m "Block 14: async ingest jobs (202 + GET /api/jobs poll)"
 > and `make webui-lint` are the web gates; `make lint`/`make test` (Go) must
 > stay green too — they are unaffected by `web/` (arch-lint excludes it).
 
-### Task 19: Scaffold `web/`, wire the build → embed loop
+### Task 19: Scaffold `web/`, wire the build → embed loop ✅
 
 **Files (all created):**
 - `web/package.json`, `web/bunfig.toml`

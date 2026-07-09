@@ -1,0 +1,5 @@
+# Bun config for the web app. Bun is the package manager + script runner only;
+# the test runner is Vitest (`bun run test`), never `bun test`. Exact installs
+# keep the committed bun.lock reproducible for the `--frozen-lockfile` gates.
+[install]
+exact = true

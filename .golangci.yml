@@ -109,6 +109,11 @@ linters:
 
   exclusions:
     generated: lax
+    paths:
+      # The frontend lives under web/; npm deps (node_modules) occasionally ship
+      # vendored Go (e.g. flatted/golang) that is not ours and not in any module.
+      # go-arch-lint already excludes web/ — mirror that here so golangci ignores it.
+      - web/node_modules
     rules:
       - path: _test\.go
         linters:
