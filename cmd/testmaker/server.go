@@ -136,48 +136,49 @@ func newServer(d serverDeps) *server {
 	}
 }
 
-// routes maps the delivery verbs onto the use-cases. The patterns use the Go
-// 1.22 method+path router so each verb is explicit and path ids arrive through
-// r.PathValue.
+// routes maps the delivery verbs onto the use-cases, all under the /api
+// prefix (ADR-0005); everything else falls through to the SPA handler. The
+// patterns use the Go 1.22 method+path router — registered /api patterns are
+// more specific than "GET /", so they always win over the SPA catch-all.
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
-	// "/{$}" anchors to the exact root so unknown paths still 404 (a bare "/" would
-	// be a catch-all).
-	mux.HandleFunc("GET /{$}", s.handleIndex)
-	mux.HandleFunc("POST /items/generate", s.handleGenerate)
-	mux.HandleFunc("POST /tests", s.handleCompose)
-	mux.HandleFunc("GET /tests/{id}", s.handleGetTest)
-	mux.HandleFunc("POST /tests/{id}/sessions", s.handleStartSession)
-	mux.HandleFunc("POST /sessions/{id}/answers", s.handleAnswer)
-	mux.HandleFunc("POST /sessions/{id}/complete", s.handleComplete)
-	mux.HandleFunc("GET /sessions/{id}/score", s.handleScore)
-	mux.HandleFunc("GET /media/{ref}", s.handleMedia)
+	mux.HandleFunc("GET /api", s.handleIndex)
+	mux.HandleFunc("POST /api/items/generate", s.handleGenerate)
+	mux.HandleFunc("POST /api/tests", s.handleCompose)
+	mux.HandleFunc("GET /api/tests/{id}", s.handleGetTest)
+	mux.HandleFunc("POST /api/tests/{id}/sessions", s.handleStartSession)
+	mux.HandleFunc("POST /api/sessions/{id}/answers", s.handleAnswer)
+	mux.HandleFunc("POST /api/sessions/{id}/complete", s.handleComplete)
+	mux.HandleFunc("GET /api/sessions/{id}/score", s.handleScore)
+	mux.HandleFunc("GET /api/media/{ref}", s.handleMedia)
 	// Sourcing front half: catalogue, ingest, and item-bank query.
-	mux.HandleFunc("GET /sources", s.handleListSources)
-	mux.HandleFunc("GET /sources/{id}", s.handleGetSource)
-	mux.HandleFunc("POST /catalog/sync", s.handleSyncCatalog)
-	mux.HandleFunc("GET /items", s.handleListItems)
-	mux.HandleFunc("GET /items/{id}", s.handleGetItem)
-	mux.HandleFunc("POST /sources/{id}/ingest", s.handleIngest)
-	mux.HandleFunc("POST /sources/{id}/ingest-llm", s.handleIngestLLM)
+	mux.HandleFunc("GET /api/sources", s.handleListSources)
+	mux.HandleFunc("GET /api/sources/{id}", s.handleGetSource)
+	mux.HandleFunc("POST /api/catalog/sync", s.handleSyncCatalog)
+	mux.HandleFunc("GET /api/items", s.handleListItems)
+	mux.HandleFunc("GET /api/items/{id}", s.handleGetItem)
+	mux.HandleFunc("POST /api/sources/{id}/ingest", s.handleIngest)
+	mux.HandleFunc("POST /api/sources/{id}/ingest-llm", s.handleIngestLLM)
+	// Everything that is not /api is the web app (or the JSON fallback).
+	mux.HandleFunc("GET /", s.handleSPA)
 	return mux
 }
 
-// handleIndex serves a small JSON index at the root, so hitting the server confirms
-// it is up and lists the available endpoints. There is no HTML UI yet — the web UI
-// (operator console + test player) is ROADMAP §1.
+// handleIndex serves the JSON service index at GET /api: proof of life plus
+// the endpoint list. It is also the GET / fallback body when no UI is built.
 func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"service": "testmaker",
 		"status":  "ok",
 		"endpoints": []string{
-			"GET /sources", "GET /sources/{id}", "POST /catalog/sync",
-			"GET /items", "GET /items/{id}",
-			"POST /sources/{id}/ingest", "POST /sources/{id}/ingest-llm",
-			"POST /items/generate", "POST /tests", "GET /tests/{id}",
-			"POST /tests/{id}/sessions", "POST /sessions/{id}/answers",
-			"POST /sessions/{id}/complete", "GET /sessions/{id}/score",
-			"GET /media/{ref}",
+			"GET /api",
+			"GET /api/sources", "GET /api/sources/{id}", "POST /api/catalog/sync",
+			"GET /api/items", "GET /api/items/{id}",
+			"POST /api/sources/{id}/ingest", "POST /api/sources/{id}/ingest-llm",
+			"POST /api/items/generate", "POST /api/tests", "GET /api/tests/{id}",
+			"POST /api/tests/{id}/sessions", "POST /api/sessions/{id}/answers",
+			"POST /api/sessions/{id}/complete", "GET /api/sessions/{id}/score",
+			"GET /api/media/{ref}",
 		},
 	})
 }

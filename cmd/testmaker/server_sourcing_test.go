@@ -122,7 +122,7 @@ func TestSourcesEndpointListsAndFilters(t *testing.T) {
 	}})
 
 	var all []source.Snapshot
-	resp := get(t, ts, "/sources")
+	resp := get(t, ts, "/api/sources")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /sources status = %d, want 200", resp.StatusCode)
 	}
@@ -132,25 +132,25 @@ func TestSourcesEndpointListsAndFilters(t *testing.T) {
 	}
 
 	var gens []source.Snapshot
-	decode(t, get(t, ts, "/sources?generators=true"), &gens)
+	decode(t, get(t, ts, "/api/sources?generators=true"), &gens)
 	if len(gens) != 1 || gens[0].ID != "gen-src" {
 		t.Fatalf("generators filter = %v, want [gen-src]", srcIDs(gens))
 	}
 
 	var byType []source.Snapshot
-	decode(t, get(t, ts, "/sources?testType=B1"), &byType)
+	decode(t, get(t, ts, "/api/sources?testType=B1"), &byType)
 	if len(byType) != 1 || byType[0].ID != "cond-src" {
 		t.Fatalf("testType filter = %v, want [cond-src]", srcIDs(byType))
 	}
 
 	var byFamily []source.Snapshot
-	decode(t, get(t, ts, "/sources?family=logical"), &byFamily)
+	decode(t, get(t, ts, "/api/sources?family=logical"), &byFamily)
 	if len(byFamily) != 1 || byFamily[0].ID != "gen-src" {
 		t.Fatalf("family filter = %v, want [gen-src] (A1 -> logical)", srcIDs(byFamily))
 	}
 
 	var reusable []source.Snapshot
-	decode(t, get(t, ts, "/sources?redistributable=yes"), &reusable)
+	decode(t, get(t, ts, "/api/sources?redistributable=yes"), &reusable)
 	if len(reusable) != 1 || reusable[0].ID != "gen-src" {
 		t.Fatalf("redistributable filter = %v, want [gen-src]", srcIDs(reusable))
 	}
@@ -163,7 +163,7 @@ func TestGetSourceEndpoint(t *testing.T) {
 		srcSnap("s1", false, shared.RedistYes, "A1"),
 	}})
 	var s source.Snapshot
-	resp := get(t, ts, "/sources/s1")
+	resp := get(t, ts, "/api/sources/s1")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /sources/s1 = %d, want 200", resp.StatusCode)
 	}
@@ -171,7 +171,7 @@ func TestGetSourceEndpoint(t *testing.T) {
 	if s.ID != "s1" {
 		t.Fatalf("got source %q, want s1", s.ID)
 	}
-	resp = get(t, ts, "/sources/nope")
+	resp = get(t, ts, "/api/sources/nope")
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown source = %d, want 404", resp.StatusCode)
@@ -185,7 +185,7 @@ func TestCatalogSyncEndpoint(t *testing.T) {
 		srcSnap("s1", false, shared.RedistYes, "A1"),
 		srcSnap("s2", true, shared.RedistYes, "A2"),
 	}})
-	resp := post(t, ts, "/catalog/sync", nil)
+	resp := post(t, ts, "/api/catalog/sync", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("POST /catalog/sync = %d, want 200", resp.StatusCode)
 	}
@@ -203,7 +203,7 @@ func TestItemsEndpointListsAndGets(t *testing.T) {
 	// Seed two distinct test types so a filter that silently returns everything
 	// would be caught (the A2-only bank of the earlier version could not).
 	for _, tt := range []string{"A2", "A3"} {
-		resp := post(t, ts, "/items/generate", generateReq{TestType: tt, Difficulty: 2, Count: 3, Seed: 1})
+		resp := post(t, ts, "/api/items/generate", generateReq{TestType: tt, Difficulty: 2, Count: 3, Seed: 1})
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("generate %s = %d, want 200", tt, resp.StatusCode)
 		}
@@ -211,10 +211,10 @@ func TestItemsEndpointListsAndGets(t *testing.T) {
 	}
 
 	var all []item.ItemSnapshot
-	decode(t, get(t, ts, "/items"), &all)
+	decode(t, get(t, ts, "/api/items"), &all)
 
 	var items []item.ItemSnapshot
-	resp := get(t, ts, "/items?testType=A2")
+	resp := get(t, ts, "/api/items?testType=A2")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /items = %d, want 200", resp.StatusCode)
 	}
@@ -232,7 +232,7 @@ func TestItemsEndpointListsAndGets(t *testing.T) {
 	}
 
 	var one item.ItemSnapshot
-	resp = get(t, ts, "/items/"+string(items[0].ID))
+	resp = get(t, ts, "/api/items/"+string(items[0].ID))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /items/{id} = %d, want 200", resp.StatusCode)
 	}
@@ -241,7 +241,7 @@ func TestItemsEndpointListsAndGets(t *testing.T) {
 		t.Fatalf("got item %q, want %q", one.ID, items[0].ID)
 	}
 
-	resp = get(t, ts, "/items/does-not-exist")
+	resp = get(t, ts, "/api/items/does-not-exist")
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown item = %d, want 404", resp.StatusCode)
@@ -256,7 +256,7 @@ func TestIngestEndpointSavesItems(t *testing.T) {
 		fetchers:    []ports.Fetcher{llmPayloadFetcher{text: "payload"}},
 		normalizers: map[source.SourceID]ingest.Normalizer{"fake-src": canNormalizer},
 	})
-	resp := post(t, ts, "/sources/fake-src/ingest", ingestReq{})
+	resp := post(t, ts, "/api/sources/fake-src/ingest", ingestReq{})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("POST ingest = %d, want 200", resp.StatusCode)
 	}
@@ -277,7 +277,7 @@ func TestIngestEndpointSavesItems(t *testing.T) {
 // TestIngestEndpointUnknownSource proves an ingest against an uncatalogued id 404s.
 func TestIngestEndpointUnknownSource(t *testing.T) {
 	ts, _ := newSourcingHarness(t, sourcingSetup{})
-	resp := post(t, ts, "/sources/nope/ingest", ingestReq{})
+	resp := post(t, ts, "/api/sources/nope/ingest", ingestReq{})
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("ingest unknown source = %d, want 404", resp.StatusCode)
@@ -291,7 +291,7 @@ func TestIngestEndpointNoNormalizer(t *testing.T) {
 		sources:  []source.Snapshot{srcSnap("fake-src", false, shared.RedistYes, "A1")},
 		fetchers: []ports.Fetcher{llmPayloadFetcher{text: "payload"}},
 	})
-	resp := post(t, ts, "/sources/fake-src/ingest", ingestReq{})
+	resp := post(t, ts, "/api/sources/fake-src/ingest", ingestReq{})
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotImplemented {
 		t.Fatalf("ingest without normalizer = %d, want 501", resp.StatusCode)
@@ -304,7 +304,7 @@ func TestIngestLLMEndpointNotConfigured(t *testing.T) {
 	ts, _ := newSourcingHarness(t, sourcingSetup{sources: []source.Snapshot{
 		srcSnap("s1", false, shared.RedistYes, "C3"),
 	}})
-	resp := post(t, ts, "/sources/s1/ingest-llm", ingestLLMReq{})
+	resp := post(t, ts, "/api/sources/s1/ingest-llm", ingestLLMReq{})
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("ingest-llm without llm = %d, want 503", resp.StatusCode)
@@ -345,7 +345,7 @@ func TestIngestLLMEndpointExtracts(t *testing.T) {
 		llm:      llmapp.NewService(client, prompts),
 		llmModel: "canned",
 	})
-	resp := post(t, ts, "/sources/llm-src/ingest-llm", ingestLLMReq{TestType: "B2"})
+	resp := post(t, ts, "/api/sources/llm-src/ingest-llm", ingestLLMReq{TestType: "B2"})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("ingest-llm = %d, want 200", resp.StatusCode)
 	}
@@ -400,14 +400,14 @@ func TestSourcingEndpointInputValidation(t *testing.T) {
 	})
 
 	// A bodyless ingest is valid (the body is optional).
-	resp := post(t, ts, "/sources/good-src/ingest", nil)
+	resp := post(t, ts, "/api/sources/good-src/ingest", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("bodyless ingest = %d, want 200", resp.StatusCode)
 	}
 	_ = resp.Body.Close()
 
 	// Malformed JSON body -> 400.
-	r, err := http.Post(ts.URL+"/sources/good-src/ingest", "application/json", strings.NewReader("{bad"))
+	r, err := http.Post(ts.URL+"/api/sources/good-src/ingest", "application/json", strings.NewReader("{bad"))
 	if err != nil {
 		t.Fatalf("post malformed: %v", err)
 	}
@@ -417,14 +417,14 @@ func TestSourcingEndpointInputValidation(t *testing.T) {
 	}
 
 	// A non-integer difficulty query param -> 400.
-	resp = get(t, ts, "/items?minDifficulty=abc")
+	resp = get(t, ts, "/api/items?minDifficulty=abc")
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("bad minDifficulty = %d, want 400", resp.StatusCode)
 	}
 
 	// A normalizer that rejects every spec -> 400, not a silent success.
-	resp = post(t, ts, "/sources/reject-src/ingest", ingestReq{})
+	resp = post(t, ts, "/api/sources/reject-src/ingest", ingestReq{})
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("reject-all ingest = %d, want 400 (ErrAllRejected)", resp.StatusCode)
@@ -453,7 +453,7 @@ func TestServerRealCatalogWiring(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	var sources []source.Snapshot
-	resp := get(t, ts, "/sources")
+	resp := get(t, ts, "/api/sources")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /sources = %d, want 200", resp.StatusCode)
 	}

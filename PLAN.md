@@ -222,7 +222,7 @@ export type SessionState = "created" | "in-progress" | "completed" | "abandoned"
 
 # Phase 0 — Scaffolding
 
-### Task 1: Branch + `webui` embed package (build-optional fallback)
+### Task 1: Branch + `webui` embed package (build-optional fallback) ✅
 
 **Files:**
 - Create: `cmd/testmaker/webui/doc.go`
@@ -367,7 +367,7 @@ git commit -m "Block 14: webui go:embed package with build-optional fallback"
 
 ---
 
-### Task 2: Re-base the JSON API under `/api` + SPA fallback handler
+### Task 2: Re-base the JSON API under `/api` + SPA fallback handler ✅
 
 The one deliberately breaking change (ADR-0005). After this task every JSON
 endpoint lives under `/api`, `GET /api` serves the index, and `GET /` serves

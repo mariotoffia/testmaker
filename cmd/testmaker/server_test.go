@@ -82,7 +82,7 @@ func decode(t *testing.T, resp *http.Response, dst any) {
 // item count.
 func seedAndCompose(t *testing.T, ts *httptest.Server, id string) (string, int) {
 	t.Helper()
-	resp := post(t, ts, "/items/generate", generateReq{TestType: "A2", Difficulty: 2, Count: 5, Seed: 1})
+	resp := post(t, ts, "/api/items/generate", generateReq{TestType: "A2", Difficulty: 2, Count: 5, Seed: 1})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("generate status = %d, want 200", resp.StatusCode)
 	}
@@ -92,7 +92,7 @@ func seedAndCompose(t *testing.T, ts *httptest.Server, id string) (string, int) 
 		t.Fatalf("generate saved 0 items")
 	}
 
-	resp = post(t, ts, "/tests", composeReq{
+	resp = post(t, ts, "/api/tests", composeReq{
 		ID:             id,
 		Title:          "Server Flow",
 		Policy:         "fixed-increasing",
@@ -123,7 +123,7 @@ func TestDeliverySurfaceFullFlow(t *testing.T) {
 	testID, _ := seedAndCompose(t, ts, "srv-fixed")
 
 	// Start the session; the opening delivery presents the first item.
-	resp := post(t, ts, "/tests/"+testID+"/sessions", nil)
+	resp := post(t, ts, "/api/tests/"+testID+"/sessions", nil)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("start status = %d, want 201", resp.StatusCode)
 	}
@@ -140,7 +140,7 @@ func TestDeliverySurfaceFullFlow(t *testing.T) {
 			t.Fatalf("answer loop did not terminate")
 		}
 		itemID := d.Session.Presented.ItemID
-		resp = post(t, ts, "/sessions/"+sessID+"/answers", answerReq{ItemID: itemID, OptionID: "a"})
+		resp = post(t, ts, "/api/sessions/"+sessID+"/answers", answerReq{ItemID: itemID, OptionID: "a"})
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("answer status = %d, want 200", resp.StatusCode)
 		}
@@ -149,7 +149,7 @@ func TestDeliverySurfaceFullFlow(t *testing.T) {
 	}
 
 	// Complete the session.
-	resp = post(t, ts, "/sessions/"+sessID+"/complete", nil)
+	resp = post(t, ts, "/api/sessions/"+sessID+"/complete", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("complete status = %d, want 200", resp.StatusCode)
 	}
@@ -160,7 +160,7 @@ func TestDeliverySurfaceFullFlow(t *testing.T) {
 	}
 
 	// Score it.
-	resp, err := http.Get(ts.URL + "/sessions/" + sessID + "/score")
+	resp, err := http.Get(ts.URL + "/api/sessions/" + sessID + "/score")
 	if err != nil {
 		t.Fatalf("GET score: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestDeliverySurfaceConcurrentAnswersRecordOnce(t *testing.T) {
 	ts := newHarness(t)
 	testID, _ := seedAndCompose(t, ts, "srv-conc")
 
-	resp := post(t, ts, "/tests/"+testID+"/sessions", nil)
+	resp := post(t, ts, "/api/tests/"+testID+"/sessions", nil)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("start status = %d, want 201", resp.StatusCode)
 	}
@@ -209,7 +209,7 @@ func TestDeliverySurfaceConcurrentAnswersRecordOnce(t *testing.T) {
 			defer wg.Done()
 			var buf bytes.Buffer
 			_ = json.NewEncoder(&buf).Encode(answerReq{ItemID: itemID, OptionID: "a"})
-			r, err := http.Post(ts.URL+"/sessions/"+sessID+"/answers", "application/json", &buf)
+			r, err := http.Post(ts.URL+"/api/sessions/"+sessID+"/answers", "application/json", &buf)
 			if err != nil {
 				statuses[i] = -1
 				return
@@ -278,7 +278,7 @@ func TestRootIndex(t *testing.T) {
 func TestDeliverySurfaceErrors(t *testing.T) {
 	ts := newHarness(t)
 
-	resp, err := http.Post(ts.URL+"/tests", "application/json", strings.NewReader("{not json"))
+	resp, err := http.Post(ts.URL+"/api/tests", "application/json", strings.NewReader("{not json"))
 	if err != nil {
 		t.Fatalf("POST malformed: %v", err)
 	}
@@ -287,7 +287,7 @@ func TestDeliverySurfaceErrors(t *testing.T) {
 		t.Fatalf("malformed body status = %d, want 400", resp.StatusCode)
 	}
 
-	resp, err = http.Get(ts.URL + "/tests/does-not-exist")
+	resp, err = http.Get(ts.URL + "/api/tests/does-not-exist")
 	if err != nil {
 		t.Fatalf("GET unknown test: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestDeliverySurfaceErrors(t *testing.T) {
 func TestMediaEndpointRoundTrip(t *testing.T) {
 	ts, db, _ := newHarnessWithStores(t)
 
-	resp := post(t, ts, "/items/generate", generateReq{TestType: "A2", Difficulty: 2, Count: 3, Seed: 1})
+	resp := post(t, ts, "/api/items/generate", generateReq{TestType: "A2", Difficulty: 2, Count: 3, Seed: 1})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("generate status = %d, want 200", resp.StatusCode)
 	}
@@ -322,7 +322,7 @@ func TestMediaEndpointRoundTrip(t *testing.T) {
 		t.Fatalf("media ref was not offloaded to the blob store: %q", ref)
 	}
 
-	mresp, err := http.Get(ts.URL + "/media/" + ref)
+	mresp, err := http.Get(ts.URL + "/api/media/" + ref)
 	if err != nil {
 		t.Fatalf("GET media: %v", err)
 	}
@@ -349,7 +349,7 @@ func TestMediaEndpointRoundTrip(t *testing.T) {
 		t.Fatal("media body is empty")
 	}
 
-	uresp, err := http.Get(ts.URL + "/media/deadbeefunknownref")
+	uresp, err := http.Get(ts.URL + "/api/media/deadbeefunknownref")
 	if err != nil {
 		t.Fatalf("GET unknown media: %v", err)
 	}
