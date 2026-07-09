@@ -4818,7 +4818,7 @@ git add web && git commit -m "Block 14: web auth context, operator login, role g
 
 ---
 
-### Task 22: App shell + routing
+### Task 22: App shell + routing ✅
 
 **Files:**
 - Modify: `web/src/App.tsx`

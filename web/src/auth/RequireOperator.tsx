@@ -4,7 +4,8 @@ import { useAuth } from "./useAuth";
 // RequireOperator guards the console. In none mode the server reports everyone
 // as operator, so this is transparently open for local development.
 export function RequireOperator() {
-  const { role } = useAuth();
+  const { role, ready } = useAuth();
+  if (!ready) return null; // whoami in flight — don't redirect on the transient anonymous
   if (role !== "operator") return <Navigate to="/login" replace />;
   return <Outlet />;
 }
