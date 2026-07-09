@@ -63,6 +63,28 @@ func TestLoadJSON(t *testing.T) {
 	}
 }
 
+func TestParseJSONValidatesRecords(t *testing.T) {
+	good := []byte(`{"sources":[{"id":"s1","name":"S1","urls":["https://x"],"access_class":["dataset-repo"],` +
+		`"license":{"category":"public-domain","redistributable":"yes"},"test_types":["A2"],` +
+		`"answer_keys":"yes","norms_difficulty":"no","priority":"high","ip_risk":"low","category":"open-data"}]}`)
+	snaps, err := filecatalog.ParseJSON(good)
+	if err != nil {
+		t.Fatalf("ParseJSON(good): %v", err)
+	}
+	if len(snaps) != 1 || snaps[0].ID != "s1" {
+		t.Fatalf("snaps = %+v", snaps)
+	}
+	// An invalid record (empty id) is rejected — the same source.NewSource gate Load applies.
+	bad := []byte(`{"sources":[{"name":"no id"}]}`)
+	if _, err := filecatalog.ParseJSON(bad); err == nil {
+		t.Fatal("ParseJSON must reject an invalid record")
+	}
+	// Malformed JSON is an error, not a panic or empty success.
+	if _, err := filecatalog.ParseJSON([]byte("{not json")); err == nil {
+		t.Fatal("ParseJSON must reject malformed JSON")
+	}
+}
+
 func TestLoadRejectsInvalid(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "bad.json")
 	bad := `{"sources":[{"id":"x","name":"X","urls":["https://x"],"access_class":["dataset-repo"],` +
