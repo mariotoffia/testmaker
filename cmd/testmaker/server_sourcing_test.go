@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher"
 	"github.com/mariotoffia/testmaker/adapters/native/llm/fileprompts"
@@ -64,12 +65,14 @@ func srcIDs(ss []source.Snapshot) []source.SourceID {
 
 // sourcingSetup configures a sourcing harness.
 type sourcingSetup struct {
-	sources     []source.Snapshot
-	fetchers    []ports.Fetcher
-	normalizers map[source.SourceID]ingest.Normalizer
-	llm         *llmapp.Service
-	llmModel    string
-	maxIngest   int // > 0 ⇒ bound concurrent ingests (Task 12); 0 ⇒ ungated
+	sources       []source.Snapshot
+	fetchers      []ports.Fetcher
+	normalizers   map[source.SourceID]ingest.Normalizer
+	llm           *llmapp.Service
+	llmModel      string
+	maxIngest     int           // > 0 ⇒ bound concurrent ingests (Task 12); 0 ⇒ ungated
+	jobs          *jobRegistry  // non-nil ⇒ async ingest enabled (Task 18); nil ⇒ sync only
+	ingestTimeout time.Duration // background async-run cap; 0 ⇒ newServer defaults it
 }
 
 // newSourcingHarness wires the full delivery surface (including catalogue + ingest)
@@ -99,7 +102,7 @@ func newSourcingHarness(t *testing.T, s sourcingSetup) (*httptest.Server, testDB
 	}
 	ts := httptest.NewServer(newServer(serverDeps{
 		db: db, blobs: blobs, catalog: cat, ingest: ing, llm: s.llm, llmModel: s.llmModel,
-		maxIngest: s.maxIngest,
+		maxIngest: s.maxIngest, jobs: s.jobs, ingestTimeout: s.ingestTimeout,
 	}).routes())
 	t.Cleanup(ts.Close)
 	return ts, db

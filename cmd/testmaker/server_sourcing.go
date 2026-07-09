@@ -26,7 +26,8 @@ import (
 // --- request bodies for the sourcing / ingest endpoints (all fields optional) ---
 
 type ingestReq struct {
-	Limit int `json:"limit"`
+	Limit int  `json:"limit"`
+	Async bool `json:"async"` // true ⇒ 202 + a poll-able job instead of a synchronous Report
 }
 
 type ingestLLMReq struct {
@@ -37,6 +38,7 @@ type ingestLLMReq struct {
 	// Empty falls back to the source's first test type — but a multi-family source
 	// would then mislabel every item, so a caller should set this per run.
 	TestType string `json:"testType"`
+	Async    bool   `json:"async"` // true ⇒ 202 + a poll-able job instead of a synchronous Report
 }
 
 // errLLMUnconfigured marks an LLM-ingest call on a deployment with no LLM backend
@@ -231,6 +233,15 @@ func (s *server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
+	// Async: hand back a 202 + job now and run on a background context. Branched
+	// before the sync semaphore gate — a queued job waits for its slot inside the
+	// runner, so the caller is never blocked by another ingest in progress.
+	if req.Async && s.jobs != nil {
+		j := s.jobs.create("ingest", string(snap.ID))
+		go s.runIngestJob(j.ID, snap, req.Limit)
+		writeJSON(w, http.StatusAccepted, j)
+		return
+	}
 	// Bound concurrent ingests: a full gate is a 429 rather than an unbounded fan
 	// of outbound fetches. Acquired after validation so a 404 never burns a slot.
 	if s.ingestSem != nil {
@@ -266,15 +277,6 @@ func (s *server) handleIngestLLM(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
-	// Same concurrency gate as the deterministic ingest; here it also bounds paid
-	// LLM spend by capping how many extractions run at once.
-	if s.ingestSem != nil {
-		if !s.ingestSem.tryAcquire() {
-			writeAuthError(w, http.StatusTooManyRequests, "limit.ingest", "another ingest is in progress")
-			return
-		}
-		defer s.ingestSem.release()
-	}
 	model := req.Model
 	if model == "" {
 		model = s.llmModel
@@ -286,19 +288,93 @@ func (s *server) handleIngestLLM(w http.ResponseWriter, r *http.Request) {
 	if testType == "" && len(snap.TestTypes) > 0 {
 		testType = snap.TestTypes[0]
 	}
-	rep, err := s.ingestSvc.IngestLLM(r.Context(), ingest.LLMExtractRequest{
+	extractReq := ingest.LLMExtractRequest{
 		Source:    snap,
 		LLM:       s.llm,
 		TestType:  testType,
 		Model:     model,
 		MaxTokens: req.MaxTokens,
 		Limit:     req.Limit,
-	})
+	}
+	// Async: 202 + a background run, mirroring the deterministic ingest path.
+	if req.Async && s.jobs != nil {
+		j := s.jobs.create("ingest-llm", string(snap.ID))
+		go s.runIngestLLMJob(j.ID, extractReq)
+		writeJSON(w, http.StatusAccepted, j)
+		return
+	}
+	// Same concurrency gate as the deterministic ingest; here it also bounds paid
+	// LLM spend by capping how many extractions run at once.
+	if s.ingestSem != nil {
+		if !s.ingestSem.tryAcquire() {
+			writeAuthError(w, http.StatusTooManyRequests, "limit.ingest", "another ingest is in progress")
+			return
+		}
+		defer s.ingestSem.release()
+	}
+	rep, err := s.ingestSvc.IngestLLM(r.Context(), extractReq)
 	if err != nil {
 		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, rep)
+}
+
+// recoverJob turns a panic in a background ingest runner into a failed job
+// rather than a process-wide crash. net/http recovers a panic in a synchronous
+// handler goroutine into a 500; these runners execute in their own goroutines,
+// which net/http does not shield, so without this a panicking fetcher/normalizer
+// on the async path would take the whole server down (the sync path survives).
+func (s *server) recoverJob(id string) {
+	if p := recover(); p != nil {
+		s.jobs.finish(id, nil, fmt.Errorf("ingest job panicked: %v", p))
+	}
+}
+
+// runIngestJob executes a deterministic ingest on a background context and
+// records the outcome on the job. It acquires the shared ingest semaphore
+// (blocking, so a queued job waits its turn) and honours the configured timeout.
+// The request context is gone by the time this runs, so it uses its own.
+func (s *server) runIngestJob(id string, snap source.Snapshot, limit int) {
+	defer s.recoverJob(id)
+	ctx, cancel := context.WithTimeout(context.Background(), s.ingestTimeout)
+	defer cancel()
+	if s.ingestSem != nil {
+		if aerr := s.ingestSem.acquire(ctx); aerr != nil {
+			s.jobs.finish(id, nil, aerr)
+			return
+		}
+		defer s.ingestSem.release()
+	}
+	s.jobs.start(id)
+	rep, err := s.ingestSvc.Ingest(ctx, snap, limit)
+	if err != nil {
+		s.jobs.finish(id, nil, err)
+		return
+	}
+	s.jobs.finish(id, &rep, nil)
+}
+
+// runIngestLLMJob is runIngestJob for the LLM extraction path: same background
+// context, timeout, and semaphore discipline, calling IngestLLM instead.
+func (s *server) runIngestLLMJob(id string, req ingest.LLMExtractRequest) {
+	defer s.recoverJob(id)
+	ctx, cancel := context.WithTimeout(context.Background(), s.ingestTimeout)
+	defer cancel()
+	if s.ingestSem != nil {
+		if aerr := s.ingestSem.acquire(ctx); aerr != nil {
+			s.jobs.finish(id, nil, aerr)
+			return
+		}
+		defer s.ingestSem.release()
+	}
+	s.jobs.start(id)
+	rep, err := s.ingestSvc.IngestLLM(ctx, req)
+	if err != nil {
+		s.jobs.finish(id, nil, err)
+		return
+	}
+	s.jobs.finish(id, &rep, nil)
 }
 
 // The decodeOptionalJSON/intParam helpers moved to server_http.go (as *server

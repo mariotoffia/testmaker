@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -81,22 +82,24 @@ func openBlobStore(spec string) (ports.BlobStore, error) {
 // demo — lives in the composition root because it depends on app use-cases,
 // which no adapter is allowed to import.
 type server struct {
-	gen         *authoring.Service
-	author      *authoring.TestService
-	exec        ports.Executor
-	scorer      ports.Scorer
-	cat         *catalog.Service
-	ingestSvc   *ingest.Service
-	items       ports.ItemRepository
-	llm         *llmapp.Service // nil when the deployment has no LLM backend configured
-	llmModel    string
-	tests       ports.TestRepository
-	sessions    ports.SessionRepository
-	blobs       ports.BlobStore
-	auth        *authenticator // role checks; zero-value AuthConfig ⇒ enforced() false
-	log         *slog.Logger   // nil → s.logger() hands back a discard logger
-	ingestSem   semaphore      // bounds concurrent ingests; nil when maxIngest ≤ 0 ⇒ ungated
-	catalogPath string         // where POST /api/catalog persists an uploaded catalogue; "" ⇒ upload unsupported
+	gen           *authoring.Service
+	author        *authoring.TestService
+	exec          ports.Executor
+	scorer        ports.Scorer
+	cat           *catalog.Service
+	ingestSvc     *ingest.Service
+	items         ports.ItemRepository
+	llm           *llmapp.Service // nil when the deployment has no LLM backend configured
+	llmModel      string
+	tests         ports.TestRepository
+	sessions      ports.SessionRepository
+	blobs         ports.BlobStore
+	auth          *authenticator // role checks; zero-value AuthConfig ⇒ enforced() false
+	log           *slog.Logger   // nil → s.logger() hands back a discard logger
+	ingestSem     semaphore      // bounds concurrent ingests; nil when maxIngest ≤ 0 ⇒ ungated
+	catalogPath   string         // where POST /api/catalog persists an uploaded catalogue; "" ⇒ upload unsupported
+	jobs          *jobRegistry   // recent async ingest jobs; nil ⇒ async ingest disabled (sync only)
+	ingestTimeout time.Duration  // background async-run cap; newServer defaults a zero to 10m
 }
 
 // serverDeps bundles everything the delivery surface drives: the TestDb-backed
@@ -104,17 +107,19 @@ type server struct {
 // optional LLM service (nil disables the LLM ingest endpoint). Grouping them keeps
 // newServer's signature stable as the surface grows.
 type serverDeps struct {
-	db          testDB
-	blobs       ports.BlobStore
-	catalog     *catalog.Service
-	ingest      *ingest.Service
-	llm         *llmapp.Service
-	llmModel    string
-	authCfg     AuthConfig  // zero value ⇒ Mode "" ⇒ auth off (what most tests construct)
-	clock       clock.Clock // nil → clock.System(); drives invite expiry
-	log         *slog.Logger
-	maxIngest   int    // > 0 ⇒ bound concurrent ingests with a semaphore; 0 ⇒ ungated
-	catalogPath string // POST /api/catalog target; "" ⇒ upload returns 501
+	db            testDB
+	blobs         ports.BlobStore
+	catalog       *catalog.Service
+	ingest        *ingest.Service
+	llm           *llmapp.Service
+	llmModel      string
+	authCfg       AuthConfig  // zero value ⇒ Mode "" ⇒ auth off (what most tests construct)
+	clock         clock.Clock // nil → clock.System(); drives invite expiry
+	log           *slog.Logger
+	maxIngest     int           // > 0 ⇒ bound concurrent ingests with a semaphore; 0 ⇒ ungated
+	catalogPath   string        // POST /api/catalog target; "" ⇒ upload returns 501
+	jobs          *jobRegistry  // async ingest job registry; nil ⇒ async ingest disabled
+	ingestTimeout time.Duration // background async-run cap; 0 ⇒ newServer defaults it to 10m
 }
 
 // newServer wires the delivery use-cases over one TestDb backend and one blob
@@ -156,6 +161,10 @@ func newServer(d serverDeps) *server {
 		log:         d.log,
 		ingestSem:   sem,
 		catalogPath: d.catalogPath,
+		jobs:        d.jobs,
+		// A zero timeout would make every background run's context expire on
+		// creation; default it so a serverDeps that omits it (most tests) is safe.
+		ingestTimeout: cmp.Or(d.ingestTimeout, 10*time.Minute),
 	}
 }
 
@@ -184,6 +193,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/items/{id}", s.requireOperator(s.handleGetItem))
 	mux.HandleFunc("POST /api/sources/{id}/ingest", s.requireOperator(s.handleIngest))
 	mux.HandleFunc("POST /api/sources/{id}/ingest-llm", s.requireOperator(s.handleIngestLLM))
+	mux.HandleFunc("GET /api/jobs", s.requireOperator(s.handleListJobs))
+	mux.HandleFunc("GET /api/jobs/{id}", s.requireOperator(s.handleGetJob))
 	// Invite-scoped: a valid invite token (operator token NOT accepted here — an
 	// operator starts via POST /api/tests/{id}/sessions).
 	mux.HandleFunc("GET /api/invites/preview", s.requireInvite(s.handleInvitePreview))
@@ -209,6 +220,7 @@ func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
 			"POST /api/catalog", "POST /api/catalog/sync",
 			"GET /api/items", "GET /api/items/{id}",
 			"POST /api/sources/{id}/ingest", "POST /api/sources/{id}/ingest-llm",
+			"GET /api/jobs", "GET /api/jobs/{id}",
 			"POST /api/items/generate", "POST /api/tests", "GET /api/tests", "GET /api/tests/{id}",
 			"POST /api/tests/{id}/sessions", "POST /api/tests/{id}/invites",
 			"GET /api/invites/preview", "POST /api/invites/start",
@@ -274,9 +286,11 @@ func buildDeliveryHandler(cfg Config, logger *slog.Logger) (http.Handler, func()
 	}
 	srv := newServer(serverDeps{
 		db: db, blobs: blobs, catalog: cat, ingest: ing, llm: llmSvc, llmModel: llmModel, log: logger,
-		maxIngest:   cfg.Limits.MaxConcurrentIngests,
-		authCfg:     cfg.Auth, // enforce the configured auth mode on the real -serve path
-		catalogPath: cfg.Catalog,
+		maxIngest:     cfg.Limits.MaxConcurrentIngests,
+		authCfg:       cfg.Auth, // enforce the configured auth mode on the real -serve path
+		catalogPath:   cfg.Catalog,
+		jobs:          newJobRegistry(clock.System(), 100, nil),
+		ingestTimeout: time.Duration(cfg.Limits.IngestTimeoutSeconds) * time.Second,
 	})
 	// Per-IP token-bucket rate limit on /api (0 rps in config ⇒ off). Nested
 	// inside the security headers so an over-limit 429 still carries them.
@@ -473,16 +487,5 @@ func (s *server) handleMedia(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(blob.Bytes)
 }
 
-// --- helpers ---
-
-// timing converts seconds on the wire into a domain testset.Timing. Seconds keep
-// the JSON free of Go duration strings and clock-adjacent types.
-func timing(total, perItem int) testset.Timing {
-	return testset.Timing{
-		Total:   time.Duration(total) * time.Second,
-		PerItem: time.Duration(perItem) * time.Second,
-	}
-}
-
-// timing lives above; the JSON/error/body helpers now live in server_http.go so
-// server.go stays under the per-file cap as the route table grows.
+// timing (wire seconds → domain testset.Timing) lives in server_http.go with the
+// other transport helpers, keeping server.go under the per-file cap.

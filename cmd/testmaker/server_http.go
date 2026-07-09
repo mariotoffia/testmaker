@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/mariotoffia/testmaker/domain/shared"
+	"github.com/mariotoffia/testmaker/domain/testset"
 )
 
 // maxRequestBody caps a request body on this unauthenticated surface so a large
@@ -115,4 +117,13 @@ func (s *server) intParam(w http.ResponseWriter, r *http.Request, q url.Values, 
 		return 0, false
 	}
 	return n, true
+}
+
+// timing converts seconds on the wire into a domain testset.Timing. Seconds keep
+// the JSON free of Go duration strings and clock-adjacent types.
+func timing(total, perItem int) testset.Timing {
+	return testset.Timing{
+		Total:   time.Duration(total) * time.Second,
+		PerItem: time.Duration(perItem) * time.Second,
+	}
 }

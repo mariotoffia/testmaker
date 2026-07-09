@@ -3474,7 +3474,7 @@ git commit -m "Block 14: POST /api/catalog upload + filecatalog.ParseJSON extrac
 
 # Phase 5 — Async ingest jobs
 
-### Task 17: In-memory job registry (clock-injected, bounded)
+### Task 17: In-memory job registry (clock-injected, bounded) ✅
 
 **Files:**
 - Create: `cmd/testmaker/jobs.go`
@@ -3727,7 +3727,7 @@ git commit -m "Block 14: in-memory bounded ingest job registry (clock-injected)"
 
 ---
 
-### Task 18: Async ingest endpoints (202 + poll)
+### Task 18: Async ingest endpoints (202 + poll) ✅
 
 **Files:**
 - Modify: `cmd/testmaker/server_sourcing.go` (`ingestReq`/`ingestLLMReq` gain `async`; handlers branch; add `runIngestJob`/`runIngestLLMJob`)
