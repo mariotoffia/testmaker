@@ -769,7 +769,7 @@ git commit -m "Block 14: web build targets, arch-lint web exclude, -auth flag pl
 
 # Phase 1 — Config & observability
 
-### Task 4: Config sections + secret generation on first run
+### Task 4: Config sections + secret generation on first run ✅
 
 **Files:**
 - Modify: `cmd/testmaker/config.go`
@@ -1034,7 +1034,7 @@ git commit -m "Block 14: config auth/limits/log sections + first-run secret gene
 
 ---
 
-### Task 5: Structured logging, request-log middleware, safe error bodies
+### Task 5: Structured logging, request-log middleware, safe error bodies ✅
 
 **Files:**
 - Create: `cmd/testmaker/middleware.go`
@@ -1299,7 +1299,7 @@ git commit -m "Block 14: structured logging, request-log middleware, safe error 
 
 ---
 
-### Task 6: Baseline security headers middleware
+### Task 6: Baseline security headers middleware ✅
 
 **Files:**
 - Modify: `cmd/testmaker/middleware.go`
