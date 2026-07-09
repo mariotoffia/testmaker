@@ -17,6 +17,7 @@ import (
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch"
 	"github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher"
 	"github.com/mariotoffia/testmaker/adapters/native/generate/rulegen"
+	"github.com/mariotoffia/testmaker/adapters/native/llm/fileprompts"
 	"github.com/mariotoffia/testmaker/adapters/native/llm/openaicompat"
 	"github.com/mariotoffia/testmaker/adapters/native/source/filecatalog"
 	"github.com/mariotoffia/testmaker/adapters/native/source/memorycatalog"
@@ -24,6 +25,7 @@ import (
 	"github.com/mariotoffia/testmaker/app/catalog"
 	"github.com/mariotoffia/testmaker/app/execution"
 	"github.com/mariotoffia/testmaker/app/ingest"
+	llmapp "github.com/mariotoffia/testmaker/app/llm"
 	scoringapp "github.com/mariotoffia/testmaker/app/scoring"
 	"github.com/mariotoffia/testmaker/domain/clock"
 	"github.com/mariotoffia/testmaker/domain/item"
@@ -40,6 +42,8 @@ func main() {
 	testdbDSN := flag.String("testdb", "memory", `TestDb backend: "memory" or a sqlite DSN (a file path or ":memory:")`)
 	llmPrompt := flag.String("llm-prompt", "", "if set (and TESTMAKER_LLM_BASE_URL is configured), send this prompt to the LLM backend")
 	ingestID := flag.String("ingest", "", "if set to a catalogue source id (e.g. openpsych-viqt), fetch and ingest its items into the bank")
+	ingestLLMID := flag.String("ingest-llm", "", "if set to a catalogue source id (and TESTMAKER_LLM_BASE_URL is configured), fetch its payload and lift items with the LLM extraction step")
+	promptsDir := flag.String("prompts", "data/prompts", "directory of the file-backed prompt store (one YAML per prompt)")
 	genType := flag.String("generate", "", "if set to a figural test type (A1, A2, A3 or A4), procedurally generate a small batch of items into the bank")
 	authorTest := flag.Bool("author-test", false, "compose a composite, timed, difficulty-ordered test from the bank and store+reload it")
 	runTest := flag.Bool("run-test", false, "administer a composed test end-to-end (fixed + adaptive) under timing, grading answers and reporting the score")
@@ -55,13 +59,25 @@ func main() {
 		return
 	}
 
-	if err := run(context.Background(), *path, *testdbDSN, *blobsSpec, *llmPrompt, *ingestID, *genType, *authorTest, *runTest); err != nil {
+	if err := run(context.Background(), runConfig{
+		path: *path, testdbDSN: *testdbDSN, blobsSpec: *blobsSpec, llmPrompt: *llmPrompt,
+		promptsDir: *promptsDir, ingestID: *ingestID, ingestLLMID: *ingestLLMID,
+		genType: *genType, authorTest: *authorTest, runTest: *runTest,
+	}); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, path, testdbDSN, blobsSpec, llmPrompt, ingestID, genType string, authorTest, runTest bool) (err error) {
+// runConfig carries the parsed flags into run so the composition root's signature
+// stays readable as the demo surface grows.
+type runConfig struct {
+	path, testdbDSN, blobsSpec, llmPrompt, promptsDir, ingestID, ingestLLMID, genType string
+	authorTest, runTest                                                               bool
+}
+
+func run(ctx context.Context, cfg runConfig) (err error) {
+	path := cfg.path
 	// --- composition root: choose adapters, wire the service ---
 	// One concrete TestDb store backs all three repositories (memory by default,
 	// sqlite behind a DSN); openTestDB is the only place that knows the backend.
@@ -70,7 +86,7 @@ func run(ctx context.Context, path, testdbDSN, blobsSpec, llmPrompt, ingestID, g
 		loader  ports.CatalogLoader    = filecatalog.NewLoader(path)
 		fetcher ports.Fetcher          = stubfetcher.NewFetcher()
 	)
-	db, err := openTestDB(testdbDSN)
+	db, err := openTestDB(cfg.testdbDSN)
 	if err != nil {
 		return err
 	}
@@ -83,7 +99,7 @@ func run(ctx context.Context, path, testdbDSN, blobsSpec, llmPrompt, ingestID, g
 		}
 	}()
 
-	blobs, err := openBlobStore(blobsSpec)
+	blobs, err := openBlobStore(cfg.blobsSpec)
 	if err != nil {
 		return err
 	}
@@ -112,19 +128,22 @@ func run(ctx context.Context, path, testdbDSN, blobsSpec, llmPrompt, ingestID, g
 	if err := itemBankDemo(ctx, itembank); err != nil {
 		return err
 	}
-	if err := ingestDemo(ctx, svc, itembank, ingestID); err != nil {
+	if err := ingestDemo(ctx, svc, itembank, cfg.ingestID); err != nil {
 		return err
 	}
-	if err := generateDemo(ctx, itembank, blobs, genType); err != nil {
+	if err := ingestLLMDemo(ctx, svc, itembank, cfg.promptsDir, cfg.ingestLLMID); err != nil {
 		return err
 	}
-	if err := authorTestDemo(ctx, itembank, testdb, authorTest); err != nil {
+	if err := generateDemo(ctx, itembank, blobs, cfg.genType); err != nil {
 		return err
 	}
-	if err := runTestDemo(ctx, itembank, testdb, sessions, runTest); err != nil {
+	if err := authorTestDemo(ctx, itembank, testdb, cfg.authorTest); err != nil {
 		return err
 	}
-	return llmDemo(ctx, llmPrompt)
+	if err := runTestDemo(ctx, itembank, testdb, sessions, cfg.runTest); err != nil {
+		return err
+	}
+	return llmDemo(ctx, cfg.llmPrompt)
 }
 
 // reportReusability prints the reuse/generator breakdown of the catalogue and
@@ -453,6 +472,63 @@ func ingestDemo(ctx context.Context, cat *catalog.Service, bank ports.ItemReposi
 	return nil
 }
 
+// ingestLLMDemo is the Block 12 "done when": it lifts a source's unstructured
+// fetched payload into validated, provenance-tagged item candidates with the LLM
+// extraction step. The prompt is loaded from the file-backed store; the backend
+// is the same openaicompat adapter used for local (Ollama) or cloud endpoints,
+// selected purely by TESTMAKER_LLM_BASE_URL — the composition root is the only
+// place that knows either the concrete backend or the prompt store.
+func ingestLLMDemo(ctx context.Context, cat *catalog.Service, bank ports.ItemRepository, promptsDir, sourceID string) error {
+	if sourceID == "" {
+		fmt.Println("\nIngest (LLM): not requested (pass -ingest-llm <source-id> with TESTMAKER_LLM_BASE_URL set); skipping.")
+		return nil
+	}
+	backend, ok, err := newLLMBackend()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		fmt.Println("\nIngest (LLM): TESTMAKER_LLM_BASE_URL not set; skipping.")
+		return nil
+	}
+
+	store, err := fileprompts.Open(promptsDir)
+	if err != nil {
+		return err
+	}
+	snap, err := cat.Get(ctx, source.SourceID(sourceID))
+	if err != nil {
+		return err
+	}
+	testType := shared.TestTypeCode("")
+	if len(snap.TestTypes) > 0 {
+		testType = snap.TestTypes[0]
+	}
+
+	// Inject through the port types (like the other adapters at the composition
+	// root) so the wiring is an app→ports dependency, not adapter→app.
+	var (
+		llmBackend ports.LLM              = backend
+		prompts    ports.PromptRepository = store
+		downloader ports.Fetcher          = httpfetch.New()
+		stub       ports.Fetcher          = stubfetcher.NewFetcher()
+	)
+	svc := ingest.NewService(bank, downloader, stub)
+
+	rep, err := svc.IngestLLM(ctx, ingest.LLMExtractRequest{
+		Source:   snap,
+		LLM:      llmapp.NewService(llmBackend, prompts),
+		TestType: testType,
+		Model:    os.Getenv("TESTMAKER_LLM_MODEL"),
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\nIngest (LLM) demo (%s): fetched %d artifact(s), extracted %d, saved %d, skipped %d — %s\n",
+		rep.SourceID, rep.Fetched, rep.Normalized, rep.Saved, rep.Skipped, rep.Note)
+	return nil
+}
+
 // generateDemo wires the procedural generator (rulegen) through the authoring
 // use-case: with no -generate flag the step is skipped. When a figural test type
 // is given, it generates a small deterministic batch and stores it in the bank,
@@ -535,31 +611,43 @@ func mediaRefs(snap item.ItemSnapshot) []string {
 	return refs
 }
 
-// llmDemo wires the OpenAI-compatible LLM adapter behind config: with no
-// TESTMAKER_LLM_BASE_URL the step is skipped and the CLI still runs. When
-// configured, the adapter is used through ports.LLM — the composition root is
-// the only place that knows the concrete backend.
-func llmDemo(ctx context.Context, userPrompt string) error {
+// newLLMBackend builds the openaicompat backend from TESTMAKER_LLM_* config. The
+// bool reports whether a backend is configured (TESTMAKER_LLM_BASE_URL set); when
+// false the caller skips its LLM step and the CLI still runs.
+func newLLMBackend() (*openaicompat.Client, bool, error) {
 	baseURL := os.Getenv("TESTMAKER_LLM_BASE_URL")
 	if baseURL == "" {
-		fmt.Println("\nLLM: not configured (set TESTMAKER_LLM_BASE_URL to enable); skipping.")
-		return nil
+		return nil, false, nil
 	}
-
 	client, err := openaicompat.New(openaicompat.Config{
 		BaseURL:    baseURL,
 		APIKey:     os.Getenv("TESTMAKER_LLM_API_KEY"),
 		AuthScheme: openaicompat.AuthScheme(os.Getenv("TESTMAKER_LLM_AUTH_SCHEME")),
 	})
 	if err != nil {
+		return nil, false, err
+	}
+	return client, true, nil
+}
+
+// llmDemo wires the OpenAI-compatible LLM adapter behind config: with no
+// TESTMAKER_LLM_BASE_URL the step is skipped and the CLI still runs. When
+// configured, the adapter is used through ports.LLM — the composition root is
+// the only place that knows the concrete backend.
+func llmDemo(ctx context.Context, userPrompt string) error {
+	backend, ok, err := newLLMBackend()
+	if err != nil {
 		return err
+	}
+	if !ok {
+		fmt.Println("\nLLM: not configured (set TESTMAKER_LLM_BASE_URL to enable); skipping.")
+		return nil
 	}
 	if userPrompt == "" {
 		fmt.Println("\nLLM: configured; pass -llm-prompt to run a completion.")
 		return nil
 	}
 
-	var backend ports.LLM = client
 	resp, err := backend.Generate(ctx, ports.LLMRequest{
 		Model:    os.Getenv("TESTMAKER_LLM_MODEL"),
 		Messages: []ports.LLMMessage{{Role: ports.LLMRoleUser, Content: userPrompt}},

@@ -143,8 +143,8 @@ aggregates.
 | `SourceRepository` | driven | catalogue app service | ✅ |
 | `CatalogLoader` | driven | ingest a catalogue file | ✅ |
 | `Fetcher` | driven | pull raw items from a source | ✅ (stub + `httpfetch` direct-download) |
-| `LLM` | driven | extraction / translation / derivation steps | ✅ (port; backends 🚧) |
-| `PromptRepository` | driven | versioned prompt store for the LLM service | ✅ (port; adapters 🚧) |
+| `LLM` | driven | extraction / translation / derivation steps | ✅ (port; `openaicompat` backend ✅) |
+| `PromptRepository` | driven | versioned prompt store for the LLM service | ✅ (port; `memoryprompts` + `fileprompts` ✅) |
 | `ItemRepository` | driven | item bank | ✅ (memory + sqlite) |
 | `TestRepository` | driven | "TestDb" — composed tests | ✅ (memory + sqlite) |
 | `SessionRepository` | driven | execution | ✅ (memory + sqlite; rich JSON snapshot; **optimistic-concurrency CAS** on `SessionSnapshot.Version`) |
@@ -186,8 +186,8 @@ one shared conformance suite (see [TESTS.md](TESTS.md)).
 | generate | rulegen (native figural) | `adapters/native/generate/rulegen` | `Generator` | ✅ figural (A1/A2/A3/A4); external engines not needed |
 | llm | openaicompat | `adapters/native/llm/openaicompat` | `LLM` | ✅ |
 | llm | bedrock | `adapters/aws/llm/bedrock` | `LLM` | 🚧 (optional) |
-| llm | memory | `adapters/native/llm/memoryprompts` | `PromptRepository` | 🚧 |
-| llm | file | `adapters/native/llm/fileprompts` | `PromptRepository` (default) | 🚧 |
+| llm | memory | `adapters/native/llm/memoryprompts` | `PromptRepository` | ✅ |
+| llm | file | `adapters/native/llm/fileprompts` | `PromptRepository` (default) | ✅ |
 | blob | memory | `adapters/native/blob/memoryblob` | `BlobStore` | ✅ |
 | blob | fs | `adapters/native/blob/fsblob` | `BlobStore` | ✅ |
 | blob | s3 | `adapters/aws/blob/s3blob` | `BlobStore` | 🚧 (later) |
@@ -353,16 +353,17 @@ testmaker/
   go.work                       workspace (lists every module)
   go.mod                        github.com/mariotoffia/testmaker (domain, ports, app)
   domain/{shared,clock,source,prompt,item,testset,session,scoring}/
-  ports/            + ports/{sourcetest,testdbtest,generatortest,blobtest}/   (conformance suites)
+  ports/            + ports/{sourcetest,testdbtest,generatortest,blobtest,prompttest}/   (conformance suites)
   app/{catalog,ingest,llm,authoring,execution,scoring}/
   adapters/native/source/{memorycatalog,filecatalog}/   (own go.mod each)
   adapters/native/testdb/{memorytestdb,sqlitetestdb}/     (own go.mod each)
   adapters/native/fetch/{stubfetcher,httpfetch}/          (own go.mod each)
   adapters/native/blob/{memoryblob,fsblob}/              (own go.mod each)
-  adapters/native/llm/openaicompat/                      (own go.mod)
+  adapters/native/llm/{openaicompat,memoryprompts,fileprompts}/  (own go.mod each)
   adapters/native/generate/rulegen/                      (own go.mod)
   cmd/testmaker/                                          (own go.mod)
   data/catalog/sources.{json,yaml}                        seed catalogue
+  data/prompts/*.yaml                                     seed LLM prompts (one per file)
   ARCHITECTURE.md DDD.md UBIQUITOUS.md DESIGN.md IMPLEMENTATION_PLAN.md
   DEVELOPMENT.md LINT.md TESTS.md AGENTS.md CLAUDE.md
   .go-arch-lint.yml .golangci.yml Makefile

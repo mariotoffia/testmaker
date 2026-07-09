@@ -10,4 +10,11 @@
 // are pure functions registered per source id in the composition root, so this
 // package stays source-agnostic while the messy, per-source shape-mapping lives
 // in one small function each (see viqt.go for the reference normalizer).
+//
+// IngestLLM (extract.go) is the second lifting path: instead of a deterministic
+// per-source normalizer it hands the fetched payload to an app/llm.Service under
+// a JSON schema, so an LLM lifts unstructured artifacts into item candidates.
+// LLM output is untrusted, so every candidate passes the same item.NewItem gate
+// before it is stored; survivors are tagged item.OriginGenerated and the run's
+// model and prompt provenance are recorded in the Report.
 package ingest

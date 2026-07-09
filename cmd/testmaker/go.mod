@@ -9,11 +9,13 @@ require (
 	github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/generate/rulegen v0.0.0
+	github.com/mariotoffia/testmaker/adapters/native/llm/fileprompts v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/llm/openaicompat v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/source/filecatalog v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/source/memorycatalog v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/testdb/memorytestdb v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/testdb/sqlitetestdb v0.0.0
+	github.com/mariotoffia/testmaker/testutil/ollamalocal v0.0.0
 )
 
 require (
@@ -43,6 +45,8 @@ replace github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher => ..
 replace github.com/mariotoffia/testmaker/adapters/native/generate/rulegen => ../../adapters/native/generate/rulegen
 
 replace github.com/mariotoffia/testmaker/adapters/native/llm/openaicompat => ../../adapters/native/llm/openaicompat
+
+replace github.com/mariotoffia/testmaker/adapters/native/llm/fileprompts => ../../adapters/native/llm/fileprompts
 
 replace github.com/mariotoffia/testmaker/testutil/ollamalocal => ../../testutil/ollamalocal
 

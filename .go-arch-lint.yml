@@ -48,6 +48,13 @@ components:
   # interfaces, so they depend on `ports` itself.
   ports_conformance: { in: [ports/**] }
   app: { in: [app, app/**] }
+  # app/ingest composes app/llm (the LLM extraction step drives the LLM service).
+  # Both are carved into their own components — more specific than app/** — so
+  # this single app→app edge is expressed narrowly and the generic `app` ring
+  # keeps its no-self-dependency guard (go-arch-lint can still flag any other
+  # app↔app tangle or cycle).
+  app_llm: { in: [app/llm, app/llm/**] }
+  app_ingest: { in: [app/ingest, app/ingest/**] }
 
   # --- adapters (one component per technology; siblings stay isolated) ---
   adapter_source_memorycatalog: { in: [adapters/native/source/memorycatalog, adapters/native/source/memorycatalog/**] }
@@ -57,6 +64,8 @@ components:
   adapter_fetch_stubfetcher: { in: [adapters/native/fetch/stubfetcher, adapters/native/fetch/stubfetcher/**] }
   adapter_fetch_httpfetch: { in: [adapters/native/fetch/httpfetch, adapters/native/fetch/httpfetch/**] }
   adapter_llm_openaicompat: { in: [adapters/native/llm/openaicompat, adapters/native/llm/openaicompat/**] }
+  adapter_llm_memoryprompts: { in: [adapters/native/llm/memoryprompts, adapters/native/llm/memoryprompts/**] }
+  adapter_llm_fileprompts: { in: [adapters/native/llm/fileprompts, adapters/native/llm/fileprompts/**] }
   adapter_generate_rulegen: { in: [adapters/native/generate/rulegen, adapters/native/generate/rulegen/**] }
 
   # --- media / blob storage (Block 11; content-addressed, own vendor-free) ---
@@ -93,6 +102,17 @@ deps:
     mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
 
+  # app/llm — the LLM use-case service; inward-only like any other use-case.
+  app_llm:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [_no_external_deps_]
+
+  # app/ingest — may compose app/llm for the LLM extraction step. This is the
+  # only sanctioned app→app edge; adapters are still barred by the depguard.
+  app_ingest:
+    mayDependOn: [app_llm, domain, domain_shared, ports]
+    canUse: [_no_external_deps_]
+
   adapter_source_memorycatalog:
     mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
@@ -123,6 +143,16 @@ deps:
   adapter_llm_openaicompat:
     mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
+
+  # In-memory prompt store: stdlib sync + sort only, no external deps.
+  adapter_llm_memoryprompts:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [_no_external_deps_]
+
+  # File-backed prompt store (default): one YAML per prompt, stdlib os + yaml.
+  adapter_llm_fileprompts:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [yaml]
 
   # Procedural figural generator: stdlib math/rand + encoding/base64 only, no
   # external rule engine (resolves DESIGN Q#299 toward native Go rules).

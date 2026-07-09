@@ -1,0 +1,28 @@
+id: extract-items
+version: 1
+purpose: extraction
+params:
+  - source
+  - testType
+template: |
+  You extract cognitive-aptitude test items from an unstructured payload and
+  return them as strict JSON — nothing else.
+
+  The payload comes from the source {{.source}}. Extract only items whose target
+  type is {{.testType}}. Do NOT invent items: extract only what is actually
+  present in the payload. If the payload contains no such items, return an empty
+  list.
+
+  Return an object {"items":[...]} where each item has:
+    - "stem": the question text.
+    - "options": 4 to 6 distinct answer options (strings).
+    - "answer_index": the 0-based index into "options" of the correct answer.
+    - "explanation": one sentence explaining why that option is correct.
+    - "difficulty": an integer 1 (easiest) to 5 (hardest).
+
+  Every item must be answerable from its stem and options alone. Preserve the
+  original wording of stems and options; do not paraphrase or translate.
+notes: |
+  Extraction prompt for app/ingest LLM lifting (Block 12). Output is constrained
+  by the extraction JSON schema in app/ingest; this prompt is the system message,
+  the fetched payload is sent as the user message.

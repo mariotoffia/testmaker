@@ -271,7 +271,7 @@ figural item media referenced by `Stimulus`.
   verification, no blob GC/`Delete`, refs the renderer must tell apart from inline
   `data:` URIs) are documented in the ADR.
 
-## Block 12 — LLM library 🚧 (port + prompts + service + `openaicompat` backend ✅)
+## Block 12 — LLM library ✅
 
 **Goal:** back the LLM stack with working adapters and the first consuming
 step. Already in place: `ports.LLM`, `domain/prompt` (versioned Go-template
@@ -281,10 +281,12 @@ prompts), `ports.PromptRepository`, the hook-running `app/llm.Service`
 against the OpenAI-compatible chat API, covering cloud (OpenAI/Azure) and local
 (Ollama `/v1`, vLLM, LM Studio, llama.cpp) via base-URL config, wired in the CLI
 behind `TESTMAKER_LLM_*` config.
-Remaining: the prompt stores `memoryprompts` (tests) + `fileprompts`
+Delivered: the prompt stores `memoryprompts` (tests) + `fileprompts`
 (default, `data/prompts/*.yaml`) validated by a `ports/prompttest` conformance
-suite; then the LLM extraction step in `app/ingest` (structured `JSONSchema`
-output). Translation and run-time derivation follow inside Blocks 5–8 as
+suite; the LLM extraction step `app/ingest.IngestLLM` (structured `JSONSchema`
+output, `item.NewItem`-gated, `OriginGenerated`-tagged) seeded by
+`data/prompts/extract-items.yaml` and wired in the CLI behind `-ingest-llm`.
+Translation and run-time derivation follow inside Blocks 5–8 as
 consumers. Design rules in [DESIGN.md](DESIGN.md#6-llm-support) §6.
 **Touches:** `adapters/native/llm/{openaicompat,memoryprompts,fileprompts}`, `ports/prompttest`, `app/ingest`, later an LLM-backed `Generator` adapter (optional `adapters/aws/llm/bedrock`).
 **Depends on:** Block 5 (first consumer); port, prompt domain and service already in place.
