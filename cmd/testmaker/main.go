@@ -52,6 +52,7 @@ func main() {
 	runTest := flag.Bool("run-test", false, "administer a composed test end-to-end (fixed + adaptive) under timing, grading answers and reporting the score")
 	serve := flag.String("serve", "", "if set to a listen address (e.g. :8080), run the HTTP delivery API (author/take/score) instead of the demo")
 	blobsSpec := flag.String("blobs", "memory", `blob store backend for figural media: "memory" or a directory path (filesystem)`)
+	authMode := flag.String("auth", "", `delivery-surface auth mode override: "token" or "none" (default: config)`)
 	flag.Parse()
 
 	if *serve != "" {
@@ -69,6 +70,8 @@ func main() {
 					cfg.Catalog = *path
 				case "prompts":
 					cfg.Prompts = *promptsDir
+				case "auth":
+					cfg.Auth.Mode = *authMode
 				}
 			})
 		})

@@ -49,6 +49,35 @@ serve:
 	@echo "serving on $(SERVE_ADDR); TESTMAKER_HOME=$(TESTMAKER_HOME) (config + data + seeds); binary $(GOBIN_DIR)/testmaker"
 	TESTMAKER_HOME="$(TESTMAKER_HOME)" "$(GOBIN_DIR)/testmaker" -serve "$(SERVE_ADDR)"
 
+# Web app (operator console + test player). Bun is OPTIONAL: every Go target
+# works without it; these targets are the only ones that need it.
+WEB_DIR := web
+
+## webui: build the web app into cmd/testmaker/webui/dist (requires bun)
+.PHONY: webui
+webui:
+	cd $(WEB_DIR) && bun install --frozen-lockfile && bun run build
+	@touch cmd/testmaker/webui/dist/.keep
+
+## webui-dev: run the Vite dev server (HMR), proxying /api to localhost:8080
+.PHONY: webui-dev
+webui-dev:
+	cd $(WEB_DIR) && bun install && bun run dev
+
+## webui-test: run the web unit/component tests (Vitest)
+.PHONY: webui-test
+webui-test:
+	cd $(WEB_DIR) && bun install --frozen-lockfile && bun run test:run
+
+## webui-lint: typecheck the web app (tsc --noEmit)
+.PHONY: webui-lint
+webui-lint:
+	cd $(WEB_DIR) && bun install --frozen-lockfile && bun run typecheck
+
+## serve-all: build the web app, then serve the single binary (SPA + API)
+.PHONY: serve-all
+serve-all: webui serve
+
 ## fmt: format all Go files in place (the only auto-fix)
 .PHONY: fmt
 fmt:

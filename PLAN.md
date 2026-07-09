@@ -654,7 +654,7 @@ git commit -m "Block 14: re-base delivery API under /api and add SPA fallback ha
 
 ---
 
-### Task 3: Makefile web targets, arch-lint exclude, CLI `-auth` flag stub
+### Task 3: Makefile web targets, arch-lint exclude, CLI `-auth` flag stub ✅
 
 Build plumbing so every later task has its commands. (The `-auth` flag is
 wired here as a no-op override slot; Task 4 gives it meaning.)
