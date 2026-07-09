@@ -35,6 +35,12 @@ go.work.sum
 /bin/
 /reports/
 
+# Web app: source deps + built assets (the embed placeholder .keep is tracked)
+/web/node_modules/
+/web/dist/
+/cmd/testmaker/webui/dist/*
+!/cmd/testmaker/webui/dist/.keep
+
 # Editor/IDE
 # .idea/
 # .vscode/
