@@ -140,13 +140,27 @@ func cloneSession(snap session.SessionSnapshot) session.SessionSnapshot {
 	return session.RehydrateFromSnapshot(snap).Snapshot()
 }
 
-// SaveSession inserts or replaces a session by id.
+// SaveSession inserts or replaces a session by id under an optimistic version
+// guard: the write succeeds only when snap.Version is exactly one past the
+// stored version (0 when absent), otherwise session.ErrSessionConflict. This
+// makes concurrent Answers — or an Answer racing a Complete — safe: the loser's
+// stale version is rejected instead of clobbering the winner (see
+// ports.SessionRepository).
 func (s *Store) SaveSession(_ context.Context, snap session.SessionSnapshot) error {
 	if snap.ID == "" {
 		return session.ErrInvalidSession.WithMessage("snapshot id is required")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	stored := 0
+	if cur, ok := s.sessions[snap.ID]; ok {
+		stored = cur.Version
+	}
+	if snap.Version != stored+1 {
+		return session.ErrSessionConflict.
+			WithMessagef("session %s: expected version %d, got %d", snap.ID, stored+1, snap.Version).
+			With("id", string(snap.ID))
+	}
 	s.sessions[snap.ID] = cloneSession(snap)
 	return nil
 }

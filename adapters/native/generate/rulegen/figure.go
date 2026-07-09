@@ -84,9 +84,10 @@ func (f figure) describe() string {
 // --- SVG rendering ---------------------------------------------------------
 //
 // ponytail: figures are drawn as SVG and inlined as base64 data-URIs so a
-// generated item is fully self-contained and viewable with no blob store. When
-// media grows (Block 11 blob store), swap the data-URI for a blob key at the
-// composition root — the item shape (MediaKind + MediaRef) does not change.
+// generated item is fully self-contained and viewable with no blob store. The
+// Block 11 blob store now offloads these data-URIs to content refs at the
+// composition root (app/authoring, when a store is wired) — the item shape
+// (MediaKind + MediaRef) does not change, and a nil store keeps them inline.
 
 const (
 	cellSize    = 100.0 // one figure occupies a 100x100 cell

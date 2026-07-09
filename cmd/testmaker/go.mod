@@ -4,6 +4,8 @@ go 1.25.0
 
 require (
 	github.com/mariotoffia/testmaker v0.0.0
+	github.com/mariotoffia/testmaker/adapters/native/blob/fsblob v0.0.0
+	github.com/mariotoffia/testmaker/adapters/native/blob/memoryblob v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/fetch/stubfetcher v0.0.0
 	github.com/mariotoffia/testmaker/adapters/native/generate/rulegen v0.0.0
@@ -29,6 +31,10 @@ require (
 )
 
 replace github.com/mariotoffia/testmaker => ../..
+
+replace github.com/mariotoffia/testmaker/adapters/native/blob/fsblob => ../../adapters/native/blob/fsblob
+
+replace github.com/mariotoffia/testmaker/adapters/native/blob/memoryblob => ../../adapters/native/blob/memoryblob
 
 replace github.com/mariotoffia/testmaker/adapters/native/fetch/httpfetch => ../../adapters/native/fetch/httpfetch
 

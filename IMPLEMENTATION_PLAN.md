@@ -176,28 +176,100 @@ representation.
   sequence get different abilities (proven by
   `TestScoreAdaptiveConsumesDeliveryOrder`), so "adaptive" is no longer cosmetic.
 
-## Block 10 — Delivery surface (CLI / HTTP API) 🚧
+## Block 10 — Delivery surface (CLI / HTTP API) ✅
 
 **Goal:** expose authoring, execution and scoring over a real interface (grow the
 CLI and/or add an `httpapi` module + config), wiring adapters in the composition
 root.
 **Touches:** `cmd/testmaker`, optional `httpapi`, config.
 **Depends on:** Blocks 7–9.
-**Done when:** a user can author, take and be scored on a test through the surface.
-**Inherited from Block 8 (close before concurrent multi-request execution):**
-- **Optimistic concurrency on `SessionRepository`** — `SaveSession` is a blind
-  upsert, so two concurrent `Answer`s (or an `Answer` racing a `Complete`) on one
-  session id last-writer-wins and can even resurrect a completed attempt. Add a
-  version/etag guard before the execution use-case is exposed to more than one
-  request per attempt. (ADR candidate.)
+**Done when:** a user can author, take and be scored on a test through the surface. ✅
+**Delivered:**
+- HTTP delivery surface in `cmd/testmaker/server.go` (stdlib `net/http` only,
+  Go 1.22 method+path router), reached with `testmaker -serve <addr>`. Seven
+  endpoints cover the whole author → take → score path: `POST /items/generate`,
+  `POST /tests`, `GET /tests/{id}`, `POST /tests/{id}/sessions`,
+  `POST /sessions/{id}/answers`, `POST /sessions/{id}/complete`,
+  `GET /sessions/{id}/score`.
+- It lives in the composition root, **not** a new adapter module: the surface is
+  the driving side of the hexagon and depends on the `app` use-cases, which no
+  adapter is allowed to import. `openTestDB` is the single backend switch
+  (memory default / sqlite DSN), shared by the CLI demo and the server. A
+  `shared.TestmakerError` → HTTP status map (invalid→400, not_found→404,
+  conflict→409, unavailable→503, unsupported→501) is the one transport
+  translation point. Request timing is expressed in seconds so the wire format
+  stays clock-free.
+- Proven end-to-end by `cmd/testmaker/server_test.go` (`httptest`): the full
+  flow returns a completed, scorable session; malformed input is 400 and an
+  unknown test is 404.
+**Inherited from Block 8 — resolution:**
+- **Optimistic concurrency on `SessionRepository`** — RESOLVED. `SaveSession` is
+  now a compare-and-swap on `SessionSnapshot.Version`: a snapshot stores only
+  when its `Version` is exactly one past the stored version, otherwise the store
+  returns `session.ErrSessionConflict` (`ClassConflict` → 409). The version is a
+  passthrough field on the `Session` aggregate (carried through
+  `Snapshot`/`RehydrateFromSnapshot`), which the executor increments at each
+  persist. Two concurrent `Answer`s (or an `Answer` racing a `Complete`) on one
+  session id no longer last-writer-wins or resurrect a completed attempt: the
+  first writer wins and the rest get a conflict. The guard is proven for **both**
+  stores by the shared `ports/testdbtest` conformance suite
+  (`OptimisticConcurrency`) and end-to-end by the delivery surface's
+  concurrent-answers-record-once test (under `-race`). Client-supplied
+  ETags/`If-Match` are a documented upgrade path; the server derives the expected
+  version from its own load today. In sqlite the swap is a guarded conditional
+  write (`json_extract` on the version in the JSON blob), so a file database runs
+  with WAL + `busy_timeout` + a real connection pool and the guarantee holds
+  across connections and processes. Recorded as
+  [ADR-0001](docs/adr/0001-optimistic-concurrency-cas-on-sessionrepository.md) /
+  [ADR-0002](docs/adr/0002-sqlite-session-version-in-json-with-guarded-write.md).
 
-## Block 11 — Media / blob storage 🚧
+## Block 11 — Media / blob storage ✅
 
 **Goal:** a storage port + adapter (local FS first, S3/AWS SDK v2 later) for
 figural item media referenced by `Stimulus`.
 **Touches:** new `ports.BlobStore`, `adapters/native/blob/*` (and later `adapters/aws/blob/*`).
 **Depends on:** Block 4.
-**Done when:** figural items resolve their media through the port in the renderer.
+**Done when:** figural items resolve their media through the port in the renderer. ✅
+**Delivered:**
+- `ports.BlobStore` (2 methods): `Put(Blob) (ref, err)` and `Get(ref) (Blob, err)`,
+  where `Blob{Bytes, ContentType}`. The store is **content-addressed**: the ref is
+  the sha256 of content-type + bytes, so identical media dedupe and the same bytes
+  under a different MIME never collide. Unknown ref → `shared.ErrNotFound`; empty
+  input → `shared.ErrInvalid`. It is an infrastructure port with no bounded
+  context (like `ports.RawItem`), so it needs no `domain/blob` package. Every
+  adapter is proven by the `ports/blobtest.RunBlobStoreTests` conformance suite.
+- Two native, stdlib-only adapters, each its own module:
+  `adapters/native/blob/memoryblob` (map + RWMutex + deep copy; the zero-config
+  runtime default, mirroring `memorytestdb`) and `adapters/native/blob/fsblob`
+  (`Open(dir)`, one file per blob as `<content-type>\n<bytes>`; the plan's "local
+  FS first"). S3 is a later `adapters/aws/blob/*` behind the same port.
+- **Put side (offload):** `app/authoring.Service` gained an optional `ports.BlobStore`.
+  The generator (`rulegen`) still emits self-contained `data:` SVG URIs, so an item
+  is viewable with no store; when a blob store is wired, `Generate`/`Author`
+  offload those inline bytes to content refs before persisting (`offloadMedia`),
+  keeping stored items small. A nil store keeps items inline — offload is a no-op —
+  and a non-`data:` ref (an external URL or an already-offloaded ref) passes
+  through untouched, so offload is idempotent.
+- **Get side (renderer):** the HTTP delivery surface serves `GET /media/{ref}`,
+  resolving an item's figural media ref back to bytes through the same port and
+  writing them with the stored content type. `openBlobStore` is the single backend
+  switch (memory default / directory → fsblob), and a `-blobs` flag selects it for
+  both the server and the CLI generate demo, which resolves one generated item's
+  ref through the store to prove the round-trip.
+- Proven end-to-end by `cmd/testmaker/server_test.go`
+  (`TestMediaEndpointRoundTrip`): generating A2 matrix items offloads their SVG to
+  the store and `GET /media/{ref}` returns the bytes with `image/svg+xml` (pinned
+  with `nosniff` + a sandbox CSP); an unknown ref is a 404. Offload itself is
+  unit-tested in `app/authoring` against a fake store (inline media rewritten, nil
+  store left inline, Put errors aborting the run, non-`data:` refs untouched).
+- The load-bearing choices — content addressing, the authoring-time offload seam,
+  and the hardened same-origin media serving — are recorded in
+  [ADR-0003](docs/adr/0003-content-addressed-blob-store-and-media-offload.md).
+  `fsblob` writes atomically (temp file + rename) so a crash can never leave a
+  truncated blob under a content ref; the `/media/{ref}` route validates fsblob
+  refs as 64-hex so it is not path-traversable. Accepted gaps (no read-time
+  verification, no blob GC/`Delete`, refs the renderer must tell apart from inline
+  `data:` URIs) are documented in the ADR.
 
 ## Block 12 — LLM library 🚧 (port + prompts + service + `openaicompat` backend ✅)
 

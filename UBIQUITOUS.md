@@ -43,6 +43,8 @@ context. Terms marked 🚧 are designed but not yet implemented.
 | **Provenance** | The item's origin: `SourceID` + `fetched`/`generated`/`authored` + inherited redistributability. |
 | **Item filter** | Query criteria over the bank: ability family, test type, origin, redistributability, difficulty range. |
 | **RawItem** | A loose, unvalidated item pulled by a Fetcher before normalization into an `Item`. |
+| **Media ref** | A `Stimulus`/`Option` `MediaRef`: the key that resolves a figural part's bytes. Inline (`data:` URI, self-contained) or a **blob ref** once offloaded; the item shape (`MediaKind` + `MediaRef`) is the same either way. |
+| **Blob store** | Infrastructure port `ports.BlobStore` (`Put`/`Get` over a `Blob{Bytes, ContentType}`) that holds figural media out of the item aggregate. **Content-addressed**: the ref is the sha256 of content-type + bytes, so identical media dedupe. Native `memoryblob` (default) and `fsblob` back it; the renderer resolves refs via `GET /media/{ref}`. |
 
 ## Test authoring (`domain/testset`)
 
@@ -69,6 +71,8 @@ context. Terms marked 🚧 are designed but not yet implemented.
 | **Clock** | `domain/clock.Clock` — the injected time source (`System()` in production, `Fake` in tests); the aggregate never reads the wall clock itself. |
 | **Global deadline** | `startedAt + total budget`; the executor abandons an attempt once `now` passes it. |
 | **Adaptive path** | The sequence of difficulties taken through an adaptive test: a classical up/down staircase (climb on correct, descend on wrong). |
+| **Version** | The session snapshot's optimistic-concurrency token: a passthrough field on the aggregate, incremented by the executor at each persist. `SaveSession` stores only when it is exactly one past the stored version (a compare-and-swap). |
+| **Session conflict** | `session.ErrSessionConflict` (`conflict` class) — a `SaveSession` whose `Version` lost the compare-and-swap race; the losing concurrent `Answer`/`Complete` is rejected instead of clobbering the winner. |
 
 ## Scoring (`domain/scoring`) ✅
 
@@ -108,3 +112,4 @@ context. Terms marked 🚧 are designed but not yet implemented.
 | **LLM-derived item** | An item produced or translated by an LLM. Untrusted until it passes `item.NewItem`; carries provenance (model, prompt hash) and counts as unnormed until calibrated. |
 | **Conformance suite** | A reusable `Run…Tests(t, …)` function that every adapter for a port runs, guaranteeing behavioural parity. |
 | **Composition root** | `cmd/testmaker` — the only place adapters are chosen and wired. |
+| **Delivery surface** | The HTTP API (`cmd/testmaker -serve`, stdlib `net/http`) that exposes the authoring, execution and scoring use-cases so a user can author, take and be scored on a test. Lives in the composition root (it drives `app`, which no adapter may import), not a separate adapter module. |

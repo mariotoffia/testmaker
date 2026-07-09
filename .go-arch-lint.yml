@@ -59,6 +59,10 @@ components:
   adapter_llm_openaicompat: { in: [adapters/native/llm/openaicompat, adapters/native/llm/openaicompat/**] }
   adapter_generate_rulegen: { in: [adapters/native/generate/rulegen, adapters/native/generate/rulegen/**] }
 
+  # --- media / blob storage (Block 11; content-addressed, own vendor-free) ---
+  adapter_blob_memoryblob: { in: [adapters/native/blob/memoryblob, adapters/native/blob/memoryblob/**] }
+  adapter_blob_fsblob: { in: [adapters/native/blob/fsblob, adapters/native/blob/fsblob/**] }
+
   # --- composition root ---
   cmd: { in: [cmd, cmd/**] }
 
@@ -123,6 +127,16 @@ deps:
   # Procedural figural generator: stdlib math/rand + encoding/base64 only, no
   # external rule engine (resolves DESIGN Q#299 toward native Go rules).
   adapter_generate_rulegen:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [_no_external_deps_]
+
+  # In-memory blob store: stdlib crypto/sha256 + sync only, no external deps.
+  adapter_blob_memoryblob:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [_no_external_deps_]
+
+  # Filesystem blob store: stdlib os + crypto/sha256 only, no external deps.
+  adapter_blob_fsblob:
     mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
 

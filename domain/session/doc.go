@@ -25,6 +25,15 @@ var (
 	ErrUnknownSession = &shared.TestmakerError{
 		Code: "session.unknown", Class: shared.ClassNotFound, Message: "unknown session",
 	}
+	// ErrSessionConflict is returned when an optimistic-concurrency check fails:
+	// a SaveSession whose Version does not immediately follow the stored one
+	// (another writer advanced the attempt first). The caller must reload and
+	// retry. It is the guard that stops two concurrent Answers — or an Answer
+	// racing a Complete — from last-writer-wins clobbering (or resurrecting) an
+	// attempt once execution is exposed to more than one request per session.
+	ErrSessionConflict = &shared.TestmakerError{
+		Code: "session.conflict", Class: shared.ClassConflict, Message: "session was modified concurrently",
+	}
 )
 
 // SessionID uniquely identifies a test-taking session.

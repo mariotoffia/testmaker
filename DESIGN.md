@@ -65,8 +65,11 @@ Design decisions:
   share the same shape; the difference is `TestType`, `Stimulus` media and
   `AnswerFormat`. This keeps the bank, generator and renderer uniform.
 - **Media by reference.** Figural items store media references (blob keys / URLs),
-  not bytes; a separate blob store adapter resolves them. Keeps the item
-  aggregate small and serializable.
+  not bytes; a separate blob store adapter resolves them (Block 11, ✅). Keeps the
+  item aggregate small and serializable. The reference is a **content ref** (sha256
+  of content-type + bytes) minted by `ports.BlobStore.Put`; the generator emits
+  self-contained `data:` URIs and the composition root offloads them to refs when a
+  store is wired, and the renderer resolves them back through the same port.
 - **Provenance carries the license.** An item never loses the redistributability
   of its source, so export/publish paths can filter on it.
 - **The taxonomy is promoted to a shared package.** It now lives in
@@ -104,7 +107,7 @@ satisfies its non-decreasing-difficulty invariant by construction.
 
 ---
 
-## 4. Execution & scoring — execution ✅ · scoring ✅
+## 4. Execution & scoring — execution ✅ · scoring ✅ · delivery ✅
 
 **Aggregate `session.Session`** ✅ — one attempt, a small clock-free state machine:
 
@@ -185,6 +188,69 @@ The reported IQ and percentile are **clamped** to a defensible range
 produces figures ("IQ 210", "percentile 100.0") no fixed-form test can support,
 so the tails are pinned rather than reported literally.
 
+### Optimistic concurrency (SessionRepository) ✅
+
+An attempt is a shared mutable resource the moment more than one request can
+touch it — two `Answer`s for the same presented item, or an `Answer` racing a
+`Complete`. A blind `SaveSession` upsert would let the last writer win and could
+even resurrect a completed attempt. So `SessionRepository.SaveSession` is a
+**compare-and-swap on `SessionSnapshot.Version`**: it stores only when the
+snapshot's version is exactly one past the stored version, otherwise it returns
+`session.ErrSessionConflict` (`ClassConflict`).
+
+The version is modelled as a **passthrough field on the `Session` aggregate**
+(never touched by a transition; carried through `Snapshot` /
+`RehydrateFromSnapshot`) rather than store bookkeeping, because that is the
+DDD-canonical home for an optimistic-lock token and it keeps the snapshot
+round-trip (`Rehydrate(snap).Snapshot()`, which the memory store uses to
+deep-copy) self-consistent. The executor increments it at each persist: `Start`
+writes version 1, every later `Answer`/`Complete` writes `loaded+1`. Two writers
+that both loaded version *v* both try to write *v+1*; the first wins, the second
+conflicts. Version 0 is the never-persisted marker and cannot be stored directly.
+
+This is enforced at the **store** (not the app), so it holds for every backend
+and every driving surface, and is proven once by the shared `ports/testdbtest`
+conformance suite (memory + sqlite) — both a sequential guard check and a
+*contended* test that races N writers at one version and asserts exactly one
+commits and the rest get `ErrSessionConflict`. In sqlite the version lives inside
+the JSON snapshot blob (no new column/migration); the swap is one **guarded
+conditional statement** — the first save is an `INSERT … ON CONFLICT DO NOTHING`
+and every later save an `UPDATE … WHERE json_extract(snapshot,'$.Version') = ?`
+on the prior version, with *zero rows changed* meaning conflict. A single
+INSERT/UPDATE holds SQLite's write lock for its whole duration, so the check and
+the write are atomic without a transaction and stay correct across a real
+connection pool. A file database therefore runs with **WAL + `busy_timeout` + a
+multi-connection pool** (a bare `:memory:` database keeps one connection, since
+each connection would otherwise get its own private database). Client-supplied
+`If-Match`/ETag propagation is the remaining upgrade path; today a driving surface
+derives the expected version from its own load.
+
+Because the guard lives in the statement rather than in a serialized connection,
+the CAS is correct independent of how tightly any caller serializes — that is its
+value as the **store's contract**. Within the single-process delivery surface
+that ships, the CAS is rarely the mechanism that *rejects* a live HTTP race (the
+executor's presented-item check usually fires first); its guarantee is the
+forward insurance that lets the execution use-case be exposed to a multi-instance
+/ multi-connection deployment (two `*Store` over one file, or two processes)
+without a redesign. That is why the guard is proven at the store
+(deterministically, under contention across a real pool) rather than only through
+the surface.
+
+### Delivery surface (HTTP) ✅
+
+Authoring, execution and scoring are exposed over stdlib `net/http`
+(`cmd/testmaker -serve <addr>`) so a user can author, take and be scored on a
+test through one interface. It sits in the **composition root**, not a new
+adapter module: the surface drives the `app` use-cases, and the layer graph
+forbids an adapter from importing `app`. Endpoints map one-to-one onto the
+use-cases (`/items/generate`, `/tests`, `/tests/{id}`, `/tests/{id}/sessions`,
+`/sessions/{id}/answers`, `/sessions/{id}/complete`, `/sessions/{id}/score`); a
+single `shared.TestmakerError`-class → HTTP-status map is the only transport
+translation, and request timing is carried in seconds so the wire format stays
+clock-free. Domain snapshots are marshalled directly (no parallel response-DTO
+layer), and norms — deployment configuration — default to empty, so the API
+returns raw scores plus feedback until a deployment supplies a norm book.
+
 ---
 
 ## 5. Fetch & generation pipeline 🚧 (`direct-download` fetcher + `app/ingest` ✅; `generate` via `rulegen` + `app/authoring` ✅)
@@ -214,13 +280,14 @@ engine that emits figural items on demand (A1 figure-series, A2 matrix, A3 →
 series, A4 odd-one-out) with ground-truth keys derived from the same rules that
 build each stimulus, an honest effective difficulty band, and rule metadata in
 the item `Explanation`. Figures render to self-contained SVG data-URIs — a
-deliberate temporary bridge so a generated item needs no external engine and no
-blob store; when the Block 11 blob store lands, the composition root swaps the
-data-URI for a blob key and the item shape (`MediaKind` + `MediaRef`) is
-unchanged. This resolves open question #299 toward native rules rather than
-shelling out to Sandia SGMT / matRiks / RAVEN-family / Bongard-LOGO. The
-**`app/authoring`** use-case stores a generated batch and also exposes a manual
-`Author` path onto the same item bank.
+deliberate bridge so a generated item needs no external engine and no blob
+store; with the Block 11 blob store now landed ✅, the composition root offloads
+the data-URI to a content ref through `ports.BlobStore` and the item shape
+(`MediaKind` + `MediaRef`) is unchanged. This resolves open question #299 toward
+native rules rather than shelling out to Sandia SGMT / matRiks / RAVEN-family /
+Bongard-LOGO. The **`app/authoring`** use-case stores a generated batch (offloading
+inline media to the blob store when wired) and also exposes a manual `Author`
+path onto the same item bank.
 
 Design decision: fetchers return a loose `RawItem` (id, stem, media refs, raw
 map) rather than a validated `Item`, keeping the messy edge out of the domain;
@@ -362,7 +429,14 @@ Design rules:
 
 - Taxonomy home: **resolved (Block 4)** — promoted to `domain/shared`, not a
   dedicated `domain/taxonomy` package.
-- Blob/media storage port shape (local FS vs S3) and item media addressing.
+- Blob/media storage port shape (local FS vs S3) and item media addressing —
+  **resolved (Block 11)**: a 2-method `ports.BlobStore` (`Put`/`Get`) over a
+  `Blob{Bytes, ContentType}`, **content-addressed** (ref = sha256 of
+  content-type + bytes). Native `memoryblob` (runtime default) and `fsblob`
+  ("local FS first") adapters ship now; S3 is a later `adapters/aws/blob/*` behind
+  the same port. Media addressing: the generator emits self-contained `data:` SVG
+  URIs, the composition root offloads them to content refs when a store is wired
+  (`app/authoring`), and the renderer resolves them back via `GET /media/{ref}`.
 - IRT vs classical difficulty for the first adaptive implementation —
   **resolved (Block 9)**: classical staircase for both delivery (Block 8) and
   scoring. The adaptive ability estimate is the transformed up/down (reversal-mean)

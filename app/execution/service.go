@@ -99,6 +99,7 @@ func (s *Service) Complete(ctx context.Context, id session.SessionID) (session.S
 		return session.SessionSnapshot{}, err
 	}
 	snap := sess.Snapshot()
+	snap.Version++
 	if err := s.repo.SaveSession(ctx, snap); err != nil {
 		return session.SessionSnapshot{}, err
 	}
@@ -120,8 +121,15 @@ func (s *Service) load(ctx context.Context, id session.SessionID) (*session.Sess
 // nothing is committed and the attempt is neither orphaned (on Start) nor wedged
 // presenting an un-fetchable item (on Answer) — a clean retry sees the prior
 // state.
+//
+// The persisted snapshot's Version is advanced one past the loaded version, so
+// SaveSession's optimistic guard rejects a concurrent writer that loaded the
+// same version (ports.SessionRepository). On success the returned Delivery
+// carries the new version.
 func (s *Service) persistAndDeliver(ctx context.Context, sess *session.Session) (ports.Delivery, error) {
-	d := ports.Delivery{Session: sess.Snapshot(), Deadline: sess.Deadline()}
+	snap := sess.Snapshot()
+	snap.Version++
+	d := ports.Delivery{Session: snap, Deadline: sess.Deadline()}
 	if p := sess.Presented(); p.ItemID != "" {
 		content, err := s.bank.GetItem(ctx, item.ItemID(p.ItemID))
 		if err != nil {

@@ -131,6 +131,13 @@ type Session struct {
 	endedAt   time.Time
 	presented Presented
 	responses []Response
+	// version is the optimistic-concurrency version of the persisted aggregate:
+	// 0 for a never-stored session, then the store advances it by one on each
+	// successful save. The transition methods never touch it — it is persistence
+	// metadata that rides through Snapshot/Rehydrate so a store can compare-and-swap
+	// (see ports.SessionRepository and app/execution). The executor increments it
+	// on the snapshot at the persistence boundary, not the domain.
+	version int
 }
 
 // NewSession validates a spec and returns a session in the created state. It
