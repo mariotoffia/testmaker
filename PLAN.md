@@ -4602,7 +4602,7 @@ git commit -m "Block 14: web API client + wire types (skew capture, ApiError)"
 
 ---
 
-### Task 21: Auth context, operator login, role routing
+### Task 21: Auth context, operator login, role routing ✅
 
 **Files (created):**
 - `web/src/auth/AuthContext.tsx`
