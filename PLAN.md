@@ -4233,7 +4233,7 @@ git commit -m "Block 14: scaffold web/ (Vite+React+TS+Tailwind) and build→embe
 
 ---
 
-### Task 20: API client + wire types
+### Task 20: API client + wire types ✅
 
 **Files (created):**
 - `web/src/api/types.ts`
