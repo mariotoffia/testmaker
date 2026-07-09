@@ -222,7 +222,7 @@ func runServer(addr string, cfg Config) (err error) {
 	})
 	httpSrv := &http.Server{
 		Addr:              addr,
-		Handler:           withRequestLog(srv.routes(), logger, clock.System()),
+		Handler:           withRequestLog(withSecurityHeaders(srv.routes()), logger, clock.System()),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	fmt.Fprintf(os.Stderr, "testmaker: serving delivery API on %s (testdb=%s, blobs=%s)\n", addr, cfg.TestDB, cfg.Blobs)

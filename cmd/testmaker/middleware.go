@@ -52,3 +52,17 @@ func clientIP(r *http.Request) string {
 	}
 	return host
 }
+
+// withSecurityHeaders sets baseline hardening headers on every response. The
+// SPA handler adds its Content-Security-Policy per document and GET /api/media
+// keeps its stricter sandbox CSP (ADR-0003); those set their own headers after
+// this middleware runs, so they are not overridden here.
+func withSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
+}
