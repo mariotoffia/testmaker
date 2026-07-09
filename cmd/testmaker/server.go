@@ -169,6 +169,7 @@ func (s *server) routes() http.Handler {
 	// Operator-only: authoring, composition, item bank, sourcing.
 	mux.HandleFunc("POST /api/items/generate", s.requireOperator(s.handleGenerate))
 	mux.HandleFunc("POST /api/tests", s.requireOperator(s.handleCompose))
+	mux.HandleFunc("GET /api/tests", s.requireOperator(s.handleListTests))
 	mux.HandleFunc("GET /api/tests/{id}", s.requireOperator(s.handleGetTest))
 	mux.HandleFunc("POST /api/tests/{id}/sessions", s.requireOperator(s.handleStartSession))
 	mux.HandleFunc("POST /api/tests/{id}/invites", s.requireOperator(s.handleMintInvite))
@@ -203,7 +204,7 @@ func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
 			"GET /api/sources", "GET /api/sources/{id}", "POST /api/catalog/sync",
 			"GET /api/items", "GET /api/items/{id}",
 			"POST /api/sources/{id}/ingest", "POST /api/sources/{id}/ingest-llm",
-			"POST /api/items/generate", "POST /api/tests", "GET /api/tests/{id}",
+			"POST /api/items/generate", "POST /api/tests", "GET /api/tests", "GET /api/tests/{id}",
 			"POST /api/tests/{id}/sessions", "POST /api/tests/{id}/invites",
 			"GET /api/invites/preview", "POST /api/invites/start",
 			"POST /api/sessions/{id}/answers",
@@ -367,6 +368,22 @@ func (s *server) handleCompose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, snap)
+}
+
+// handleListTests returns the composed-test catalogue, paginated (C5). TestFilter
+// is currently empty (no criteria), so this lists all tests; the repository sorts
+// by id, so pages are stable.
+func (s *server) handleListTests(w http.ResponseWriter, r *http.Request) {
+	tests, err := s.tests.ListTests(r.Context(), testset.TestFilter{})
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	limit, offset, ok := s.pageParams(w, r, r.URL.Query())
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, paginate(tests, limit, offset))
 }
 
 func (s *server) handleGetTest(w http.ResponseWriter, r *http.Request) {
