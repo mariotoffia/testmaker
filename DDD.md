@@ -31,6 +31,19 @@ context owns the stored prompt templates (parse/render invariants only); the
 injection; its output enters a context only through that context's
 constructors (e.g. `item.NewItem`), like any other untrusted input.
 
+**Access control is delivery-surface policy, not a bounded context.** The
+operator/taker roles, the operator token and the HMAC invite/session
+capability tokens ([ADR-0006](docs/adr/0006-operator-token-and-hmac-capability-tokens.md))
+live entirely in `cmd/testmaker` middleware. The domain never sees a
+principal: a bearer token is bound to a `session.SessionID` at the HTTP edge,
+and the aggregate underneath is unchanged. The same holds for asynchronous
+ingest **jobs** ([ADR-0007](docs/adr/0007-async-ingest-jobs-in-memory-at-delivery-surface.md))
+and the embedded **web app** ([ADR-0005](docs/adr/0005-embedded-spa-web-ui-served-from-composition-root.md)):
+a job is a transport-side view on a run, and the SPA is a client of the
+delivery API — neither introduces a context, an aggregate, or a port. The
+vocabulary for all of this is in
+[UBIQUITOUS.md](UBIQUITOUS.md) ("Delivery & access control").
+
 ---
 
 ## 2. Context map — who depends on whom
@@ -194,6 +207,7 @@ aliases so its callers are unchanged.
 | Monotonic timing (clock never rewinds) | `session` | transition guard on `now` vs `deliveredAt` |
 | Deterministic timing (no hidden wall clock) | `domain/clock` + `app/execution` | injected `clock.Clock`; `forbidigo` bans `time.Now` |
 | Answer graded against the item key | `app/execution` | `graded()` before `session.Record` |
+| Answer keys never reach a taker | `app/execution` + `cmd` | executor strips `AnswerKey`/`Explanation` from the presented item; the delivery surface's role gate keeps full `ItemSnapshot`s operator-only |
 
 ---
 

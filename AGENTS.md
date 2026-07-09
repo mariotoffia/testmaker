@@ -27,6 +27,7 @@ deferred.
 | Naming a type, field, constant, enum value, or concept | [UBIQUITOUS.md](UBIQUITOUS.md) |
 | Why a specific design fork was taken (decision records) | [docs/adr/](docs/adr/README.md) |
 | Component/model-level design, flows and mechanics | [DESIGN.md](DESIGN.md) |
+| Implementing the web app + delivery-hardening initiative (task-by-task, with code) | [PLAN.md](PLAN.md) |
 | Future directions / what is deliberately deferred | [ROADMAP.md](ROADMAP.md) |
 
 `ARCHITECTURE.md`, `DDD.md`, `UBIQUITOUS.md`, `DESIGN.md` and `ROADMAP.md` are

@@ -8,6 +8,9 @@ Everything you need to set up, build, test, and extend testmaker.
 - **Make** — provides the build / test / lint entry points.
 - **Dev tools** — run `make install` to install the pinned linters:
   `golangci-lint v2.12.2` and `go-arch-lint v1.15.0`.
+- **Bun 1.1+** (optional) — only for the web app (`web/`). Every Go target
+  (`make build/lint/test/check/serve`) works without it; absent a UI build the
+  server serves the JSON index instead of the SPA.
 
 ## Repository Structure
 
@@ -61,15 +64,17 @@ testmaker/
 │       └── generate/rulegen/                              # Generator (native figural)
 │
 ├── cmd/testmaker/          # Composition root — CLI demo + HTTP delivery API
+│   └── webui/              #   go:embed package for the built SPA (dist/ is generated)
+├── web/                    # Web app source — Bun + Vite + React + TS (NOT a Go module)
 └── data/
     ├── catalog/            # Research source catalogue (sources.json / sources.yaml)
     └── prompts/            # Seed LLM prompts (one YAML per prompt)
 ```
 
 The whole pipeline is implemented end-to-end (sourcing → item bank → authoring →
-execution → scoring → delivery). See
-[ARCHITECTURE.md §14](ARCHITECTURE.md#14-status) for the per-slice breakdown and
-[ROADMAP.md](ROADMAP.md) for what is deferred.
+execution → scoring → delivery). See [DESIGN.md](DESIGN.md) for the per-slice
+design (§7 covers the web app + delivery hardening, implemented step-by-step
+per [PLAN.md](PLAN.md)) and [ROADMAP.md](ROADMAP.md) for what is deferred.
 
 ## Getting Started
 
@@ -110,10 +115,27 @@ make serve TESTMAKER_HOME=/srv/testmaker  # different config/data home
 
 `make serve` `go install`s the CLI, seeds the home dir with the catalogue/prompts,
 and runs the global binary. The server is **config-driven**: on first run it writes
-`$TESTMAKER_HOME/config/config.json` (default `~/.testmaker`) with defaults, and
-keeps the sqlite db + blob store under `$TESTMAKER_HOME/data` — never the working
-directory. An explicit `-testdb` / `-blobs` / `-catalog` / `-prompts` flag
-overrides the matching config value for that run.
+`$TESTMAKER_HOME/config/config.json` (default `~/.testmaker`) with defaults —
+including the generated `auth` secrets (the file is 0600; the operator token for
+the console login is read from it) — and keeps the sqlite db + blob store under
+`$TESTMAKER_HOME/data`, never the working directory. An explicit `-testdb` /
+`-blobs` / `-catalog` / `-prompts` / `-auth` flag overrides the matching config
+value for that run.
+
+### Web app (requires Bun)
+
+```bash
+make webui        # bun install + vite build → cmd/testmaker/webui/dist (embedded)
+make serve-all    # webui + serve: the single binary serves SPA + API
+make webui-dev    # Vite dev server with HMR, proxying /api → localhost:8080
+make webui-test   # Vitest unit/component tests
+make webui-lint   # tsc --noEmit + eslint
+```
+
+The dev loop is two terminals: `make serve` (API) + `make webui-dev` (UI with
+hot reload). The production path is `make serve-all` — the built SPA is
+embedded via `go:embed`, so deployment stays one binary. See
+[DESIGN.md §7.1](DESIGN.md) and [PLAN.md](PLAN.md).
 
 ## Layer / Dependency Rules
 

@@ -256,15 +256,17 @@ The sourcing/ingest use-cases are wired into the server just as the CLI wires th
 (each adapter bound to its port first, keeping the graph app → ports); the
 deterministic ingest endpoints are synchronous, mirroring the CLI.
 
-The surface is **unauthenticated and single-tenant by design** — one mux serves
-operator and taker. The session `Delivery.Item` handed to a taker is
-**key-redacted** — the executor strips `AnswerKey` and `Explanation` from the
-presented item, so a taker cannot read the answer to the item in front of them.
-What still needs hardening before multi-user or taker-facing exposure: the
-operator `GET /items` returns the full `item.ItemSnapshot` (answer keys and all),
-and the ingest endpoints trigger outbound fetches and paid LLM calls
-unauthenticated. Auth over the operator/bank view + rate/cost limits are the top
-hardening step ([ROADMAP.md](ROADMAP.md) §1).
+The surface carries **two roles** — operator and taker — enforced by
+composition-root middleware (§7.3): the operator bank view (full
+`item.ItemSnapshot`s, answer keys and all) and the ingest/generation verbs sit
+behind the operator token, while a taker reaches only the session verbs of the
+one attempt their capability token names. The session `Delivery.Item` handed
+to a taker is additionally **key-redacted** — the executor strips `AnswerKey`
+and `Explanation` from the presented item — so keys are protected by two
+independent layers. The JSON surface lives under the `/api` prefix, with the
+embedded web application (§7.1) served for every other path. The full surface
+design, limits and job model are §7; the step-by-step implementation is
+tracked in [PLAN.md](PLAN.md).
 
 The server is **configuration-driven**: `testmaker -serve` reads its settings (db,
 blob and catalogue/prompt locations, optional LLM backend) from a config file
@@ -386,7 +388,7 @@ available to after-hooks and callers without a second lookup.
 
 Both first adapters are validated by one `ports/prompttest` conformance suite
 (the memorycatalog/filecatalog pattern). Response **caching** is a separate
-later concern (§8), not a persistence tier.
+later concern ([ROADMAP.md](ROADMAP.md) §5), not a persistence tier.
 
 ### Backends
 
@@ -468,7 +470,186 @@ Design rules:
 
 ---
 
-## 7. Cross-cutting design rules
+## 7. Web application & delivery hardening
+
+The web UI and the hardening it presupposes, designed together
+([ADR-0005](docs/adr/0005-embedded-spa-web-ui-served-from-composition-root.md) ·
+[ADR-0006](docs/adr/0006-operator-token-and-hmac-capability-tokens.md) ·
+[ADR-0007](docs/adr/0007-async-ingest-jobs-in-memory-at-delivery-surface.md)).
+Everything in this section is composition-root work: **no new port, no domain
+change** — the one domain-adjacent fact it relies on (an empty `Answer` records
+as wrong) already holds. Implementation is tracked task-by-task in
+[PLAN.md](PLAN.md).
+
+### 7.1 The web app: one SPA, two faces
+
+**Stack.** Vite + React + TypeScript, built with **Bun**, styled with Tailwind;
+data fetching via TanStack Query; routing via react-router. Source lives in
+`web/` (not a Go module); `vite build` emits into `cmd/testmaker/webui/dist`,
+which the tiny `webui` Go package embeds (`//go:embed all:dist`). A committed
+`dist/.keep` keeps `go build` green without a UI build — the server then falls
+back to the JSON index at `/`, so Bun stays optional for Go-only work.
+
+**Serving.** Registered API patterns win over the `GET /` catch-all (Go 1.22
+`ServeMux` precedence). The SPA handler serves the exact embedded file when it
+exists (hashed `/assets/*` get `Cache-Control: immutable`), else `index.html`
+(no-store) so client-side routes deep-link. The dev loop runs Vite's server
+proxying `/api` to a locally running `testmaker -serve` (`make webui-dev`).
+
+**Console** (operator face): dashboard (bank/catalogue/test counts), source
+browser with per-source ingest + LLM-ingest actions and job progress, item-bank
+browser (paginated, filtered, media previews via `/api/media/{ref}`, answer keys
+visible — this face is operator-only), procedural generation form, test
+composer (sections, families, difficulty ranges, timing, fixed/adaptive),
+test list/detail, invite minting (copyable player link), job list.
+
+**Player** (taker face): reads the invite from the URL fragment
+(`/take#<token>` — fragments never reach server logs), shows the redacted test
+preview (title, sections, counts, timing), then administers one item at a time:
+stimulus parts (text and figural media), the three answer formats
+(multiple-choice 4–6 options incl. figural options, open-numeric, true/false/
+cannot-say), **global and per-item countdowns**, keyboard-first input (`1`–`6`
+select, `Enter` submits, `T`/`F`/`C` verdicts), auto-submit of the current
+selection when the per-item deadline lapses, and finally the score report (raw,
+speed, percentile band / scaled IQ when normed, per-item feedback with
+explanations).
+
+**Wire conventions the TS client encodes once** (`web/src/api/types.ts`):
+domain snapshots marshal **as-is** (PascalCase fields — `ID`, `TestID`,
+`Presented`, …; the documented no-response-DTO decision), while request bodies
+and cmd-local types (jobs, invites, page envelopes) are camelCase;
+`time.Time` is RFC3339 (zero = `0001-01-01T00:00:00Z` = untimed);
+`time.Duration` is **nanoseconds** on the wire.
+
+### 7.2 API surface (`/api`)
+
+| Endpoint | Role | Notes |
+| --- | --- | --- |
+| `GET /api` | public | service + endpoint index (was `GET /`) |
+| `GET /api/auth/whoami` | public | resolves the presented bearer → `{role, …}`; the console/player login check |
+| `GET /api/media/{ref}` | public | content-addressed capability refs; stimulus media only, never keys |
+| `GET /api/sources`, `GET /api/sources/{id}` | operator | list is paginated + filtered |
+| `POST /api/catalog` | operator | upload a catalogue JSON body: validate (`filecatalog.ParseJSON`) → atomic write to the configured catalogue path → `Sync` |
+| `POST /api/catalog/sync` | operator | reload from the catalogue file |
+| `GET /api/items`, `GET /api/items/{id}` | operator | full snapshots (keys); paginated + filtered |
+| `POST /api/sources/{id}/ingest`, `…/ingest-llm` | operator | `"async": true` → `202` + job (§7.5); model/tokens clamped (§7.4) |
+| `GET /api/jobs`, `GET /api/jobs/{id}` | operator | job registry, newest first |
+| `POST /api/items/generate` | operator | unchanged semantics |
+| `POST /api/tests`, `GET /api/tests`, `GET /api/tests/{id}` | operator | `GET /api/tests` is new (paginated) — the console's test list |
+| `POST /api/tests/{id}/sessions` | operator | direct start (testing/ops); response includes the session token |
+| `POST /api/tests/{id}/invites` | operator | mint `{token, url, expiresAt}` |
+| `GET /api/invites/preview` | invite | redacted test summary (title, sections, counts, timing) — no item refs |
+| `POST /api/invites/start` | invite | start a session for the invited test → `Delivery` + `SessionToken` |
+| `POST /api/sessions/{id}/answers`, `…/complete`, `GET …/score` | session | session token for `{id}` (or operator) |
+
+Collection endpoints return the **page envelope**
+`{"items": […], "total": n, "limit": l, "offset": o}` (default limit 50, max
+500), sorted by id (jobs: newest first) so pages are stable. Pagination is
+applied at the handler over the repository list — honest at single-node scale;
+pushing `Limit`/`Offset` into the repository ports is deliberately deferred to
+cloud persistence ([ROADMAP.md](ROADMAP.md) §2), where a store can page
+natively.
+
+### 7.3 Access control
+
+Stateless, single-tenant, three tokens
+([ADR-0006](docs/adr/0006-operator-token-and-hmac-capability-tokens.md)):
+
+- **Operator token** — random 256-bit bearer in `auth.operatorToken`.
+- **Invite** — `ti.<b64url(JSON{tid,exp})>.<b64url(HMAC-SHA256(secret, "ti."+payload))>`;
+  minted per test, TTL from `auth.inviteTTLSeconds` (request may shorten);
+  grants preview + start for `tid`. Stateless ⇒ not single-use (documented
+  ceiling; an invite store is the upgrade).
+- **Session token** — `ts.<b64url(JSON{sid})>.<sig>`, returned by
+  `invites/start` (and `tests/{id}/sessions`); authorizes exactly session
+  `sid`'s verbs. No expiry of its own — the session lifecycle (global deadline,
+  completion) already bounds it.
+
+```mermaid
+sequenceDiagram
+  participant OP as operator (console)
+  participant SRV as delivery surface
+  participant TK as taker (player)
+  OP->>SRV: POST /api/tests/{id}/invites (Bearer operator)
+  SRV-->>OP: token + player link (/take, token in the URL fragment)
+  OP->>TK: share link
+  TK->>SRV: GET /api/invites/preview (Bearer invite)
+  SRV-->>TK: {testId, title, sections summary, timing}
+  TK->>SRV: POST /api/invites/start (Bearer invite)
+  SRV-->>TK: Delivery (key-redacted item) + SessionToken
+  loop each item
+    TK->>SRV: POST /api/sessions/{sid}/answers (Bearer session)
+    SRV-->>TK: next Delivery
+  end
+  TK->>SRV: POST /api/sessions/{sid}/complete → GET /api/sessions/{sid}/score
+```
+
+`auth.mode: none` disables enforcement (trusted localhost / most tests).
+Verification is constant-time; auth failures are transport-native
+(`401`/`403`, `code: auth.required | auth.forbidden`) rather than
+`TestmakerError`s — the domain's closed `Class` vocabulary is not stretched to
+transport concerns. The same rule keeps `429` (limits) middleware-native.
+
+### 7.4 Limits
+
+- **Per-IP rate limit** on `/api` (token bucket, `limits.requestsPerSecond` /
+  `limits.burst`, default 10/20) → `429`. Buckets are pruned; the keying
+  assumes direct connections (a trusted-proxy header option is a documented
+  later knob).
+- **Ingest semaphore** — `limits.maxConcurrentIngests` (default 1) gates sync
+  and async runs alike; a sync request that cannot acquire it gets `429`, an
+  async job queues.
+- **LLM clamp** — a `BeforeGenerate` hook registered at the composition root
+  (the LLM service's designed hook point, §6): `MaxTokens` capped to
+  `llm.maxTokensCap` (default 4096) and, when `llm.allowedModels` is non-empty,
+  unknown models rejected as `invalid` → 400. Caller-controlled spend is
+  bounded server-side no matter what the request says.
+- The 1 MiB request-body cap already ships; `POST /api/catalog` alone allows
+  4 MiB (a full catalogue upload).
+
+### 7.5 Jobs (async ingest)
+
+In-memory registry in `cmd` ([ADR-0007](docs/adr/0007-async-ingest-jobs-in-memory-at-delivery-surface.md)):
+`{id, kind: ingest|ingest-llm, sourceId, state: queued→running→done|failed,
+report?, error?, createdAt/startedAt/endedAt}`. `"async": true` on an ingest
+request returns `202` + the job; the run executes on a background context with
+`limits.ingestTimeoutSeconds`; the console polls. Bounded (oldest completed
+pruned), clock-injected (`domain/clock`) so lifecycles are deterministic under
+test, lost on restart by design — the durable outcome is the item bank and the
+report the run already persists through its own path.
+
+### 7.6 Observability & error hygiene
+
+Structured logging via `log/slog` (level from `log.level`): a request-log
+middleware (method, path, status, duration, remote IP) and full error detail
+at the log — while the wire body carries only
+`{"error": <safe message>, "code": <TestmakerError code>, "class": <class>}`.
+Unclassified errors become a generic `500 internal error` body; cause chains
+(paths, backend URLs) stop echoing to clients. Non-media responses gain
+baseline security headers; the SPA gets a same-origin CSP; `GET /api/media/…`
+keeps its stricter sandboxed CSP (ADR-0003).
+
+### 7.7 Configuration additions
+
+`config.json` gains `auth` (mode, operatorToken, secret, inviteTTLSeconds),
+`limits` (requestsPerSecond, burst, maxConcurrentIngests,
+ingestTimeoutSeconds), `log` (level) and the LLM clamp fields (maxTokensCap,
+allowedModels). Loading applies defaults to absent fields (existing files keep
+working) and **generates + persists** the operator token and secret on first
+run in `token` mode — the file is already 0600 for the LLM key. `-auth` joins
+the flag-overrides-config set.
+
+### 7.8 Player timing model
+
+The executor stays the enforcement point (global budget server-side; per-item
+deadline advisory). The player renders `Delivery.Deadline` (per-item) and
+`StartedAt + Timing.Total` (global) as countdowns, correcting client skew from
+the response `Date` header; at a lapsed per-item deadline it **auto-submits
+the current selection** — an empty `Answer{}` is recordable and grades wrong,
+so a timed-out item counts as answered-wrong (the strict speeded convention)
+and the attempt advances without a "skip" verb the domain doesn't have.
+
+## 8. Cross-cutting design rules
 
 - **Snapshots at boundaries.** Aggregates never cross a port; a `Snapshot` DTO
   does. Adapters store/return deep copies so internal state can't leak.
@@ -482,7 +663,7 @@ Design rules:
 
 ---
 
-## 8. Design decisions of record
+## 9. Design decisions of record
 
 The forks taken along the way — optimistic-concurrency CAS on the session store,
 the content-addressed blob store and media offload, and LLM-extraction provenance

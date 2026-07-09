@@ -116,6 +116,25 @@ The pattern is used by `memorycatalog` (`SourceRepository`), `filecatalog`
   or other resource with `t.Cleanup`/`defer` at acquisition, so a leak fails
   its own test.
 
+## Web-App Tests (`web/`)
+
+The SPA follows the same spirit with its own tooling (run via
+`make webui-test`; not part of `make test`):
+
+- **Vitest + React Testing Library**, jsdom environment. No network: the API
+  client is faked at the `fetch` boundary (a stub returning canned JSON), the
+  same in-process-fake philosophy as `httptest.Server` on the Go side.
+- **Fake timers for countdowns.** The player's `useCountdown`/auto-submit logic
+  is driven with `vi.useFakeTimers()` — a UI test reading the real clock is a
+  flake, exactly like the Go rule.
+- **Test the logic-bearing pieces**: the API client (paths, page envelopes,
+  error mapping), auth context (role routing), the countdown/auto-submit hook,
+  answer-format controls, and score rendering. Skip snapshot tests of static
+  markup.
+- **Go-side handler tests stay in Go**: auth middleware, rate limits, jobs,
+  pagination and the SPA fallback are tested in `cmd/testmaker/*_test.go` with
+  the stdlib `testing` package as always. The Go suite never shells out to Bun.
+
 ## Where Assertions Live
 
 Test code — including the `var _` interface assertions and hand-rolled fakes —

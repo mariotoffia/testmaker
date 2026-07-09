@@ -277,7 +277,7 @@ under test. The `session` aggregate itself holds no clock — the executor passe
 
 ---
 
-## 9. Delivery surface (HTTP API) ✅
+## 9. Delivery surface (HTTP API + web app)
 
 Authoring, execution and scoring are exposed over HTTP by
 [`cmd/testmaker/server.go`](cmd/testmaker) (stdlib `net/http` only, the Go 1.22
@@ -290,13 +290,25 @@ the one ring allowed to import everything, so it is where net/http meets the
 use-cases. `openTestDB` is the single backend switch (memory default, sqlite
 behind a DSN), shared by the CLI demo and the server.
 
+Every JSON endpoint lives under the **`/api` prefix**; everything else falls
+through to the **embedded web app** ([ADR-0005](docs/adr/0005-embedded-spa-web-ui-served-from-composition-root.md)) —
+a Vite + React + TypeScript SPA (source in `web/`, built with Bun into
+`cmd/testmaker/webui/dist`, embedded via `go:embed`). With no UI build present
+the server serves the JSON index at `/`, so the Go toolchain never depends on
+Bun. The mux is wrapped by three composition-root middleware layers, outermost
+first — **request logging** (`log/slog`), **per-IP rate limiting** (`/api`
+only), **security headers** — with **role enforcement** applied per route
+(§9.1). None of this touches `domain`, `ports` or `app`: hardening the driving
+surface added **zero new ports** — auth, limits, jobs and the SPA are all
+transport policy wired in `cmd` (see [DDD.md §1](DDD.md)).
+
 ```mermaid
 sequenceDiagram
   participant HTTP as client
   participant SRV as cmd/testmaker.server
   participant EXE as app/execution.Service (Executor)
   participant REPO as SessionRepository (memory/sqlite)
-  HTTP->>SRV: POST /sessions/{id}/answers
+  HTTP->>SRV: POST /api/sessions/{id}/answers
   SRV->>EXE: Answer(ctx, id, itemID, ans)
   EXE->>REPO: GetSession → grade → SaveSession (Version+1, CAS)
   alt version matches
@@ -310,37 +322,75 @@ sequenceDiagram
   end
 ```
 
-Endpoints cover the **whole pipeline**. Sourcing / item bank: `GET /sources`,
-`GET /sources/{id}`, `POST /catalog/sync`, `GET /items`, `GET /items/{id}`,
-`POST /sources/{id}/ingest`, `POST /sources/{id}/ingest-llm`. Authoring →
-delivery: `POST /items/generate`, `POST /tests`, `GET /tests/{id}`,
-`POST /tests/{id}/sessions`, `POST /sessions/{id}/answers`,
-`POST /sessions/{id}/complete`, `GET /sessions/{id}/score`, `GET /media/{ref}`. A
-single `shared.TestmakerError` → status map (invalid→400, not_found→404,
-conflict→409, unavailable→503, unsupported→501, else 500) is the only transport
-translation; request timing is expressed in seconds so the wire format carries no
-clock types. Snapshots are marshalled directly (no response-DTO layer). Norms are
-deployment config, so the server runs with an empty norm book and returns raw
-scores + feedback. The sourcing/ingest use-cases (`app/catalog`, `app/ingest`)
-are wired into the server exactly as the CLI wires them — each adapter bound to
-its port first so the graph stays app → ports, never adapter → app.
+Endpoints cover the **whole pipeline**, all under `/api`. Sourcing / item bank
+(operator): `GET /api/sources`, `GET /api/sources/{id}`, `POST /api/catalog`
+(upload a catalogue body), `POST /api/catalog/sync`, `GET /api/items`,
+`GET /api/items/{id}`, `POST /api/sources/{id}/ingest`,
+`POST /api/sources/{id}/ingest-llm` (both accept `"async": true` → 202 + job),
+`GET /api/jobs`, `GET /api/jobs/{id}`. Authoring (operator):
+`POST /api/items/generate`, `POST /api/tests`, `GET /api/tests`,
+`GET /api/tests/{id}`, `POST /api/tests/{id}/sessions`,
+`POST /api/tests/{id}/invites`. Taking (invite / session token):
+`GET /api/invites/preview`, `POST /api/invites/start`,
+`POST /api/sessions/{id}/answers`, `POST /api/sessions/{id}/complete`,
+`GET /api/sessions/{id}/score`. Public: `GET /api` (index),
+`GET /api/auth/whoami`, `GET /api/media/{ref}` (content-addressed capability
+refs). Collection endpoints return the **page envelope**
+`{items, total, limit, offset}`.
 
-**Security posture — unauthenticated, single-tenant.** The surface has no
-authentication and one mux serves operator and taker, so as it stands it is a
-trusted-operator / localhost tool. The session `Delivery.Item` a taker receives is
-**key-redacted** (the executor strips `AnswerKey` / `Explanation`), so a taker
-cannot read the answer to the presented item. What remains before taker-facing or
-multi-user exposure: the operator `GET /items` still returns the full
-`item.ItemSnapshot` (keys included), and the ingest endpoints trigger outbound
-fetches and paid LLM calls unauthenticated. Auth over the operator/bank view +
-rate/cost limits are the top hardening item ([ROADMAP.md](ROADMAP.md) §1).
+A single `shared.TestmakerError` → status map (invalid→400, not_found→404,
+conflict→409, unavailable→503, unsupported→501, else 500) is the only transport
+translation; the wire body carries the error's safe `Message` + `Code` +
+`Class` while the full cause chain goes to the structured log, never to the
+client. Transport-only failures (401/403 auth, 429 limits) are written directly
+by the middleware — the domain's closed error-class vocabulary is not extended
+for them. Request timing is expressed in seconds so the wire format carries no
+clock types. Snapshots are marshalled directly (no response-DTO layer). Norms
+are deployment config, so the server runs with an empty norm book and returns
+raw scores + feedback. The sourcing/ingest use-cases (`app/catalog`,
+`app/ingest`) are wired into the server exactly as the CLI wires them — each
+adapter bound to its port first so the graph stays app → ports, never
+adapter → app.
+
+### 9.1 Access control (roles)
+
+Two principals, enforced by middleware per route
+([ADR-0006](docs/adr/0006-operator-token-and-hmac-capability-tokens.md)):
+
+| Role | Credential | May |
+| --- | --- | --- |
+| **Operator** | static bearer token (`auth.operatorToken`, generated into the config on first run) | everything — including the un-redacted item bank and ingest |
+| **Taker** | HMAC capability tokens: an **invite** (per test, expiring, minted by the operator) then a **session token** (per session, returned by start) | preview/start the invited test; answer/complete/score exactly that session |
+
+The session `Delivery.Item` a taker receives is **key-redacted** (the executor
+strips `AnswerKey`/`Explanation`) — that redaction plus the operator gate on
+`GET /api/items*` is the two-layer guarantee that answer keys never reach a
+taker. `auth.mode: none` restores the old open surface for trusted-localhost
+development. Tokens are verified in constant time and never logged; invite
+links carry the token in the URL fragment so it stays out of server logs.
+
+### 9.2 Limits & jobs
+
+Mutating cost sits behind three gates, all composition-root wiring: a per-IP
+token-bucket **rate limit** on `/api` (429), one **ingest semaphore**
+(`limits.maxConcurrentIngests`) shared by sync and async runs, and an **LLM
+clamp** registered as an `app/llm` `BeforeGenerate` hook — `maxTokens` capped
+and the model checked against `llm.allowedModels`, the first production
+consumer of the LLM service's designed hook point. Long ingest runs opt into
+**async jobs** (`202` + poll `GET /api/jobs/{id}`;
+[ADR-0007](docs/adr/0007-async-ingest-jobs-in-memory-at-delivery-surface.md)):
+an in-memory, clock-injected, bounded registry — deliberately not a port and
+lost on restart, because the durable outcome of a run is the bank itself.
 
 **Configuration.** `testmaker -serve` is config-driven: it reads its settings from
 a config file created with defaults under `~/.testmaker` on first run (an explicit
 flag overrides the matching value), and mutable state (db, blobs) plus the seed
 catalogue/prompts default to per-user paths under that home — so `make serve`
 (which `go install`s the binary and runs it globally) is self-contained, never
-writing to the working directory.
+writing to the working directory. The config also carries the `auth` (mode,
+operator token, secret, invite TTL), `limits` (rate, burst, ingest concurrency
+and timeout), `log` (level) and LLM-clamp (`maxTokensCap`, `allowedModels`)
+sections; secrets are generated and persisted (0600) on first run.
 
 **Optimistic concurrency.** `SessionRepository.SaveSession` is a compare-and-swap
 on `SessionSnapshot.Version`: it stores only when the snapshot's version is
@@ -384,10 +434,11 @@ testmaker/
   adapters/native/blob/{memoryblob,fsblob}/              (own go.mod each)
   adapters/native/llm/{openaicompat,memoryprompts,fileprompts}/  (own go.mod each)
   adapters/native/generate/rulegen/                      (own go.mod)
-  cmd/testmaker/                                          (own go.mod)
+  cmd/testmaker/                                          (own go.mod; incl. webui/ — the go:embed package for the built SPA)
+  web/                                                    web-app source (Bun + Vite + React + TS; not a Go module, builds into cmd/testmaker/webui/dist)
   data/catalog/sources.{json,yaml}                        seed catalogue
   data/prompts/*.yaml                                     seed LLM prompts (one per file)
-  ARCHITECTURE.md DDD.md UBIQUITOUS.md DESIGN.md ROADMAP.md
+  ARCHITECTURE.md DDD.md UBIQUITOUS.md DESIGN.md ROADMAP.md PLAN.md
   DEVELOPMENT.md LINT.md TESTS.md AGENTS.md CLAUDE.md
   .go-arch-lint.yml .golangci.yml Makefile
 ```
@@ -423,3 +474,13 @@ implementations.
 `.github/workflows/check.yml` on every push/PR. `lint` runs
 `gofmt`, `go vet`, **`go-arch-lint`** (layer graph) and **`golangci-lint`** (v2).
 See [DEVELOPMENT.md](DEVELOPMENT.md) and [LINT.md](LINT.md).
+
+The web app has its own, **optional** toolchain (Bun): `make webui`
+(production build into the embed directory), `make webui-dev` (Vite dev server
+proxying `/api`), `make webui-test` / `make webui-lint` (Vitest / ESLint), and
+`make serve-all` (build the UI, then serve the single binary). `make check`
+stays pure Go — a checkout without Bun builds, lints and tests everything Go —
+and CI runs the web job separately. The `web/` tree is excluded from
+`.go-arch-lint.yml`'s scan; the `webui` embed package is ordinary `cmd/**` and
+needs no new arch component. Implementation status for all of §9's hardening +
+the web app is tracked step-by-step in [PLAN.md](PLAN.md).

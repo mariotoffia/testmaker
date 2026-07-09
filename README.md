@@ -15,10 +15,14 @@ The whole pipeline is implemented end-to-end — cataloguing sources, fetching /
 generating items into the bank, composing timed (fixed or adaptive) tests, and
 administering + scoring attempts — driven by a CLI demo and exposed as an HTTP
 API. Storage runs on in-memory or sqlite backends (proven interchangeable by
-shared conformance suites), seeded with an 81-source research catalogue. See
-[ARCHITECTURE.md §14](ARCHITECTURE.md#14-status) for the per-slice breakdown and
-[ROADMAP.md](ROADMAP.md) for deferred directions (cloud persistence, IRT
-calibration, the remaining fetchers, LLM hardening).
+shared conformance suites), seeded with an 81-source research catalogue.
+
+The current initiative is the **web app** — an embedded operator console +
+test player SPA with the delivery-surface hardening it requires (roles/auth,
+rate + cost limits, pagination, async ingest jobs). Its design is in
+[DESIGN.md §7](DESIGN.md) and the step-by-step implementation in
+[PLAN.md](PLAN.md). [ROADMAP.md](ROADMAP.md) holds the deferred directions
+(cloud persistence, IRT calibration, the remaining fetchers, LLM hardening).
 
 ## Documentation
 
@@ -28,6 +32,7 @@ calibration, the remaining fetchers, LLM hardening).
 | [DESIGN.md](DESIGN.md) | Model- and flow-level design decisions |
 | [DDD.md](DDD.md) | Bounded contexts, aggregates, invariants, context map |
 | [UBIQUITOUS.md](UBIQUITOUS.md) | Authoritative glossary |
+| [PLAN.md](PLAN.md) | Step-by-step implementation plan for the web app + hardening initiative |
 | [ROADMAP.md](ROADMAP.md) | Future directions and deferred work |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Setup, build, adding modules, conventions |
 | [LINT.md](LINT.md) | What the linters enforce and how |
@@ -48,7 +53,8 @@ adapters/native/   edge implementations, one module each
   blob/{memoryblob,fsblob}                            figural-media store
   llm/{openaicompat,memoryprompts,fileprompts}        LLM backend + prompt stores
   generate/rulegen                                    native figural generator
-cmd/testmaker/     composition root (CLI demo + HTTP API)
+cmd/testmaker/     composition root (CLI demo + HTTP API + webui/ go:embed package)
+web/               web app source (Bun + Vite + React + TS) → builds into cmd/testmaker/webui/dist
 data/catalog/      seed source catalogue (sources.json / .yaml)
 data/prompts/      seed LLM prompts (one YAML per prompt)
 ```
@@ -60,6 +66,7 @@ make install     # golangci-lint + go-arch-lint (pinned versions)
 make check       # build + lint (gofmt, vet, go-arch-lint, golangci) + unit tests
 go run ./cmd/testmaker --catalog data/catalog/sources.json   # the CLI demo
 make serve       # install + run the HTTP API (config + data under ~/.testmaker)
+make serve-all   # build the web app (requires bun), then serve the single binary
 ```
 
 That bare command loads the catalogue into the in-memory repository and reports
@@ -118,35 +125,46 @@ testmaker -run-test      # CLI demo: drives a fixed and an adaptive attempt
 testmaker -serve :8080   # or expose the HTTP API for real takers
 ```
 
-The same stages are available over HTTP (`-serve`):
+The same stages are available over HTTP (`-serve`), all under `/api`
+([DESIGN.md §7.2](DESIGN.md) is the authoritative table, with roles):
 
 ```
-GET  /sources[?generators=&family=&testType=&redistributable=]  list the catalogue
-GET  /sources/{id}                                              one source
-POST /catalog/sync                                              reload the catalogue
-POST /sources/{id}/ingest                                       deterministic fetch + normalize
-POST /sources/{id}/ingest-llm                                   LLM extraction (503 if no LLM)
-GET  /items[?family=&testType=&minDifficulty=&maxDifficulty=]   query the item bank
-GET  /items/{id}                                                one item
-POST /items/generate                                            generate items into the bank
-POST /tests                                                     compose a test
-POST /tests/{id}/sessions                                       start an attempt (first item)
-POST /sessions/{id}/answers                                     answer the presented item (repeat)
-POST /sessions/{id}/complete                                    finish the attempt
-GET  /sessions/{id}/score                                       raw + band + IQ + speed + feedback
-GET  /media/{ref}                                               resolve a figural-media blob
+GET  /api                                                            service + endpoint index
+GET  /api/auth/whoami                                                resolve the bearer token → role
+GET  /api/sources[?generators=&family=&...&limit=&offset=]           list the catalogue (operator)
+GET  /api/sources/{id}                                               one source (operator)
+POST /api/catalog                                                    upload a catalogue body (operator)
+POST /api/catalog/sync                                               reload the catalogue file (operator)
+POST /api/sources/{id}/ingest[-llm]                                  fetch/extract items ("async":true → 202 + job)
+GET  /api/jobs[/{id}]                                                async ingest job progress (operator)
+GET  /api/items[?family=&...&limit=&offset=]                         query the item bank, keys included (operator)
+GET  /api/items/{id}                                                 one item (operator)
+POST /api/items/generate                                             generate items into the bank (operator)
+POST /api/tests · GET /api/tests[/{id}]                              compose / list / inspect tests (operator)
+POST /api/tests/{id}/invites                                         mint a taker invite link (operator)
+GET  /api/invites/preview · POST /api/invites/start                  preview / start the invited test (invite token)
+POST /api/sessions/{id}/answers                                      answer the presented item (session token)
+POST /api/sessions/{id}/complete                                     finish the attempt (session token)
+GET  /api/sessions/{id}/score                                        raw + band + IQ + speed + feedback (session token)
+GET  /api/media/{ref}                                                resolve a figural-media blob (public, content-addressed)
 ```
+
+Everything outside `/api` serves the embedded **web app** — the operator
+console and the test player ([DESIGN.md §7.1](DESIGN.md)). Without a UI build,
+`/` falls back to the JSON index.
 
 **5 · Score & feedback** — the completed attempt yields a raw score, a percentile
 / IQ band from the deployment's norm book (raw-only when a test carries no norm),
 a first-class speed dimension, and per-item explanations.
 
-> **API posture.** `-serve` exposes the whole pipeline (stages 1–5). The session
-> item a taker receives is answer-key-redacted, but the surface is unauthenticated
-> and single-tenant by design — one mux serves operator and taker, and the operator
-> `GET /items` returns answer keys — so authentication over the bank view plus
-> rate/cost limits are the top hardening step before taker-facing exposure
-> ([ROADMAP.md](ROADMAP.md) §1).
+> **API posture.** Two roles guard the surface: the **operator** (static bearer
+> token, generated into the config on first run) owns the catalogue, the bank
+> (answer keys) and composition; a **taker** holds only HMAC capability tokens —
+> an expiring invite for one test, then a token for their one session — and the
+> item they see is answer-key-redacted by the executor on top of that. Rate
+> limits, an ingest-concurrency gate and server-side LLM clamps bound the cost
+> of the mutating verbs; `auth.mode: none` restores the open localhost surface
+> for development ([DESIGN.md §7](DESIGN.md), [ADR-0006](docs/adr/0006-operator-token-and-hmac-capability-tokens.md)).
 
 ## Development
 

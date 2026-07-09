@@ -98,6 +98,30 @@ context. Terms marked 🚧 are designed but not yet implemented.
 | **Prompt application** | The built-in first step of `GenerateFor`: look up the purpose's prompt, render it, prepend it as the system message. |
 | **PromptRepository** | Driven port storing prompts. `ByPurpose` = highest `Version`, ties by smallest ID — deterministic across adapters (memory, file, sqlite, …). |
 
+## Delivery & access control (`cmd/testmaker`)
+
+Access control, jobs and the web app are **delivery-surface concepts**: they
+live entirely in the composition root and never appear in `domain`, `ports` or
+`app` (see [DDD.md §1](DDD.md), [ADR-0006](docs/adr/0006-operator-token-and-hmac-capability-tokens.md)).
+
+| Term | Meaning |
+|---|---|
+| **Operator** | The authoring/administration principal: full API access — catalogue, ingest, the un-redacted item bank (answer keys), generation, composition, invites, jobs. |
+| **Taker** | The principal sitting a test: may preview/start a session from an invite and drive only that session (answer, complete, read its score). |
+| **Role** | The authorization level the auth middleware resolves from a request's bearer token: `operator`, `taker`, or anonymous. |
+| **Operator token** | The static bearer credential for the operator role (`auth.operatorToken`), generated into the config file on first run. |
+| **Auth secret** | The server's HMAC-SHA256 key (`auth.secret`, generated on first run) that signs invite and session tokens. |
+| **Invite** | A signed, expiring capability an operator mints for one test (`POST /api/tests/{id}/invites`): grants preview + start-session for that test id until expiry. Stateless, so not single-use. |
+| **Session token** | The HMAC capability returned when a session starts; authorizes exactly that session's verbs. The operator token is also accepted on session verbs. |
+| **Auth mode** | `token` (default — roles enforced) or `none` (explicit opt-out for trusted-localhost development and tests). |
+| **Console** (operator console) | The operator face of the web app: catalogue browser, ingest with job progress, item-bank browser/preview, generate, compose, invites. |
+| **Player** (test player) | The taker face of the web app: invite preview → timed one-item-at-a-time administration (global + per-item countdowns, keyboard-first) → score report with per-item feedback. |
+| **Web app** (`webui`) | The embedded React SPA: source in `web/`, built into `cmd/testmaker/webui/dist`, embedded via `go:embed`, served by the delivery surface with an SPA fallback. Absent a build, the server falls back to the JSON index. |
+| **API prefix** | Every JSON endpoint lives under `/api`; everything else falls through to the SPA handler. Middleware (auth, rate limit) targets the prefix. |
+| **Job** | One asynchronous ingest run tracked at the delivery surface: `queued → running → done \| failed`, with the run's `ingest.Report` or error. In-memory, bounded, lost on restart by design ([ADR-0007](docs/adr/0007-async-ingest-jobs-in-memory-at-delivery-surface.md)). |
+| **Ingest semaphore** | The shared concurrency gate (`limits.maxConcurrentIngests`) over sync and async ingest runs; bounds outbound fetches and LLM spend. |
+| **Page envelope** | The paginated collection response `{items, total, limit, offset}` returned by the list endpoints (`/api/items`, `/api/sources`, `/api/tests`, `/api/jobs`). |
+
 ## Cross-cutting
 
 | Term | Meaning |

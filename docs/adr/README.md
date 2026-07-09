@@ -19,6 +19,9 @@ of thing a future reader will otherwise re-litigate.
 | [0002](0002-sqlite-session-version-in-json-with-guarded-write.md) | SQLite session version in the JSON snapshot, enforced by a guarded write | Accepted |
 | [0003](0003-content-addressed-blob-store-and-media-offload.md) | Content-addressed blob store, authoring-time media offload, and hardened media serving | Accepted |
 | [0004](0004-llm-extraction-provenance-in-report-not-item.md) | LLM-extraction provenance lives in the ingest Report, not on the item | Accepted |
+| [0005](0005-embedded-spa-web-ui-served-from-composition-root.md) | Web UI is an embedded React SPA served by the composition root; API re-based under `/api` | Accepted |
+| [0006](0006-operator-token-and-hmac-capability-tokens.md) | Access control via a static operator token and stateless HMAC capability tokens | Accepted |
+| [0007](0007-async-ingest-jobs-in-memory-at-delivery-surface.md) | Asynchronous ingest runs as in-memory jobs at the delivery surface | Accepted |
 
 ## Template
 
