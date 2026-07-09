@@ -3982,7 +3982,7 @@ git commit -m "Block 14: async ingest jobs (202 + GET /api/jobs poll)"
 > and `make webui-lint` are the web gates; `make lint`/`make test` (Go) must
 > stay green too — they are unaffected by `web/` (arch-lint excludes it).
 
-### Task 19: Scaffold `web/`, wire the build → embed loop
+### Task 19: Scaffold `web/`, wire the build → embed loop ✅
 
 **Files (all created):**
 - `web/package.json`, `web/bunfig.toml`
@@ -4233,7 +4233,7 @@ git commit -m "Block 14: scaffold web/ (Vite+React+TS+Tailwind) and build→embe
 
 ---
 
-### Task 20: API client + wire types
+### Task 20: API client + wire types ✅
 
 **Files (created):**
 - `web/src/api/types.ts`
@@ -4602,7 +4602,7 @@ git commit -m "Block 14: web API client + wire types (skew capture, ApiError)"
 
 ---
 
-### Task 21: Auth context, operator login, role routing
+### Task 21: Auth context, operator login, role routing ✅
 
 **Files (created):**
 - `web/src/auth/AuthContext.tsx`
@@ -4818,7 +4818,7 @@ git add web && git commit -m "Block 14: web auth context, operator login, role g
 
 ---
 
-### Task 22: App shell + routing
+### Task 22: App shell + routing ✅
 
 **Files:**
 - Modify: `web/src/App.tsx`
