@@ -320,11 +320,23 @@ func (s *server) handleIngestLLM(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rep)
 }
 
+// recoverJob turns a panic in a background ingest runner into a failed job
+// rather than a process-wide crash. net/http recovers a panic in a synchronous
+// handler goroutine into a 500; these runners execute in their own goroutines,
+// which net/http does not shield, so without this a panicking fetcher/normalizer
+// on the async path would take the whole server down (the sync path survives).
+func (s *server) recoverJob(id string) {
+	if p := recover(); p != nil {
+		s.jobs.finish(id, nil, fmt.Errorf("ingest job panicked: %v", p))
+	}
+}
+
 // runIngestJob executes a deterministic ingest on a background context and
 // records the outcome on the job. It acquires the shared ingest semaphore
 // (blocking, so a queued job waits its turn) and honours the configured timeout.
 // The request context is gone by the time this runs, so it uses its own.
 func (s *server) runIngestJob(id string, snap source.Snapshot, limit int) {
+	defer s.recoverJob(id)
 	ctx, cancel := context.WithTimeout(context.Background(), s.ingestTimeout)
 	defer cancel()
 	if s.ingestSem != nil {
@@ -346,6 +358,7 @@ func (s *server) runIngestJob(id string, snap source.Snapshot, limit int) {
 // runIngestLLMJob is runIngestJob for the LLM extraction path: same background
 // context, timeout, and semaphore discipline, calling IngestLLM instead.
 func (s *server) runIngestLLMJob(id string, req ingest.LLMExtractRequest) {
+	defer s.recoverJob(id)
 	ctx, cancel := context.WithTimeout(context.Background(), s.ingestTimeout)
 	defer cancel()
 	if s.ingestSem != nil {
