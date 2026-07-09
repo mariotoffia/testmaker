@@ -60,6 +60,16 @@ func (s *server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	})
 }
 
+// writeAuthError writes a transport-native auth/limit failure (401/403/429):
+// these are not domain TestmakerErrors, so the closed Class vocabulary is not
+// stretched to cover them (DESIGN §7.3 / C3). A 401 carries WWW-Authenticate.
+func writeAuthError(w http.ResponseWriter, status int, code, msg string) {
+	if status == http.StatusUnauthorized {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+	}
+	writeJSON(w, status, map[string]string{"error": msg, "code": code})
+}
+
 // logger returns the server's logger, or a discard logger if none was wired
 // (zero-value server in a unit test).
 func (s *server) logger() *slog.Logger {

@@ -153,3 +153,74 @@ func bearer(r *http.Request) string {
 	}
 	return ""
 }
+
+// requireOperator gates an operator-only handler. Enforced mode: a missing
+// token is 401, a present-but-non-operator token is 403. In none mode it is a
+// pass-through.
+func (s *server) requireOperator(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.auth.enforced() {
+			next(w, r)
+			return
+		}
+		tok := bearer(r)
+		if tok == "" {
+			writeAuthError(w, http.StatusUnauthorized, "auth.required", "authentication required")
+			return
+		}
+		if !s.auth.verifyOperator(tok) {
+			writeAuthError(w, http.StatusForbidden, "auth.forbidden", "operator credentials required")
+			return
+		}
+		next(w, r)
+	}
+}
+
+// requireSession gates a session verb: the caller must hold that session's
+// token (sid == path id) or the operator token. None mode passes through.
+func (s *server) requireSession(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.auth.enforced() {
+			next(w, r)
+			return
+		}
+		tok := bearer(r)
+		if tok == "" {
+			writeAuthError(w, http.StatusUnauthorized, "auth.required", "authentication required")
+			return
+		}
+		if s.auth.verifyOperator(tok) {
+			next(w, r)
+			return
+		}
+		sid, ok := s.auth.verifySession(tok)
+		if !ok {
+			writeAuthError(w, http.StatusUnauthorized, "auth.required", "invalid session token")
+			return
+		}
+		if sid != r.PathValue("id") {
+			writeAuthError(w, http.StatusForbidden, "auth.forbidden", "token does not match this session")
+			return
+		}
+		next(w, r)
+	}
+}
+
+// handleWhoami resolves the presented bearer to a role for the SPA's login
+// check. None mode reports everyone as operator (the surface is open).
+func (s *server) handleWhoami(w http.ResponseWriter, r *http.Request) {
+	role := "anonymous"
+	switch {
+	case !s.auth.enforced():
+		role = "operator"
+	case s.auth.verifyOperator(bearer(r)):
+		role = "operator"
+	default:
+		if _, ok := s.auth.verifySession(bearer(r)); ok {
+			role = "taker"
+		} else if _, ok := s.auth.verifyInvite(bearer(r)); ok {
+			role = "taker"
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"role": role, "mode": s.auth.mode})
+}

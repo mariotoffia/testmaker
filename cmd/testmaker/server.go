@@ -93,7 +93,8 @@ type server struct {
 	tests     ports.TestRepository
 	sessions  ports.SessionRepository
 	blobs     ports.BlobStore
-	log       *slog.Logger // nil → s.logger() hands back a discard logger
+	auth      *authenticator // role checks; zero-value AuthConfig ⇒ enforced() false
+	log       *slog.Logger   // nil → s.logger() hands back a discard logger
 }
 
 // serverDeps bundles everything the delivery surface drives: the TestDb-backed
@@ -107,6 +108,8 @@ type serverDeps struct {
 	ingest   *ingest.Service
 	llm      *llmapp.Service
 	llmModel string
+	authCfg  AuthConfig  // zero value ⇒ Mode "" ⇒ auth off (what most tests construct)
+	clock    clock.Clock // nil → clock.System(); drives invite expiry
 	log      *slog.Logger
 }
 
@@ -122,6 +125,10 @@ func newServer(d serverDeps) *server {
 	// reads as ports-only (mirrors main.go and keeps the arch graph clean: the
 	// rulegen adapter never appears to depend on app).
 	var gen ports.Generator = rulegen.New()
+	clk := d.clock
+	if clk == nil {
+		clk = clock.System()
+	}
 	return &server{
 		gen:       authoring.NewService(gen, d.db.items, d.blobs),
 		author:    authoring.NewTestService(d.db.items, d.db.tests),
@@ -135,6 +142,7 @@ func newServer(d serverDeps) *server {
 		tests:     d.db.tests,
 		sessions:  d.db.sessions,
 		blobs:     d.blobs,
+		auth:      newAuthenticator(d.authCfg, clk),
 		log:       d.log,
 	}
 }
@@ -145,23 +153,26 @@ func newServer(d serverDeps) *server {
 // more specific than "GET /", so they always win over the SPA catch-all.
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
+	// Public: proof-of-life, role probe, media resolution.
 	mux.HandleFunc("GET /api", s.handleIndex)
-	mux.HandleFunc("POST /api/items/generate", s.handleGenerate)
-	mux.HandleFunc("POST /api/tests", s.handleCompose)
-	mux.HandleFunc("GET /api/tests/{id}", s.handleGetTest)
-	mux.HandleFunc("POST /api/tests/{id}/sessions", s.handleStartSession)
-	mux.HandleFunc("POST /api/sessions/{id}/answers", s.handleAnswer)
-	mux.HandleFunc("POST /api/sessions/{id}/complete", s.handleComplete)
-	mux.HandleFunc("GET /api/sessions/{id}/score", s.handleScore)
+	mux.HandleFunc("GET /api/auth/whoami", s.handleWhoami)
 	mux.HandleFunc("GET /api/media/{ref}", s.handleMedia)
-	// Sourcing front half: catalogue, ingest, and item-bank query.
-	mux.HandleFunc("GET /api/sources", s.handleListSources)
-	mux.HandleFunc("GET /api/sources/{id}", s.handleGetSource)
-	mux.HandleFunc("POST /api/catalog/sync", s.handleSyncCatalog)
-	mux.HandleFunc("GET /api/items", s.handleListItems)
-	mux.HandleFunc("GET /api/items/{id}", s.handleGetItem)
-	mux.HandleFunc("POST /api/sources/{id}/ingest", s.handleIngest)
-	mux.HandleFunc("POST /api/sources/{id}/ingest-llm", s.handleIngestLLM)
+	// Operator-only: authoring, composition, item bank, sourcing.
+	mux.HandleFunc("POST /api/items/generate", s.requireOperator(s.handleGenerate))
+	mux.HandleFunc("POST /api/tests", s.requireOperator(s.handleCompose))
+	mux.HandleFunc("GET /api/tests/{id}", s.requireOperator(s.handleGetTest))
+	mux.HandleFunc("POST /api/tests/{id}/sessions", s.requireOperator(s.handleStartSession))
+	mux.HandleFunc("GET /api/sources", s.requireOperator(s.handleListSources))
+	mux.HandleFunc("GET /api/sources/{id}", s.requireOperator(s.handleGetSource))
+	mux.HandleFunc("POST /api/catalog/sync", s.requireOperator(s.handleSyncCatalog))
+	mux.HandleFunc("GET /api/items", s.requireOperator(s.handleListItems))
+	mux.HandleFunc("GET /api/items/{id}", s.requireOperator(s.handleGetItem))
+	mux.HandleFunc("POST /api/sources/{id}/ingest", s.requireOperator(s.handleIngest))
+	mux.HandleFunc("POST /api/sources/{id}/ingest-llm", s.requireOperator(s.handleIngestLLM))
+	// Session-scoped: the session's own token (or operator) drives these.
+	mux.HandleFunc("POST /api/sessions/{id}/answers", s.requireSession(s.handleAnswer))
+	mux.HandleFunc("POST /api/sessions/{id}/complete", s.requireSession(s.handleComplete))
+	mux.HandleFunc("GET /api/sessions/{id}/score", s.requireSession(s.handleScore))
 	// Everything that is not /api is the web app (or the JSON fallback).
 	mux.HandleFunc("GET /", s.handleSPA)
 	return mux
@@ -174,7 +185,7 @@ func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
 		"service": "testmaker",
 		"status":  "ok",
 		"endpoints": []string{
-			"GET /api",
+			"GET /api", "GET /api/auth/whoami",
 			"GET /api/sources", "GET /api/sources/{id}", "POST /api/catalog/sync",
 			"GET /api/items", "GET /api/items/{id}",
 			"POST /api/sources/{id}/ingest", "POST /api/sources/{id}/ingest-llm",
