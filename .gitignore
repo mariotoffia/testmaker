@@ -13,6 +13,7 @@
 
 # Built command binaries (Go binaries have no extension, so ignore by path)
 /cmd/testmaker/testmaker
+/testmaker
 
 # Code coverage profiles and other test artifacts
 *.out

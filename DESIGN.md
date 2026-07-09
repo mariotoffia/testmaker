@@ -253,7 +253,7 @@ returns raw scores plus feedback until a deployment supplies a norm book.
 
 ---
 
-## 5. Fetch & generation pipeline 🚧 (`direct-download` fetcher + `app/ingest` ✅; `generate` via `rulegen` + `app/authoring` ✅)
+## 5. Fetch & generation pipeline 🚧 (`direct-download` / `scrape-html` / `api` fetchers + `app/ingest` ✅; `generate` via `rulegen` + `app/authoring` ✅)
 
 The `Fetcher` port pulls `RawItem`s from a source; a **router** selects the
 concrete fetcher by `source.Extraction.Method` / `AccessClass`:
@@ -261,9 +261,9 @@ concrete fetcher by `source.Extraction.Method` / `AccessClass`:
 | Method / access | Fetcher adapter | Items arrive as |
 | --- | --- | --- |
 | `direct-download` | `adapters/native/fetch/httpfetch` (HTTP GET; zip/text) ✅ | one `RawItem` per file/zip member (text inlined, binary as media ref) |
-| `scrape-html` | HTML scraper 🚧 | text (figural = image refs) |
+| `scrape-html` | `adapters/native/fetch/scrapefetch` (HTTP GET; inline HTML) ✅ | text (figural = image refs) |
 | `headless-browser` | browser driver (JS/interactive) 🚧 | images / interactive |
-| `api` | API client (OSF, Wikimedia, HF) 🚧 | mixed |
+| `api` | `adapters/native/fetch/apifetch` (HTTP GET; JSON endpoints) ✅ | mixed |
 | `git-clone` / `generate` | repo runner / **Generator** ✅ (`generate` via `rulegen`) | images / grids / vectors |
 | `order-required` / `none` | not fetchable — catalogue only | — |
 
@@ -274,7 +274,14 @@ material to a source-keyed **Normalizer** that emits `item.NewItem` specs.
 The **openpsych-viqt** normalizer is the first real one — it parses the
 codebook for keys and the response CSV for p-value difficulty bands, turning a
 "pick the 2 synonyms among 5 words" vocabulary set into 4-option synonym
-multiple-choice items. The **`Generator`** port is the generate branch, now
+multiple-choice items. Two more normalizers land the scrape-html and api
+branches end to end: the **asvab-official** normalizer scrapes the public-domain
+official ASVAB sample subtests (`scrapefetch`), joining each question's visible
+answer labels to the quiz's base64-encoded answer-key config to emit keyed
+synonym (WK→C3), reading (PC→C1), and arithmetic (AR/MK→B2) multiple-choice
+items; the **wikimedia-commons** parser reads MediaWiki `imageinfo` JSON
+(`apifetch`) into licensed figure references (media only — no answer keys).
+The **`Generator`** port is the generate branch, now
 implemented by **`adapters/native/generate/rulegen`** ✅: a native Go rule
 engine that emits figural items on demand (A1 figure-series, A2 matrix, A3 →
 series, A4 odd-one-out) with ground-truth keys derived from the same rules that

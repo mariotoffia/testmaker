@@ -8,7 +8,9 @@ use (
 	.
 	./adapters/native/blob/fsblob
 	./adapters/native/blob/memoryblob
+	./adapters/native/fetch/apifetch
 	./adapters/native/fetch/httpfetch
+	./adapters/native/fetch/scrapefetch
 	./adapters/native/fetch/stubfetcher
 	./adapters/native/generate/rulegen
 	./adapters/native/llm/fileprompts

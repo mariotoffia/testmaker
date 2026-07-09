@@ -522,6 +522,7 @@ sources:
   urls:
   - https://commons.wikimedia.org/wiki/Category:Intelligence_tests
   - https://commons.wikimedia.org/w/api.php
+  - https://commons.wikimedia.org/w/api.php?action=query&generator=categorymembers&gcmtitle=Category:Intelligence_tests&gcmtype=file&gcmlimit=10&prop=imageinfo&iiprop=url%7Cmime%7Cextmetadata&format=json
   access_class:
   - api
   - dataset-repo
@@ -3011,7 +3012,10 @@ sources:
   provider: US Department of Defense (DMDC)
   category: gov-standardized
   urls:
-  - https://www.officialasvab.com/applicants/sample-questions/
+  - https://www.officialasvab.com/word-knowledge-wk/
+  - https://www.officialasvab.com/paragraph-comprehension-pc/
+  - https://www.officialasvab.com/arithmetic-reasoning-ar/
+  - https://www.officialasvab.com/mathematics-knowledge-mk/
   access_class:
   - site-scrape
   formats:

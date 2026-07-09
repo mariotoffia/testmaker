@@ -63,6 +63,8 @@ components:
   adapter_testdb_sqlitetestdb: { in: [adapters/native/testdb/sqlitetestdb, adapters/native/testdb/sqlitetestdb/**] }
   adapter_fetch_stubfetcher: { in: [adapters/native/fetch/stubfetcher, adapters/native/fetch/stubfetcher/**] }
   adapter_fetch_httpfetch: { in: [adapters/native/fetch/httpfetch, adapters/native/fetch/httpfetch/**] }
+  adapter_fetch_scrapefetch: { in: [adapters/native/fetch/scrapefetch, adapters/native/fetch/scrapefetch/**] }
+  adapter_fetch_apifetch: { in: [adapters/native/fetch/apifetch, adapters/native/fetch/apifetch/**] }
   adapter_llm_openaicompat: { in: [adapters/native/llm/openaicompat, adapters/native/llm/openaicompat/**] }
   adapter_llm_memoryprompts: { in: [adapters/native/llm/memoryprompts, adapters/native/llm/memoryprompts/**] }
   adapter_llm_fileprompts: { in: [adapters/native/llm/fileprompts, adapters/native/llm/fileprompts/**] }
@@ -136,6 +138,16 @@ deps:
 
   # Direct-download fetcher: stdlib net/http + archive/zip only.
   adapter_fetch_httpfetch:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [_no_external_deps_]
+
+  # HTML-scrape fetcher: stdlib net/http only, inlines page HTML.
+  adapter_fetch_scrapefetch:
+    mayDependOn: [domain, domain_shared, ports]
+    canUse: [_no_external_deps_]
+
+  # JSON-API fetcher: stdlib net/http + encoding/json only, inlines JSON bodies.
+  adapter_fetch_apifetch:
     mayDependOn: [domain, domain_shared, ports]
     canUse: [_no_external_deps_]
 
