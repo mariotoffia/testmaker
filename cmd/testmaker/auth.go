@@ -195,6 +195,13 @@ func (s *server) requireSession(next http.HandlerFunc) http.HandlerFunc {
 		}
 		sid, ok := s.auth.verifySession(tok)
 		if !ok {
+			// A validly-signed invite is a recognized credential on the wrong
+			// verb (C3: valid token, wrong role → 403); anything else is a
+			// garbage/unrecognized token → 401.
+			if _, isInvite := s.auth.verifyInvite(tok); isInvite {
+				writeAuthError(w, http.StatusForbidden, "auth.forbidden", "an invite cannot drive a session; start one first")
+				return
+			}
 			writeAuthError(w, http.StatusUnauthorized, "auth.required", "invalid session token")
 			return
 		}
@@ -203,6 +210,21 @@ func (s *server) requireSession(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		next(w, r)
+	}
+}
+
+// requireInvite gates the invite verbs. It ALWAYS verifies (even in none mode,
+// where there is no secret, so it simply 401s — the invite flow is a token-mode
+// feature; an operator in none mode starts sessions directly). The verified
+// test id is handed to the wrapped handler so it need not re-parse the token.
+func (s *server) requireInvite(next func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tid, ok := s.auth.verifyInvite(bearer(r))
+		if !ok {
+			writeAuthError(w, http.StatusUnauthorized, "auth.required", "a valid invite is required")
+			return
+		}
+		next(w, r, tid)
 	}
 }
 

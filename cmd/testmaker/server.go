@@ -162,6 +162,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/tests", s.requireOperator(s.handleCompose))
 	mux.HandleFunc("GET /api/tests/{id}", s.requireOperator(s.handleGetTest))
 	mux.HandleFunc("POST /api/tests/{id}/sessions", s.requireOperator(s.handleStartSession))
+	mux.HandleFunc("POST /api/tests/{id}/invites", s.requireOperator(s.handleMintInvite))
 	mux.HandleFunc("GET /api/sources", s.requireOperator(s.handleListSources))
 	mux.HandleFunc("GET /api/sources/{id}", s.requireOperator(s.handleGetSource))
 	mux.HandleFunc("POST /api/catalog/sync", s.requireOperator(s.handleSyncCatalog))
@@ -169,6 +170,10 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/items/{id}", s.requireOperator(s.handleGetItem))
 	mux.HandleFunc("POST /api/sources/{id}/ingest", s.requireOperator(s.handleIngest))
 	mux.HandleFunc("POST /api/sources/{id}/ingest-llm", s.requireOperator(s.handleIngestLLM))
+	// Invite-scoped: a valid invite token (operator token NOT accepted here — an
+	// operator starts via POST /api/tests/{id}/sessions).
+	mux.HandleFunc("GET /api/invites/preview", s.requireInvite(s.handleInvitePreview))
+	mux.HandleFunc("POST /api/invites/start", s.requireInvite(s.handleInviteStart))
 	// Session-scoped: the session's own token (or operator) drives these.
 	mux.HandleFunc("POST /api/sessions/{id}/answers", s.requireSession(s.handleAnswer))
 	mux.HandleFunc("POST /api/sessions/{id}/complete", s.requireSession(s.handleComplete))
@@ -190,7 +195,9 @@ func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
 			"GET /api/items", "GET /api/items/{id}",
 			"POST /api/sources/{id}/ingest", "POST /api/sources/{id}/ingest-llm",
 			"POST /api/items/generate", "POST /api/tests", "GET /api/tests/{id}",
-			"POST /api/tests/{id}/sessions", "POST /api/sessions/{id}/answers",
+			"POST /api/tests/{id}/sessions", "POST /api/tests/{id}/invites",
+			"GET /api/invites/preview", "POST /api/invites/start",
+			"POST /api/sessions/{id}/answers",
 			"POST /api/sessions/{id}/complete", "GET /api/sessions/{id}/score",
 			"GET /api/media/{ref}",
 		},
@@ -346,12 +353,7 @@ func (s *server) handleStartSession(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
-	d, err := s.exec.Start(r.Context(), test)
-	if err != nil {
-		s.writeError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, d)
+	s.startAndRespond(w, r, test)
 }
 
 func (s *server) handleAnswer(w http.ResponseWriter, r *http.Request) {
