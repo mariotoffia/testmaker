@@ -238,7 +238,9 @@ func TestDeliverySurfaceConcurrentAnswersRecordOnce(t *testing.T) {
 
 // TestRootIndex proves GET / returns a 200 API index (so hitting the server root
 // confirms it is up and lists the endpoints) while an unknown path still 404s —
-// i.e. the root pattern is anchored and does not swallow every unmatched request.
+// i.e. the SPA catch-all serves the JSON index at "/" but does not swallow every
+// unmatched request into a 200 (ADR-0005: no UI build in tests, so handleSPA
+// degrades to the index at "/" and JSON 404 elsewhere).
 func TestRootIndex(t *testing.T) {
 	ts := newHarness(t)
 
@@ -261,8 +263,9 @@ func TestRootIndex(t *testing.T) {
 		t.Fatalf("index = %+v, want a service name and a non-empty endpoint list", idx)
 	}
 
-	// An unknown path must still be a 404: the root handler must be anchored to "/"
-	// (GET /{$}), not a catch-all that intercepts every unmatched GET.
+	// An unknown non-/api path must still be a 404: the GET / catch-all delegates
+	// to handleSPA, which (with no UI build) returns the index only for "/" and a
+	// JSON 404 for anything else — it must not turn every unmatched GET into a 200.
 	other, err := http.Get(ts.URL + "/does-not-exist")
 	if err != nil {
 		t.Fatalf("GET unknown: %v", err)
