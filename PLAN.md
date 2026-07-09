@@ -2828,7 +2828,7 @@ git commit -m "Block 14: ingest concurrency semaphore (sync 429 when full)"
 
 ---
 
-### Task 13: LLM cost clamp (BeforeGenerate hook)
+### Task 13: LLM cost clamp (BeforeGenerate hook) ✅
 
 The first production consumer of the LLM service's designed `BeforeGenerate`
 hook: cap tokens and gate models server-side, so a caller-supplied

@@ -99,7 +99,11 @@ func wireSourcing(bank ports.ItemRepository, catalogPath, promptsDir string, llm
 			llmBackend ports.LLM              = backend
 			prompts    ports.PromptRepository = store
 		)
-		llmSvc = llmapp.NewService(llmBackend, prompts)
+		// Clamp caller-controlled spend server-side: cap MaxTokens and gate models
+		// (DESIGN.md §7.4). The composition root is the only place that registers a
+		// BeforeGenerate hook; steps never do.
+		llmSvc = llmapp.NewService(llmBackend, prompts,
+			llmapp.WithBeforeGenerate(llmClampHook(llmCfg.MaxTokensCap, llmCfg.AllowedModels)))
 	}
 	model := llmCfg.Model
 	if model == "" {
