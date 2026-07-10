@@ -10,6 +10,19 @@ import (
 	"github.com/mariotoffia/testmaker/cmd/testmaker/webui"
 )
 
+// skipIfUIEmbedded skips a no-build-fallback test when a real UI build happens to
+// be embedded — e.g. a dev ran `make serve` / `make webui`, leaving
+// cmd/testmaker/webui/dist populated. Those tests assert the JSON-fallback
+// behaviour, which is only active without a build; CI runs on a clean checkout so
+// they always execute there. Symmetric to TestServesEmbeddedSPAWhenBuilt, which
+// skips when there is no build.
+func skipIfUIEmbedded(t *testing.T) {
+	t.Helper()
+	if _, ok := webui.FS(); ok {
+		t.Skip("UI build embedded (dev dist/ not clean); asserts the no-build fallback — run `git clean -fdxq cmd/testmaker/webui/dist` to exercise it")
+	}
+}
+
 // TestServesEmbeddedSPAWhenBuilt asserts the SPA-serving contract, but only when
 // a build is embedded (make webui). Without one it skips — the Go toolchain must
 // stay green with no Bun, so this can never be a hard failure on CI's Go job.
