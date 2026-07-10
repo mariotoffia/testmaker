@@ -5708,7 +5708,7 @@ git add web && git commit -m "Block 14: console polish (empty states, pending/di
 > auth context. All timing tests use `vi.useFakeTimers()` (TESTS.md's no-real-
 > clock rule, in TypeScript).
 
-### Task 30: Take entry — invite preview + session start
+### Task 30 ✅: Take entry — invite preview + session start
 
 **Files:**
 - Modify: `web/src/pages/Take.tsx`
