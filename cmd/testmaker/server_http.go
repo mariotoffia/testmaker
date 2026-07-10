@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -18,6 +19,21 @@ import (
 // maxRequestBody caps a request body on this unauthenticated surface so a large
 // or slow-drip POST cannot exhaust memory; the JSON payloads here are all small.
 const maxRequestBody = 1 << 20 // 1 MiB
+
+// serverURL turns a net/http listen address (":8080", "0.0.0.0:8080", "[::]:8080")
+// into a browsable URL to print at startup: an empty or wildcard host becomes
+// localhost so the line is clickable, while a concrete host or IP is kept as given.
+func serverURL(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "http://" + addr
+	}
+	switch host {
+	case "", "0.0.0.0", "::":
+		host = "localhost"
+	}
+	return "http://" + net.JoinHostPort(host, port)
+}
 
 // writeJSON encodes v as the response body with the given status.
 func writeJSON(w http.ResponseWriter, status int, v any) {

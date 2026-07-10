@@ -258,7 +258,7 @@ func runServer(addr string, cfg Config) (err error) {
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	fmt.Fprintf(os.Stderr, "testmaker: serving delivery API on %s (auth=%s, testdb=%s, blobs=%s)\n", addr, cfg.Auth.Mode, cfg.TestDB, cfg.Blobs)
+	fmt.Fprintf(os.Stderr, "testmaker: serving delivery API on %s (auth=%s, testdb=%s, blobs=%s)\n", serverURL(addr), cfg.Auth.Mode, cfg.TestDB, cfg.Blobs)
 	if lerr := httpSrv.ListenAndServe(); lerr != nil && !errors.Is(lerr, http.ErrServerClosed) {
 		return fmt.Errorf("serve %s: %w", addr, lerr)
 	}
