@@ -5007,7 +5007,7 @@ git add web && git commit -m "Block 14: web app shell, routing, guarded console 
 > Each task ends with `make webui-test && make webui-lint` green and a commit.
 > The Go gates are unaffected but re-run them at the phase's end (Task 29).
 
-### Task 23: Data hooks + dashboard
+### Task 23: Data hooks + dashboard ✅
 
 **Files:**
 - Create: `web/src/api/hooks.ts`
@@ -5198,7 +5198,7 @@ git add web && git commit -m "Block 14: web data hooks, Async wrapper, dashboard
 
 ---
 
-### Task 24: Sources browser + catalogue sync/upload
+### Task 24: Sources browser + catalogue sync/upload ✅
 
 **Files:**
 - Modify: `web/src/pages/Sources.tsx`
@@ -5307,7 +5307,7 @@ git add web && git commit -m "Block 14: web sources browser + catalogue sync/upl
 
 ---
 
-### Task 25: Ingest actions + live job progress
+### Task 25: Ingest actions + live job progress ✅
 
 **Files:**
 - Modify: `web/src/pages/SourceDetail.tsx` (ingest / ingest-llm buttons, async toggle)
@@ -5399,7 +5399,7 @@ git add web && git commit -m "Block 14: web ingest actions + live job progress"
 
 ---
 
-### Task 26: Item bank browser + shared media renderer + item preview
+### Task 26: Item bank browser + shared media renderer + item preview ✅
 
 **Files:**
 - Modify: `web/src/pages/Items.tsx`
@@ -5499,7 +5499,7 @@ git add web && git commit -m "Block 14: web item bank browser, shared MediaRende
 
 ---
 
-### Task 27: Generate items form
+### Task 27: Generate items form ✅
 
 **Files:**
 - Modify: `web/src/pages/Generate.tsx`
@@ -5569,7 +5569,7 @@ git add web && git commit -m "Block 14: web generate-items form"
 
 ---
 
-### Task 28: Compose test form + tests list/detail + invite minting
+### Task 28: Compose test form + tests list/detail + invite minting ✅
 
 **Files:**
 - Modify: `web/src/pages/Compose.tsx`, `web/src/pages/Tests.tsx`
@@ -5647,6 +5647,15 @@ export function InviteButton({ testId }: { testId: string }) {
 an operator "Start a session" button (direct start via
 `POST /api/tests/:id/sessions`, useful for smoke-testing without an invite).
 
+> **Deferred to Phase 8:** the operator direct-start button is intentionally
+> omitted here. The player (`Take.tsx` / `useTakeSession`, Task 30) is
+> invite-driven — it starts a session from an invite in the URL hash and has no
+> landing for a pre-started session, and no `api.startSession` client method
+> exists. Building the button now would start server-side session state with
+> nowhere to navigate. Invite minting (`<InviteButton>`) already delivers the
+> start capability; add the direct-start button in Phase 8 once `Take.tsx` can
+> receive an operator-started session.
+
 - [ ] **Step 6: Test + lint + commit**
 
 ```bash
@@ -5656,7 +5665,7 @@ git add web && git commit -m "Block 14: web compose form, tests list/detail, inv
 
 ---
 
-### Task 29: Console polish + Go-gate checkpoint
+### Task 29: Console polish + Go-gate checkpoint ✅
 
 **Files:**
 - Modify: assorted console pages (empty states, error copy, disabled-button

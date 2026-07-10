@@ -6,10 +6,13 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Dashboard from "./pages/Dashboard";
 import Sources from "./pages/Sources";
+import SourceDetail from "./pages/SourceDetail";
 import Items from "./pages/Items";
+import ItemDetail from "./pages/ItemDetail";
 import Generate from "./pages/Generate";
 import Compose from "./pages/Compose";
 import Tests from "./pages/Tests";
+import TestDetail from "./pages/TestDetail";
 import Jobs from "./pages/Jobs";
 import Take from "./pages/Take";
 
@@ -23,10 +26,13 @@ export function AppRoutes() {
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="sources" element={<Sources />} />
+          <Route path="sources/:id" element={<SourceDetail />} />
           <Route path="items" element={<Items />} />
+          <Route path="items/:id" element={<ItemDetail />} />
           <Route path="generate" element={<Generate />} />
           <Route path="compose" element={<Compose />} />
           <Route path="tests" element={<Tests />} />
+          <Route path="tests/:id" element={<TestDetail />} />
           <Route path="jobs" element={<Jobs />} />
         </Route>
       </Route>
