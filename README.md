@@ -19,7 +19,7 @@ shared conformance suites), seeded with an 81-source research catalogue.
 
 The **web app** is available — an embedded operator console + test player SPA
 with the delivery-surface hardening it requires (roles/auth, rate + cost limits,
-pagination, async ingest jobs). Run it with `make serve-all` (builds the SPA,
+pagination, async ingest jobs). Run it with `make serve` (builds the SPA,
 then serves the single binary on `:8080`). Its design is in
 [DESIGN.md §7](DESIGN.md). [ROADMAP.md](ROADMAP.md) holds the deferred directions
 (cloud persistence, IRT calibration, the remaining fetchers, LLM hardening).
@@ -65,8 +65,7 @@ data/prompts/      seed LLM prompts (one YAML per prompt)
 make install     # golangci-lint + go-arch-lint (pinned versions)
 make check       # build + lint (gofmt, vet, go-arch-lint, golangci) + unit tests
 go run ./cmd/testmaker --catalog data/catalog/sources.json   # the CLI demo
-make serve       # install + run the HTTP API (config + data under ~/.testmaker)
-make serve-all   # build the web app (requires bun), then serve the single binary
+make serve       # build the web app (bun) + install + run the single binary (SPA + API) on :8080
 ```
 
 That bare command loads the catalogue into the in-memory repository and reports
@@ -80,7 +79,7 @@ One pipeline runs from cataloguing sources to scoring a taker's attempt. The
 exposes the whole pipeline as an HTTP API (the same stages, over HTTP).
 (`testmaker` below is the built binary, or `go run ./cmd/testmaker`.) For the demo,
 storage is chosen with `-testdb memory|<sqlite-dsn>` and `-blobs memory|<dir>`; the
-**server** is config-driven — `make serve` installs the binary and runs it against
+**server** is config-driven — `make serve` builds the web app, installs the binary and runs it against
 a config file created under `~/.testmaker` on first run (settings + data live
 there, never the working directory).
 
