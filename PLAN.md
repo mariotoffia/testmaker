@@ -6181,7 +6181,7 @@ git add web && git commit -m "Block 14: player item view + keyboard-first answer
 
 ---
 
-### Task 33: Wire the advance loop + per-item auto-submit
+### Task 33 ✅: Wire the advance loop + per-item auto-submit
 
 **Files:**
 - Modify: `web/src/pages/Take.tsx` (compose item + countdowns + current-answer state)
