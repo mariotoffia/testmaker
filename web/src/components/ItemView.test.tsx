@@ -36,4 +36,11 @@ describe("ItemView", () => {
     const beta = screen.getByText("Beta").closest("li");
     expect(beta?.className).not.toContain("border-green-500");
   });
+
+  it("renders only the stimulus when showOptions is false (the player shows options via AnswerControl)", () => {
+    render(<ItemView item={item} showKey={false} showOptions={false} />);
+    expect(screen.getByText("What comes next?")).toBeInTheDocument();
+    expect(screen.queryByText("Alpha")).toBeNull();
+    expect(screen.queryByText("Beta")).toBeNull();
+  });
 });

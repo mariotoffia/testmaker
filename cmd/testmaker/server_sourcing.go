@@ -217,6 +217,17 @@ func (s *server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, snap)
 }
 
+// handleDeleteItem removes one bank item and returns 204. Deleting an absent id
+// is not an error (the repository is idempotent), so the client can fire a
+// bulk delete without racing a concurrent removal.
+func (s *server) handleDeleteItem(w http.ResponseWriter, r *http.Request) {
+	if err := s.items.DeleteItem(r.Context(), item.ItemID(r.PathValue("id"))); err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- ingest handlers ---
 
 // handleIngest runs the deterministic fetch -> normalize -> validate -> store

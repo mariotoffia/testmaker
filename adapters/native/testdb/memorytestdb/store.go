@@ -132,6 +132,14 @@ func (s *Store) ListItems(_ context.Context, filter item.ItemFilter) ([]item.Ite
 	return out, nil
 }
 
+// DeleteItem removes an item by id; deleting an absent id is not an error.
+func (s *Store) DeleteItem(_ context.Context, id item.ItemID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.items, id)
+	return nil
+}
+
 // --- SessionRepository ---
 
 // cloneSession deep-copies a snapshot via the aggregate so stored state never

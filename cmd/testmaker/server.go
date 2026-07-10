@@ -191,6 +191,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/catalog/sync", s.requireOperator(s.handleSyncCatalog))
 	mux.HandleFunc("GET /api/items", s.requireOperator(s.handleListItems))
 	mux.HandleFunc("GET /api/items/{id}", s.requireOperator(s.handleGetItem))
+	mux.HandleFunc("DELETE /api/items/{id}", s.requireOperator(s.handleDeleteItem))
 	mux.HandleFunc("POST /api/sources/{id}/ingest", s.requireOperator(s.handleIngest))
 	mux.HandleFunc("POST /api/sources/{id}/ingest-llm", s.requireOperator(s.handleIngestLLM))
 	mux.HandleFunc("GET /api/jobs", s.requireOperator(s.handleListJobs))
@@ -218,7 +219,7 @@ func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
 			"GET /api", "GET /api/auth/whoami",
 			"GET /api/sources", "GET /api/sources/{id}",
 			"POST /api/catalog", "POST /api/catalog/sync",
-			"GET /api/items", "GET /api/items/{id}",
+			"GET /api/items", "GET /api/items/{id}", "DELETE /api/items/{id}",
 			"POST /api/sources/{id}/ingest", "POST /api/sources/{id}/ingest-llm",
 			"GET /api/jobs", "GET /api/jobs/{id}",
 			"POST /api/items/generate", "POST /api/tests", "GET /api/tests", "GET /api/tests/{id}",

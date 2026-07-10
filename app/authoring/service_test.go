@@ -70,6 +70,11 @@ func (b *fakeBank) ListItems(_ context.Context, filter item.ItemFilter) ([]item.
 	return out, nil
 }
 
+func (b *fakeBank) DeleteItem(_ context.Context, id item.ItemID) error {
+	delete(b.saved, id)
+	return nil
+}
+
 // sampleSnapshot builds a valid multiple-choice snapshot for the fakes.
 func sampleSnapshot(t *testing.T, id item.ItemID) item.ItemSnapshot {
 	t.Helper()

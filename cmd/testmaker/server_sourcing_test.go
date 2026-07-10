@@ -117,6 +117,20 @@ func get(t *testing.T, ts *httptest.Server, path string) *http.Response {
 	return resp
 }
 
+func httpDelete(t *testing.T, ts *httptest.Server, path string) int {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+path, nil)
+	if err != nil {
+		t.Fatalf("new DELETE %s: %v", path, err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE %s: %v", path, err)
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode
+}
+
 // TestSourcesEndpointListsAndFilters proves GET /sources returns the catalogue and
 // honours the generators / testType / redistributable query filters.
 func TestSourcesEndpointListsAndFilters(t *testing.T) {
@@ -250,6 +264,44 @@ func TestItemsEndpointListsAndGets(t *testing.T) {
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown item = %d, want 404", resp.StatusCode)
+	}
+}
+
+// TestDeleteItemEndpoint proves DELETE /api/items/{id} removes a bank item
+// (204), leaves it gone (404 on GET), and is idempotent (deleting an absent id
+// is still 204).
+func TestDeleteItemEndpoint(t *testing.T) {
+	ts, _ := newSourcingHarness(t, sourcingSetup{})
+	resp := post(t, ts, "/api/items/generate", generateReq{TestType: "A2", Difficulty: 2, Count: 3, Seed: 1})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("generate = %d, want 200", resp.StatusCode)
+	}
+	_ = resp.Body.Close()
+
+	var all pageEnvelope[item.ItemSnapshot]
+	decode(t, get(t, ts, "/api/items"), &all)
+	if len(all.Items) == 0 {
+		t.Fatalf("no items generated")
+	}
+	id := string(all.Items[0].ID)
+
+	if code := httpDelete(t, ts, "/api/items/"+id); code != http.StatusNoContent {
+		t.Fatalf("DELETE /items/{id} = %d, want 204", code)
+	}
+	resp = get(t, ts, "/api/items/"+id)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("GET after delete = %d, want 404", resp.StatusCode)
+	}
+	// deleting an absent id is idempotent
+	if code := httpDelete(t, ts, "/api/items/"+id); code != http.StatusNoContent {
+		t.Fatalf("DELETE absent = %d, want 204", code)
+	}
+
+	var after pageEnvelope[item.ItemSnapshot]
+	decode(t, get(t, ts, "/api/items"), &after)
+	if after.Total != all.Total-1 {
+		t.Fatalf("bank total after delete = %d, want %d", after.Total, all.Total-1)
 	}
 }
 

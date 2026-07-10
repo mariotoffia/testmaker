@@ -108,6 +108,11 @@ func (s *Store) ListItems(ctx context.Context, filter item.ItemFilter) ([]item.I
 	return s.listItemRows(ctx, filter)
 }
 
+// DeleteItem removes an item by id; deleting an absent id is not an error.
+func (s *Store) DeleteItem(ctx context.Context, id item.ItemID) error {
+	return s.deleteItemRow(ctx, id)
+}
+
 // --- SessionRepository ---
 
 // SaveSession inserts or replaces a session by id.

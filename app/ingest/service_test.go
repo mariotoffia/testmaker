@@ -50,6 +50,17 @@ func (b *fakeBank) ListItems(context.Context, item.ItemFilter) ([]item.ItemSnaps
 	return b.saved, nil
 }
 
+func (b *fakeBank) DeleteItem(_ context.Context, id item.ItemID) error {
+	kept := b.saved[:0]
+	for _, s := range b.saved {
+		if s.ID != id {
+			kept = append(kept, s)
+		}
+	}
+	b.saved = kept
+	return nil
+}
+
 var (
 	_ ports.Fetcher        = (*fakeFetcher)(nil)
 	_ ports.ItemRepository = (*fakeBank)(nil)

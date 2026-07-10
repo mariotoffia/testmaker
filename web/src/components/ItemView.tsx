@@ -4,7 +4,9 @@ import { MediaRenderer } from "./MediaRenderer";
 // ItemView renders an item's stem and options. showKey highlights the correct
 // option — operator preview only; the player passes showKey={false} and the
 // server has already stripped the key from a taker's presented item anyway.
-export function ItemView({ item, showKey }: { item: ItemSnapshot; showKey: boolean }) {
+// showOptions={false} renders the stimulus alone: the player owns option display
+// via AnswerControl, so rendering options here too would duplicate every choice.
+export function ItemView({ item, showKey, showOptions = true }: { item: ItemSnapshot; showKey: boolean; showOptions?: boolean }) {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -12,7 +14,7 @@ export function ItemView({ item, showKey }: { item: ItemSnapshot; showKey: boole
           <div key={i}><MediaRenderer part={p} /></div>
         ))}
       </div>
-      {item.AnswerFormat === "multiple-choice" && (
+      {showOptions && item.AnswerFormat === "multiple-choice" && (
         <ul className="space-y-1">
           {(item.Options ?? []).map((o) => {
             const correct = showKey && o.ID === item.AnswerKey.OptionID;

@@ -373,6 +373,13 @@ func (s *Store) saveItemRow(ctx context.Context, snap item.ItemSnapshot) error {
 	return nil
 }
 
+func (s *Store) deleteItemRow(ctx context.Context, id item.ItemID) error {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM items WHERE id = ?`, string(id)); err != nil {
+		return ErrStore.WithMessagef("delete item %q", id).Wrap(err)
+	}
+	return nil
+}
+
 func unmarshalItem(id item.ItemID, blob string) (item.ItemSnapshot, error) {
 	var snap item.ItemSnapshot
 	if err := json.Unmarshal([]byte(blob), &snap); err != nil {

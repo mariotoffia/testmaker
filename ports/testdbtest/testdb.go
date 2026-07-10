@@ -273,6 +273,21 @@ func RunItemRepositoryTests(t *testing.T, newRepo func() ports.ItemRepository) {
 		}
 	})
 
+	t.Run("Delete", func(t *testing.T) {
+		repo := newRepo()
+		mustSaveItem(t, repo, mcItemSnapshot(t, "omib-1", "A2", 3))
+		if err := repo.DeleteItem(ctx, "omib-1"); err != nil {
+			t.Fatalf("delete: %v", err)
+		}
+		if _, err := repo.GetItem(ctx, "omib-1"); !errors.Is(err, item.ErrUnknownItem) {
+			t.Fatalf("expected gone, got %v", err)
+		}
+		// deleting an absent id is not an error
+		if err := repo.DeleteItem(ctx, "omib-1"); err != nil {
+			t.Fatalf("delete absent: %v", err)
+		}
+	})
+
 	t.Run("StoredSnapshotIsolatedFromInput", func(t *testing.T) {
 		repo := newRepo()
 		// two independent builds: want stays pristine while snap is mutated after

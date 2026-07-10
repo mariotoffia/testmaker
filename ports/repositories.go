@@ -19,6 +19,8 @@ type ItemRepository interface {
 	GetItem(ctx context.Context, id item.ItemID) (item.ItemSnapshot, error)
 	// ListItems returns all items matching the filter (empty filter = all).
 	ListItems(ctx context.Context, filter item.ItemFilter) ([]item.ItemSnapshot, error)
+	// DeleteItem removes an item by id (no error if absent).
+	DeleteItem(ctx context.Context, id item.ItemID) error
 }
 
 // TestRepository persists composed tests (driven port).

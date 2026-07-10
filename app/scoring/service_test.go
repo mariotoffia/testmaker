@@ -52,6 +52,11 @@ func (b *fakeBank) ListItems(_ context.Context, _ item.ItemFilter) ([]item.ItemS
 	return out, nil
 }
 
+func (b *fakeBank) DeleteItem(_ context.Context, id item.ItemID) error {
+	delete(b.items, id)
+	return nil
+}
+
 // mcItem builds a valid multiple-choice bank item with a known key + explanation.
 func mcItem(t *testing.T, id, key, explanation string, band int) item.ItemSnapshot {
 	t.Helper()

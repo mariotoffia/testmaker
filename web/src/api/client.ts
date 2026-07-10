@@ -68,6 +68,7 @@ export const api = {
 
   listItems: (token: string, q = "") => apiFetch<Page<ItemSnapshot>>(`/api/items${q}`, { token }),
   getItem: (token: string, id: string) => apiFetch<ItemSnapshot>(`/api/items/${id}`, { token }),
+  deleteItem: (token: string, id: string) => apiFetch<void>(`/api/items/${id}`, { token, method: "DELETE" }),
   generate: (token: string, body: object) => apiFetch<unknown>("/api/items/generate", { token, body }),
 
   ingest: (token: string, id: string, body: object) => apiFetch<Job | IngestSync>(`/api/sources/${id}/ingest`, { token, body }),

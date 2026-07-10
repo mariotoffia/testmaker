@@ -61,6 +61,11 @@ func (b *fakeBank) ListItems(_ context.Context, _ item.ItemFilter) ([]item.ItemS
 	return out, nil
 }
 
+func (b *fakeBank) DeleteItem(_ context.Context, id item.ItemID) error {
+	delete(b.items, id)
+	return nil
+}
+
 // fakeSessions is an in-memory ports.SessionRepository. It clones through the
 // aggregate on the way in and out, so a caller never shares slice storage with
 // stored state — the isolation a real store gives, and what resume-via-repo
