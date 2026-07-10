@@ -5897,7 +5897,7 @@ git add web && git commit -m "Block 14: player take-session state machine (previ
 
 ---
 
-### Task 31: Countdown hook + timer display
+### Task 31 ✅: Countdown hook + timer display
 
 **Files:**
 - Create: `web/src/player/useCountdown.ts`
