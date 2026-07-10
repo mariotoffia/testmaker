@@ -6020,7 +6020,7 @@ git add web && git commit -m "Block 14: player countdown hook + timer display (s
 
 ---
 
-### Task 32: Item presentation + answer-format controls + keyboard
+### Task 32 ✅: Item presentation + answer-format controls + keyboard
 
 **Files:**
 - Create: `web/src/player/AnswerControl.tsx`
