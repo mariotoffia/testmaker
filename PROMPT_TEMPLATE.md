@@ -1,4 +1,0 @@
-implement Phase {x:0-9} in PLAN.md - do a deep analysis of the plan and per strict TDD loop: {START LOOP} implement, test, and docuemnt it. Do a adversial QA review to gate if it passes. Loop until zero bugs/issues left to be fixed -> {START LOOP} else {END LOOP}. make sure that lint, test work properly.
-For each task finished - set the status to ✅
-
-When all pass & we are finished: Create branch+pr, commit+push, merge, delete branch, checkout main, pull
