@@ -5399,7 +5399,7 @@ git add web && git commit -m "Block 14: web ingest actions + live job progress"
 
 ---
 
-### Task 26: Item bank browser + shared media renderer + item preview
+### Task 26: Item bank browser + shared media renderer + item preview ✅
 
 **Files:**
 - Modify: `web/src/pages/Items.tsx`
