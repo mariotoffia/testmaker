@@ -87,6 +87,7 @@ func TestUnknownNonAPIPathIs404WithoutUIBuild(t *testing.T) {
 }
 
 func TestOldRootEndpointsAreGone(t *testing.T) {
+	skipIfUIEmbedded(t)
 	ts := newSPATestServer(t)
 	res, err := http.Get(ts.URL + "/sources")
 	if err != nil {

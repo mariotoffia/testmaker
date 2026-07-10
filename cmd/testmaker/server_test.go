@@ -278,6 +278,7 @@ func TestDeliverySurfaceConcurrentAnswersRecordOnce(t *testing.T) {
 // unmatched request into a 200 (ADR-0005: no UI build in tests, so handleSPA
 // degrades to the index at "/" and JSON 404 elsewhere).
 func TestRootIndex(t *testing.T) {
+	skipIfUIEmbedded(t)
 	ts := newHarness(t)
 
 	resp, err := http.Get(ts.URL + "/")
