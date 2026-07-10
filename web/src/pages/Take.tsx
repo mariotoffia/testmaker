@@ -57,7 +57,17 @@ export default function Take() {
     );
   }
 
-  // preview
+  // preview — a failed preview means the invite is expired/invalid/consumed.
+  if (s.previewError) {
+    return (
+      <div className="mx-auto max-w-2xl p-6">
+        <h1 className="text-xl font-semibold">This invite is no longer valid</h1>
+        <p className="mt-2 text-slate-600">
+          The link may have expired, already been used, or been mistyped. Ask the sender for a fresh invite.
+        </p>
+      </div>
+    );
+  }
   const p = s.preview;
   if (!p) return <p className="p-8">Loading…</p>;
   return (

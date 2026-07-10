@@ -6331,7 +6331,7 @@ git add web && git commit -m "Block 14: player score report view"
 
 ---
 
-### Task 35: Player edge states (conflict, resume, untimed, bad invite)
+### Task 35 ✅: Player edge states (conflict, resume, untimed, bad invite)
 
 **Files:**
 - Modify: `web/src/pages/Take.tsx`, `web/src/player/useTakeSession.ts`

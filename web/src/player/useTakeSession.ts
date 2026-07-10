@@ -38,6 +38,10 @@ export function useTakeSession(invite: string) {
     setToken(started.SessionToken);
     setDelivery({ Session: started.Session, Item: started.Item, Deadline: started.Deadline });
     setPhase("in-test");
+    // ponytail: we persist the session token/id so a future reload could resume,
+    // but a true refresh-resume needs a server-side "re-present current item"
+    // verb (client-supplied If-Match) — deferred to ROADMAP §6. Until then a
+    // reload restarts at preview; we do not ship a dead "resume" button.
     sessionStorage.setItem("tm.session", JSON.stringify({ token: started.SessionToken, sid: started.Session.ID }));
   }, [invite]);
 
