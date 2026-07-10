@@ -7,22 +7,22 @@ is wanted, and how it would be built against the current ports so nothing here
 needs a redesign to land — only a new adapter or a swapped algorithm behind an
 existing seam.
 
-**§1 (web UI + delivery hardening) has been designed and promoted out of this
-roadmap**: the design now lives in [DESIGN.md §7](DESIGN.md) (with
+**§1 (web UI + delivery hardening) has shipped and is promoted out of this
+roadmap**: the design lives in [DESIGN.md §7](DESIGN.md) (with
 [ADR-0005](docs/adr/0005-embedded-spa-web-ui-served-from-composition-root.md)/[0006](docs/adr/0006-operator-token-and-hmac-capability-tokens.md)/[0007](docs/adr/0007-async-ingest-jobs-in-memory-at-delivery-surface.md)),
-and the step-by-step implementation is [PLAN.md](PLAN.md). The remaining items
+and it is implemented step-by-step in [PLAN.md](PLAN.md). The remaining items
 are ordered by dependency: an item lower in the list generally assumes the
 ports and data from the ones above are in place — **§2 (cloud persistence) is
-the recommended next step once PLAN.md completes.**
+the recommended next step.**
 
 ---
 
-## 1. Web UI (operator console + test player) — **designed; in PLAN.md**
+## 1. Web UI (operator console + test player) — **✅ shipped**
 
-This initiative graduated from the roadmap on 2026-07-09. The web app (one
-SPA, two faces) and its hardening preconditions — roles/auth, rate + cost
-limits, pagination, error hygiene, async ingest jobs, `POST /api/catalog` —
-are now part of the system's design:
+This initiative graduated from the roadmap on 2026-07-09 and **shipped on
+2026-07-10**. The web app (one SPA, two faces) and its hardening preconditions —
+roles/auth, rate + cost limits, pagination, error hygiene, async ingest jobs,
+`POST /api/catalog` — are part of the running system:
 
 - **Design:** [DESIGN.md §7](DESIGN.md) (web app, `/api` surface, access
   control, limits, jobs, player timing model) and
@@ -33,7 +33,7 @@ are now part of the system's design:
   (operator token + HMAC capability tokens),
   [ADR-0007](docs/adr/0007-async-ingest-jobs-in-memory-at-delivery-surface.md)
   (in-memory async jobs).
-- **Implementation:** every task, test-first with code, lives in
+- **Implementation:** shipped; every task, test-first with code, is recorded in
   [PLAN.md](PLAN.md).
 
 What deliberately remains roadmap-only from the original scope: client-supplied

@@ -1,5 +1,9 @@
 # Web App (Operator Console + Test Player) & Delivery-Surface Hardening — Implementation Plan
 
+> **Status: shipped on 2026-07-10.** All 38 tasks (Phases 0–9) are implemented,
+> tested, and merged to `main`. The checkbox steps below record the original
+> task-by-task plan; each `### Task` heading is marked ✅ as it landed.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship the initiative formerly known as ROADMAP §1 — an embedded web application (operator console + test player) on top of a hardened `/api` delivery surface (roles/auth, rate + cost limits, pagination, error hygiene, async ingest jobs, catalogue upload) — as designed in [DESIGN.md §7](DESIGN.md), [ARCHITECTURE.md §9](ARCHITECTURE.md), [ADR-0005](docs/adr/0005-embedded-spa-web-ui-served-from-composition-root.md), [ADR-0006](docs/adr/0006-operator-token-and-hmac-capability-tokens.md), [ADR-0007](docs/adr/0007-async-ingest-jobs-in-memory-at-delivery-surface.md).
@@ -6545,7 +6549,7 @@ git commit -m "Block 14: CI web job (bun test/typecheck/build) + embed build che
 
 ---
 
-### Task 38: Documentation status flip + final gates
+### Task 38: Documentation status flip + final gates ✅
 
 The design docs were written describing the target as designed, with
 implementation tracked here. With the plan complete, flip the remaining
@@ -6575,9 +6579,9 @@ the endpoint table and posture note.
 ```bash
 make check                       # Go: build + lint + test
 cd web && bun run test:run && bun run typecheck && bun run build && cd ..
-make webui && cd cmd/testmaker && go build -o /tmp/testmaker.out ./... && cd ..
+make webui && go build -o /tmp/testmaker.out ./cmd/testmaker   # single main pkg; ./... errors
 git checkout -- cmd/testmaker/webui/dist/.keep 2>/dev/null || true
-git clean -fdq cmd/testmaker/webui/dist
+git clean -fdxq cmd/testmaker/webui/dist   # -x: dist/* is gitignored, plain -fd skips it
 make check                       # green again with the placeholder restored
 ```
 Expected: all green.

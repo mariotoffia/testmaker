@@ -17,11 +17,11 @@ administering + scoring attempts — driven by a CLI demo and exposed as an HTTP
 API. Storage runs on in-memory or sqlite backends (proven interchangeable by
 shared conformance suites), seeded with an 81-source research catalogue.
 
-The current initiative is the **web app** — an embedded operator console +
-test player SPA with the delivery-surface hardening it requires (roles/auth,
-rate + cost limits, pagination, async ingest jobs). Its design is in
-[DESIGN.md §7](DESIGN.md) and the step-by-step implementation in
-[PLAN.md](PLAN.md). [ROADMAP.md](ROADMAP.md) holds the deferred directions
+The **web app** is available — an embedded operator console + test player SPA
+with the delivery-surface hardening it requires (roles/auth, rate + cost limits,
+pagination, async ingest jobs). Run it with `make serve-all` (builds the SPA,
+then serves the single binary on `:8080`). Its design is in
+[DESIGN.md §7](DESIGN.md). [ROADMAP.md](ROADMAP.md) holds the deferred directions
 (cloud persistence, IRT calibration, the remaining fetchers, LLM hardening).
 
 ## Documentation

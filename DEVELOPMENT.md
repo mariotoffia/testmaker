@@ -73,8 +73,8 @@ testmaker/
 
 The whole pipeline is implemented end-to-end (sourcing → item bank → authoring →
 execution → scoring → delivery). See [DESIGN.md](DESIGN.md) for the per-slice
-design (§7 covers the web app + delivery hardening, implemented step-by-step
-per [PLAN.md](PLAN.md)) and [ROADMAP.md](ROADMAP.md) for what is deferred.
+design (§7 covers the web app + delivery hardening, now shipped — see
+[PLAN.md](PLAN.md)) and [ROADMAP.md](ROADMAP.md) for what is deferred.
 
 ## Getting Started
 

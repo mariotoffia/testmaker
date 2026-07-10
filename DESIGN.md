@@ -470,7 +470,7 @@ Design rules:
 
 ---
 
-## 7. Web application & delivery hardening
+## 7. Web application & delivery hardening ✅
 
 The web UI and the hardening it presupposes, designed together
 ([ADR-0005](docs/adr/0005-embedded-spa-web-ui-served-from-composition-root.md) ·
@@ -478,8 +478,8 @@ The web UI and the hardening it presupposes, designed together
 [ADR-0007](docs/adr/0007-async-ingest-jobs-in-memory-at-delivery-surface.md)).
 Everything in this section is composition-root work: **no new port, no domain
 change** — the one domain-adjacent fact it relies on (an empty `Answer` records
-as wrong) already holds. Implementation is tracked task-by-task in
-[PLAN.md](PLAN.md).
+as wrong) already holds. Implementation is **complete** — shipped task-by-task
+per [PLAN.md](PLAN.md).
 
 ### 7.1 The web app: one SPA, two faces
 
