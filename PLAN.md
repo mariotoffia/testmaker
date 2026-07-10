@@ -5569,7 +5569,7 @@ git add web && git commit -m "Block 14: web generate-items form"
 
 ---
 
-### Task 28: Compose test form + tests list/detail + invite minting
+### Task 28: Compose test form + tests list/detail + invite minting ✅
 
 **Files:**
 - Modify: `web/src/pages/Compose.tsx`, `web/src/pages/Tests.tsx`
@@ -5646,6 +5646,15 @@ export function InviteButton({ testId }: { testId: string }) {
 `/tests/:id`; detail shows sections/timing/policy and hosts `<InviteButton>` +
 an operator "Start a session" button (direct start via
 `POST /api/tests/:id/sessions`, useful for smoke-testing without an invite).
+
+> **Deferred to Phase 8:** the operator direct-start button is intentionally
+> omitted here. The player (`Take.tsx` / `useTakeSession`, Task 30) is
+> invite-driven — it starts a session from an invite in the URL hash and has no
+> landing for a pre-started session, and no `api.startSession` client method
+> exists. Building the button now would start server-side session state with
+> nowhere to navigate. Invite minting (`<InviteButton>`) already delivers the
+> start capability; add the direct-start button in Phase 8 once `Take.tsx` can
+> receive an operator-started session.
 
 - [ ] **Step 6: Test + lint + commit**
 

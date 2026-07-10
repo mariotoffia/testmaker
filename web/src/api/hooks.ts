@@ -29,6 +29,10 @@ export function useTests(q = "") {
   const token = useApiToken();
   return useQuery({ queryKey: ["tests", q], queryFn: () => api.listTests(token, q) });
 }
+export function useTest(id: string) {
+  const token = useApiToken();
+  return useQuery({ queryKey: ["test", id], queryFn: () => api.getTest(token, id), enabled: !!id });
+}
 export function useJobs(pollMs = 0) {
   const token = useApiToken();
   return useQuery({

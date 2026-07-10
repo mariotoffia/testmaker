@@ -12,6 +12,7 @@ import ItemDetail from "./pages/ItemDetail";
 import Generate from "./pages/Generate";
 import Compose from "./pages/Compose";
 import Tests from "./pages/Tests";
+import TestDetail from "./pages/TestDetail";
 import Jobs from "./pages/Jobs";
 import Take from "./pages/Take";
 
@@ -31,6 +32,7 @@ export function AppRoutes() {
           <Route path="generate" element={<Generate />} />
           <Route path="compose" element={<Compose />} />
           <Route path="tests" element={<Tests />} />
+          <Route path="tests/:id" element={<TestDetail />} />
           <Route path="jobs" element={<Jobs />} />
         </Route>
       </Route>
