@@ -38,6 +38,18 @@ export function ScoreView({ sid, token }: { sid: string; token: string }) {
           </div>
         ))}
       </div>
+      {(s.Sources ?? []).length > 0 && (
+        <div className="border-t pt-4 text-sm text-slate-600">
+          <p>Want more practice? These questions came from:</p>
+          <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+            {(s.Sources ?? []).map((src) => (
+              <li key={src.ID}>
+                <a href={src.Site} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline">{src.Provider} ↗</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

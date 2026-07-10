@@ -462,7 +462,10 @@ func (s *server) handleScore(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, score)
+	writeJSON(w, http.StatusOK, scoreResponse{
+		Score:   score,
+		Sources: sourceAttribution(r.Context(), s.cat, score.Items),
+	})
 }
 
 // handleMedia resolves a figural media ref back to its bytes through the blob

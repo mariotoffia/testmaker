@@ -7,8 +7,9 @@ import { AuthProvider } from "../auth/AuthContext";
 import SourceDetail from "./SourceDetail";
 
 const source = {
-  ID: "s1", Name: "Src One", Provider: "p", Category: "iq",
+  ID: "s1", Name: "Src One", Provider: "Acme Corp", Category: "iq",
   Families: ["logical"], TestTypes: ["A2"],
+  URLs: ["https://acme.example/iq-test/", "https://acme.example/data.zip"],
   License: { Category: "public-domain", Detail: "", Redistributable: "yes" },
   Extraction: { Method: "http-json", Auth: "", ItemsAs: "", Notes: "" },
   ItemCount: 5,
@@ -50,6 +51,23 @@ function renderDetail() {
 afterEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
+});
+
+describe("SourceDetail attribution", () => {
+  it("renders each source URL as an external link and a visit-author link", async () => {
+    stubFetch(null);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText("Src One")).toBeInTheDocument());
+
+    const imported = screen.getByRole("link", { name: "https://acme.example/iq-test/" });
+    expect(imported).toHaveAttribute("href", "https://acme.example/iq-test/");
+    expect(imported).toHaveAttribute("target", "_blank");
+    expect(imported).toHaveAttribute("rel", expect.stringContaining("noopener"));
+
+    // author-site link derived from the first URL's origin
+    const visit = screen.getByRole("link", { name: /Acme Corp/ });
+    expect(visit).toHaveAttribute("href", "https://acme.example");
+  });
 });
 
 describe("SourceDetail ingest", () => {

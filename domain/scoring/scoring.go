@@ -62,6 +62,7 @@ type Speed struct {
 // strings so the feedback is display-ready without importing the item context.
 type ItemFeedback struct {
 	ItemID        string
+	SourceID      string
 	Correct       bool
 	Given         string
 	CorrectAnswer string

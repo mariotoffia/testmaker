@@ -182,6 +182,7 @@ func (s *Service) feedback(ctx context.Context, responses []session.Response) ([
 		case err == nil:
 			fb.CorrectAnswer = keyAnswer(it)
 			fb.Explanation = it.Explanation
+			fb.SourceID = it.Provenance.SourceID
 		case errors.Is(err, item.ErrUnknownItem):
 			// ponytail: item gone since administration; frozen r.Correct still
 			// scores, feedback text degrades to blank. Upgrade path = freeze the

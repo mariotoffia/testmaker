@@ -33,6 +33,25 @@ describe("ScoreView", () => {
     expect(screen.getByText("8/10")).toBeInTheDocument();
   });
 
+  it("links to each contributing author's site", async () => {
+    const scored = {
+      Raw: 8, Max: 12, Normed: false, Percentile: 0, ScaledIQ: 0, Band: "",
+      Speed: { Total: 0, Mean: 0, CorrectPerMinute: 0 }, Items: [],
+      Sources: [
+        { ID: "acme-iq", Name: "Acme IQ", Provider: "Acme Corp", Site: "https://acme.example" },
+        { ID: "beta", Name: "Beta Tests", Provider: "Beta Inc", Site: "https://beta.example" },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse(scored))));
+    renderScore();
+
+    await waitFor(() => expect(screen.getByText("Your result")).toBeInTheDocument());
+    const acme = screen.getByRole("link", { name: /Acme Corp/ });
+    expect(acme).toHaveAttribute("href", "https://acme.example");
+    expect(acme).toHaveAttribute("target", "_blank");
+    expect(screen.getByRole("link", { name: /Beta Inc/ })).toHaveAttribute("href", "https://beta.example");
+  });
+
   it("shows a raw-only note and no IQ for an unnormed score", async () => {
     const raw = {
       Raw: 5, Max: 10, Normed: false, Percentile: 0, ScaledIQ: 0, Band: "",

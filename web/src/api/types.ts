@@ -100,11 +100,21 @@ export interface TestSnapshot {
 
 export interface ItemFeedback {
   ItemID: string;
+  SourceID: string;
   Correct: boolean;
   Given: string;
   CorrectAnswer: string;
   Explanation: string;
   Elapsed: Ns;
+}
+// SourceRef is the author attribution the score endpoint resolves server-side
+// (takers can't query the operator-only sources API): who wrote the items and a
+// link to their site.
+export interface SourceRef {
+  ID: string;
+  Name: string;
+  Provider: string;
+  Site: string;
 }
 export interface Score {
   Raw: number;
@@ -117,12 +127,14 @@ export interface Score {
   Speed: { Total: Ns; Mean: Ns; CorrectPerMinute: number };
   Items: ItemFeedback[] | null;
   DegradedFeedback: number;
+  Sources: SourceRef[] | null;
 }
 
 export interface SourceSnapshot {
   ID: string;
   Name: string;
   Provider: string;
+  URLs: string[] | null;
   Category: string;
   Families: string[] | null;
   TestTypes: string[] | null;

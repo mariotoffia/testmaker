@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSource, useApiToken } from "../api/hooks";
 import { Async } from "../components/Async";
 import { api, ApiError } from "../api/client";
+import { siteRoot } from "../api/attribution";
 import type { IngestReport, Job } from "../api/types";
 
 // isJob distinguishes the async 202 envelope (a Job, has a state) from the sync
@@ -70,6 +71,23 @@ export default function SourceDetail() {
               <dd>{(s.Families ?? []).join(", ") || "—"}</dd>
               <dt className="text-slate-500">Bank items</dt>
               <dd>{s.ItemCount}</dd>
+              {(s.URLs ?? []).length > 0 && (
+                <>
+                  <dt className="text-slate-500">Links</dt>
+                  <dd className="space-y-1">
+                    {(s.URLs ?? []).map((u) => (
+                      <div key={u}>
+                        <a href={u} target="_blank" rel="noopener noreferrer" className="break-all text-blue-700 hover:underline">{u}</a>
+                      </div>
+                    ))}
+                    {siteRoot((s.URLs ?? [])[0]) && (
+                      <a href={siteRoot((s.URLs ?? [])[0])} target="_blank" rel="noopener noreferrer" className="inline-block font-medium text-blue-700 hover:underline">
+                        Visit {s.Provider} ↗
+                      </a>
+                    )}
+                  </dd>
+                </>
+              )}
             </dl>
 
             <div className="space-y-3 border-t pt-4">

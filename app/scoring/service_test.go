@@ -178,6 +178,11 @@ func TestScoreFixedNormedWithFeedback(t *testing.T) {
 	if fb.Given != "a" || fb.CorrectAnswer != "b" || fb.Explanation != "add a dot" {
 		t.Fatalf("feedback[1] = %+v, want given a / correct b / 'add a dot'", fb)
 	}
+	// Feedback carries the item's source so the taker can be pointed back to the
+	// author (attribution links).
+	if fb.SourceID != "rulegen" {
+		t.Fatalf("feedback[1].SourceID = %q, want rulegen", fb.SourceID)
+	}
 }
 
 func TestScoreUnnormedTestIsRawOnly(t *testing.T) {
