@@ -51,7 +51,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - name: Build UI then Go binary
+      - name: Build UI, embed it, verify the SPA contract
         run: |
           make webui
           go build -o /tmp/testmaker.out ./cmd/testmaker
+          # -run just the embedded test: with a build in dist the sibling SPA
+          # fallback tests (which assume no build) would fail, so scope to this one.
+          go test ./cmd/testmaker -run TestServesEmbeddedSPAWhenBuilt -v

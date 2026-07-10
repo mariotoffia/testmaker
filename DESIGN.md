@@ -265,8 +265,8 @@ to a taker is additionally **key-redacted** — the executor strips `AnswerKey`
 and `Explanation` from the presented item — so keys are protected by two
 independent layers. The JSON surface lives under the `/api` prefix, with the
 embedded web application (§7.1) served for every other path. The full surface
-design, limits and job model are §7; the step-by-step implementation is
-tracked in [PLAN.md](PLAN.md).
+design, limits and job model are §7, all of it shipped and recorded
+task-by-task in [PLAN.md](PLAN.md).
 
 The server is **configuration-driven**: `testmaker -serve` reads its settings (db,
 blob and catalogue/prompt locations, optional LLM backend) from a config file

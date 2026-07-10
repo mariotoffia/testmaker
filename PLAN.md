@@ -1,8 +1,8 @@
 # Web App (Operator Console + Test Player) & Delivery-Surface Hardening — Implementation Plan
 
-> **Status: shipped on 2026-07-10.** All 38 tasks (Phases 0–9) are implemented,
-> tested, and merged to `main`. The checkbox steps below record the original
-> task-by-task plan; each `### Task` heading is marked ✅ as it landed.
+> **Status: shipped on 2026-07-10.** All 38 tasks (Phases 0–9) are implemented
+> and tested. The checkbox steps below record the original task-by-task plan;
+> each `### Task` heading is marked ✅ as it landed.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -6531,10 +6531,11 @@ so the pure-Go `check` job stays Bun-free:
         with: { go-version: "1.25", check-latest: true }
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: latest }
-      - name: Build UI then Go binary
+      - name: Build UI, embed it, verify the SPA contract
         run: |
           make webui
           go build -o /tmp/testmaker.out ./cmd/testmaker   # single main pkg; `./...` errors (webui pkg + main)
+          go test ./cmd/testmaker -run TestServesEmbeddedSPAWhenBuilt -v   # -run: siblings assume no build
 ```
 
 - [ ] **Step 3: Validate the workflow locally** (yaml lint, or push a branch and
