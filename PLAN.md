@@ -6255,7 +6255,7 @@ git add web && git commit -m "Block 14: player advance loop with per-item auto-s
 
 ---
 
-### Task 34: Score report view
+### Task 34 ✅: Score report view
 
 **Files:**
 - Create: `web/src/player/ScoreView.tsx`
