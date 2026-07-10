@@ -6375,7 +6375,7 @@ git add web && git commit -m "Block 14: player edge states (invalid invite, 409 
 
 # Phase 9 — Integration, CI, and finish
 
-### Task 36: Embedded-SPA integration test + `serve-all` smoke
+### Task 36: Embedded-SPA integration test + `serve-all` smoke ✅
 
 **Files:**
 - Create: `cmd/testmaker/server_spa_embedded_test.go`
@@ -6469,7 +6469,7 @@ operator token.
 
 ```bash
 git checkout -- cmd/testmaker/webui/dist/.keep 2>/dev/null || true
-git clean -fdq cmd/testmaker/webui/dist
+git clean -fdxq cmd/testmaker/webui/dist   # -x: dist/* is gitignored, plain -fd skips it
 make lint && make test
 ```
 Expected: green (embedded test skips again).
