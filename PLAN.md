@@ -5708,7 +5708,7 @@ git add web && git commit -m "Block 14: console polish (empty states, pending/di
 > auth context. All timing tests use `vi.useFakeTimers()` (TESTS.md's no-real-
 > clock rule, in TypeScript).
 
-### Task 30: Take entry — invite preview + session start
+### Task 30 ✅: Take entry — invite preview + session start
 
 **Files:**
 - Modify: `web/src/pages/Take.tsx`
@@ -5897,7 +5897,7 @@ git add web && git commit -m "Block 14: player take-session state machine (previ
 
 ---
 
-### Task 31: Countdown hook + timer display
+### Task 31 ✅: Countdown hook + timer display
 
 **Files:**
 - Create: `web/src/player/useCountdown.ts`
@@ -6020,7 +6020,7 @@ git add web && git commit -m "Block 14: player countdown hook + timer display (s
 
 ---
 
-### Task 32: Item presentation + answer-format controls + keyboard
+### Task 32 ✅: Item presentation + answer-format controls + keyboard
 
 **Files:**
 - Create: `web/src/player/AnswerControl.tsx`
@@ -6181,7 +6181,7 @@ git add web && git commit -m "Block 14: player item view + keyboard-first answer
 
 ---
 
-### Task 33: Wire the advance loop + per-item auto-submit
+### Task 33 ✅: Wire the advance loop + per-item auto-submit
 
 **Files:**
 - Modify: `web/src/pages/Take.tsx` (compose item + countdowns + current-answer state)
@@ -6255,7 +6255,7 @@ git add web && git commit -m "Block 14: player advance loop with per-item auto-s
 
 ---
 
-### Task 34: Score report view
+### Task 34 ✅: Score report view
 
 **Files:**
 - Create: `web/src/player/ScoreView.tsx`
@@ -6331,7 +6331,7 @@ git add web && git commit -m "Block 14: player score report view"
 
 ---
 
-### Task 35: Player edge states (conflict, resume, untimed, bad invite)
+### Task 35 ✅: Player edge states (conflict, resume, untimed, bad invite)
 
 **Files:**
 - Modify: `web/src/pages/Take.tsx`, `web/src/player/useTakeSession.ts`
