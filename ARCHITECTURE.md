@@ -277,7 +277,7 @@ under test. The `session` aggregate itself holds no clock — the executor passe
 
 ---
 
-## 9. Delivery surface (HTTP API + web app)
+## 9. Delivery surface (HTTP API + web app) ✅
 
 Authoring, execution and scoring are exposed over HTTP by
 [`cmd/testmaker/server.go`](cmd/testmaker) (stdlib `net/http` only, the Go 1.22
@@ -482,5 +482,5 @@ proxying `/api`), `make webui-test` / `make webui-lint` (Vitest / ESLint), and
 stays pure Go — a checkout without Bun builds, lints and tests everything Go —
 and CI runs the web job separately. The `web/` tree is excluded from
 `.go-arch-lint.yml`'s scan; the `webui` embed package is ordinary `cmd/**` and
-needs no new arch component. Implementation status for all of §9's hardening +
-the web app is tracked step-by-step in [PLAN.md](PLAN.md).
+needs no new arch component. All of §9's hardening +
+the web app is **shipped**, implemented step-by-step per [PLAN.md](PLAN.md).
