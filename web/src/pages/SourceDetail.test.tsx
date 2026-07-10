@@ -53,12 +53,31 @@ afterEach(() => {
 });
 
 describe("SourceDetail ingest", () => {
-  it("shows saved counts after a synchronous ingest", async () => {
-    stubFetch({ SourceID: "s1", Fetched: 5, Normalized: 5, Saved: 3, Skipped: 2, Note: "" });
+  it("shows saved counts and refreshes the item count after a synchronous ingest", async () => {
+    // The source starts with 5 bank items; the ingest saves 3, and the next
+    // source GET reports 8 — proving the mutation invalidated the source query.
+    let itemCount = 5;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        let body: unknown;
+        if (url.includes("whoami")) body = { role: "operator", mode: "none" };
+        else if (url.endsWith("/ingest")) {
+          itemCount = 8;
+          body = { SourceID: "s1", Fetched: 5, Normalized: 5, Saved: 3, Skipped: 2, Note: "" };
+        } else body = { ...source, ItemCount: itemCount };
+        return Promise.resolve(
+          new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }),
+        );
+      }),
+    );
     renderDetail();
     await waitFor(() => expect(screen.getByText("Src One")).toBeInTheDocument());
+    expect(screen.getByText("5")).toBeInTheDocument(); // initial Bank items count
     await userEvent.click(screen.getByRole("button", { name: /^ingest$/i }));
     await waitFor(() => expect(screen.getByText(/Saved 3 of 5/)).toBeInTheDocument());
+    // invalidation refetched the source, so the Bank items figure updated 5 → 8.
+    await waitFor(() => expect(screen.getByText("8")).toBeInTheDocument());
   });
 
   it("navigates to the jobs page after an async ingest", async () => {

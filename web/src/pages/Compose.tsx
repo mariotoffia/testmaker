@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../api/client";
@@ -32,6 +32,13 @@ export default function Compose() {
   const patchSection = (i: number, patch: Partial<SectionForm>) =>
     setSections((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
 
+  // numChange coerces a number field, dropping the transient NaN a number input
+  // can emit mid-edit so a request never serializes NaN → null on the wire.
+  const numChange = (set: (n: number) => void) => (e: ChangeEvent<HTMLInputElement>) => {
+    const n = Number(e.target.value);
+    if (!Number.isNaN(n)) set(n);
+  };
+
   const compose = useMutation({
     mutationFn: () =>
       api.compose(token, {
@@ -57,7 +64,7 @@ export default function Compose() {
 
   const numField = (label: string, value: number, set: (n: number) => void) => (
     <label className="block text-sm">{label}
-      <input type="number" value={value} onChange={(e) => set(Number(e.target.value))}
+      <input type="number" value={value} onChange={numChange(set)}
         className="mt-1 w-full rounded border px-2 py-1" />
     </label>
   );
@@ -111,16 +118,16 @@ export default function Compose() {
               </div>
               <div className="grid grid-cols-4 gap-2 text-sm">
                 <input type="number" aria-label={`section ${i + 1} total seconds`} value={s.totalSeconds}
-                  onChange={(e) => patchSection(i, { totalSeconds: Number(e.target.value) })}
+                  onChange={numChange((n) => patchSection(i, { totalSeconds: n }))}
                   className="rounded border px-2 py-1" placeholder="total s" />
                 <input type="number" aria-label={`section ${i + 1} per-item seconds`} value={s.perItemSeconds}
-                  onChange={(e) => patchSection(i, { perItemSeconds: Number(e.target.value) })}
+                  onChange={numChange((n) => patchSection(i, { perItemSeconds: n }))}
                   className="rounded border px-2 py-1" placeholder="per-item s" />
                 <input type="number" aria-label={`section ${i + 1} min difficulty`} value={s.minDifficulty}
-                  onChange={(e) => patchSection(i, { minDifficulty: Number(e.target.value) })}
+                  onChange={numChange((n) => patchSection(i, { minDifficulty: n }))}
                   className="rounded border px-2 py-1" placeholder="min diff" />
                 <input type="number" aria-label={`section ${i + 1} max difficulty`} value={s.maxDifficulty}
-                  onChange={(e) => patchSection(i, { maxDifficulty: Number(e.target.value) })}
+                  onChange={numChange((n) => patchSection(i, { maxDifficulty: n }))}
                   className="rounded border px-2 py-1" placeholder="max diff" />
               </div>
             </div>

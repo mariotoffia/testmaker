@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSource, useApiToken } from "../api/hooks";
 import { Async } from "../components/Async";
 import { api } from "../api/client";
@@ -19,11 +19,17 @@ export default function SourceDetail() {
   const { id = "" } = useParams();
   const token = useApiToken();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const source = useSource(id);
   const [asyncMode, setAsyncMode] = useState(false);
   const [report, setReport] = useState<IngestReport | null>(null);
 
   const onResult = (r: Job | IngestReport) => {
+    // Ingest changed the bank: refresh this source's item count and the item /
+    // source lists so the UI doesn't sit next to a stale "Bank items" figure.
+    qc.invalidateQueries({ queryKey: ["source", id] });
+    qc.invalidateQueries({ queryKey: ["items"] });
+    qc.invalidateQueries({ queryKey: ["sources"] });
     if (isJob(r)) navigate("/jobs");
     else setReport(r);
   };

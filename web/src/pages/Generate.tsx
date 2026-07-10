@@ -27,7 +27,10 @@ export default function Generate() {
         {(["difficulty", "count", "seed"] as const).map((k) => (
           <label key={k} className="block text-sm capitalize">{k}
             <input type="number" className="mt-1 w-full rounded border px-2 py-1"
-              value={form[k]} onChange={(e) => setForm({ ...form, [k]: Number(e.target.value) })} />
+              value={form[k]} onChange={(e) => {
+                const n = Number(e.target.value);
+                if (!Number.isNaN(n)) setForm({ ...form, [k]: n });
+              }} />
           </label>
         ))}
         <button className="rounded bg-slate-800 px-4 py-2 text-white disabled:opacity-50" disabled={gen.isPending}>
