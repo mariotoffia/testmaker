@@ -39,9 +39,9 @@ test:
 	@mkdir -p $(REPORTS)
 	@for m in $(MODULES); do echo "== test $$m =="; (cd $$m && $(GO) test -short -race -timeout 120s ./...) || exit 1; done
 
-## serve: go install the CLI, seed the home dir, and run the global binary's HTTP API on SERVE_ADDR (default :8080)
+## serve: build the web app, go install the CLI, seed the home dir, and run the installed single binary (SPA + API) on SERVE_ADDR (default :8080)
 .PHONY: serve
-serve:
+serve: webui
 	$(GO) install ./cmd/testmaker
 	@mkdir -p "$(TESTMAKER_HOME)/data/catalog" "$(TESTMAKER_HOME)/data/prompts" "$(TESTMAKER_HOME)/data/blobs"
 	@cp -n data/catalog/sources.json "$(TESTMAKER_HOME)/data/catalog/" 2>/dev/null || true
@@ -49,8 +49,9 @@ serve:
 	@echo "serving on $(SERVE_ADDR); TESTMAKER_HOME=$(TESTMAKER_HOME) (config + data + seeds); binary $(GOBIN_DIR)/testmaker"
 	TESTMAKER_HOME="$(TESTMAKER_HOME)" "$(GOBIN_DIR)/testmaker" -serve "$(SERVE_ADDR)"
 
-# Web app (operator console + test player). Bun is OPTIONAL: every Go target
-# works without it; these targets are the only ones that need it.
+# Web app (operator console + test player). Bun is needed for these web targets
+# and for `make serve` (it builds + embeds the SPA); the Go toolchain
+# (build/lint/test/check) stays Bun-free.
 WEB_DIR := web
 
 ## webui: build the web app into cmd/testmaker/webui/dist (requires bun)
@@ -73,10 +74,6 @@ webui-test:
 .PHONY: webui-lint
 webui-lint:
 	cd $(WEB_DIR) && bun install --frozen-lockfile && bun run typecheck
-
-## serve-all: build the web app, then serve the single binary (SPA + API)
-.PHONY: serve-all
-serve-all: webui serve
 
 ## fmt: format all Go files in place (the only auto-fix)
 .PHONY: fmt

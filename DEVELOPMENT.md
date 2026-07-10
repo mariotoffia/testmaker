@@ -108,13 +108,13 @@ go run ./cmd/testmaker -catalog data/catalog/sources.json
 Run the HTTP delivery API:
 
 ```bash
-make serve                              # go install + run on :8080
+make serve                              # build UI + go install + run the installed binary on :8080
 make serve SERVE_ADDR=:9000             # different port
 make serve TESTMAKER_HOME=/srv/testmaker  # different config/data home
 ```
 
-`make serve` `go install`s the CLI, seeds the home dir with the catalogue/prompts,
-and runs the global binary. The server is **config-driven**: on first run it writes
+`make serve` builds the web app, `go install`s the CLI, seeds the home dir with the
+catalogue/prompts, and runs the installed binary. The server is **config-driven**: on first run it writes
 `$TESTMAKER_HOME/config/config.json` (default `~/.testmaker`) with defaults —
 including the generated `auth` secrets (the file is 0600; the operator token for
 the console login is read from it) — and keeps the sqlite db + blob store under
@@ -126,16 +126,16 @@ value for that run.
 
 ```bash
 make webui        # bun install + vite build → cmd/testmaker/webui/dist (embedded)
-make serve-all    # webui + serve: the single binary serves SPA + API
 make webui-dev    # Vite dev server with HMR, proxying /api → localhost:8080
 make webui-test   # Vitest unit/component tests
 make webui-lint   # tsc --noEmit + eslint
 ```
 
-The dev loop is two terminals: `make serve` (API) + `make webui-dev` (UI with
-hot reload). The production path is `make serve-all` — the built SPA is
-embedded via `go:embed`, so deployment stays one binary. See
-[DESIGN.md §7.1](DESIGN.md) and [PLAN.md](PLAN.md).
+`make serve` is the production path: it builds the SPA, `go install`s the CLI, and
+runs the installed single binary with the SPA embedded via `go:embed`, so
+deployment stays one binary. For UI work with hot reload, run `make webui-dev`
+(Vite dev server) against a server started with `make serve`; it proxies `/api` to
+`:8080`. See [DESIGN.md §7.1](DESIGN.md) and [PLAN.md](PLAN.md).
 
 ## Layer / Dependency Rules
 

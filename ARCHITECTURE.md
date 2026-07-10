@@ -386,8 +386,8 @@ lost on restart, because the durable outcome of a run is the bank itself.
 a config file created with defaults under `~/.testmaker` on first run (an explicit
 flag overrides the matching value), and mutable state (db, blobs) plus the seed
 catalogue/prompts default to per-user paths under that home — so `make serve`
-(which `go install`s the binary and runs it globally) is self-contained, never
-writing to the working directory. The config also carries the `auth` (mode,
+(which builds the web app, `go install`s the binary and runs it globally) is
+self-contained, never writing to the working directory. The config also carries the `auth` (mode,
 operator token, secret, invite TTL), `limits` (rate, burst, ingest concurrency
 and timeout), `log` (level) and LLM-clamp (`maxTokensCap`, `allowedModels`)
 sections; secrets are generated and persisted (0600) on first run.
@@ -475,10 +475,11 @@ implementations.
 `gofmt`, `go vet`, **`go-arch-lint`** (layer graph) and **`golangci-lint`** (v2).
 See [DEVELOPMENT.md](DEVELOPMENT.md) and [LINT.md](LINT.md).
 
-The web app has its own, **optional** toolchain (Bun): `make webui`
-(production build into the embed directory), `make webui-dev` (Vite dev server
-proxying `/api`), `make webui-test` / `make webui-lint` (Vitest / ESLint), and
-`make serve-all` (build the UI, then serve the single binary). `make check`
+The web app has its own toolchain (Bun), needed for the web targets and for
+`make serve`: `make webui` (production build into the embed directory),
+`make webui-dev` (Vite dev server proxying `/api`), `make webui-test` /
+`make webui-lint` (Vitest / ESLint), and `make serve` (build the UI, then
+`go install` + run the installed single binary). `make check`
 stays pure Go — a checkout without Bun builds, lints and tests everything Go —
 and CI runs the web job separately. The `web/` tree is excluded from
 `.go-arch-lint.yml`'s scan; the `webui` embed package is ordinary `cmd/**` and
