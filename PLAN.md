@@ -5307,7 +5307,7 @@ git add web && git commit -m "Block 14: web sources browser + catalogue sync/upl
 
 ---
 
-### Task 25: Ingest actions + live job progress
+### Task 25: Ingest actions + live job progress ✅
 
 **Files:**
 - Modify: `web/src/pages/SourceDetail.tsx` (ingest / ingest-llm buttons, async toggle)
