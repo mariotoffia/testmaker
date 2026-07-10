@@ -5499,7 +5499,7 @@ git add web && git commit -m "Block 14: web item bank browser, shared MediaRende
 
 ---
 
-### Task 27: Generate items form
+### Task 27: Generate items form ✅
 
 **Files:**
 - Modify: `web/src/pages/Generate.tsx`
