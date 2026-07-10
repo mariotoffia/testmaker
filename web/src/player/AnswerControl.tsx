@@ -55,7 +55,9 @@ export function AnswerControl({
         type="number"
         autoFocus
         value={value.numeric ?? ""}
-        onChange={(e) => onChange({ itemId: item.ID, numeric: Number(e.target.value) })}
+        // An empty field is "no answer" (undefined), not 0 — else the taker can
+        // never clear it (0 ?? "" is 0) and a blank submits as a real guess of 0.
+        onChange={(e) => onChange({ itemId: item.ID, numeric: e.target.value === "" ? undefined : Number(e.target.value) })}
         className="w-40 rounded border px-3 py-2"
         aria-label="numeric answer"
       />

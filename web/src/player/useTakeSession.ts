@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, api } from "../api/client";
 import type { Answer } from "./answer";
@@ -47,9 +47,16 @@ export function useTakeSession(invite: string) {
 
   const sid = delivery?.Session.ID ?? "";
 
+  // inFlight is a synchronous re-entrancy lock: `busy` state alone can't stop two
+  // submits in the same tick (Enter → window keydown + native button click) or a
+  // per-item auto-submit firing while a manual submit's request is still open —
+  // both would read a stale busy=false. The ref is read live at call time.
+  const inFlight = useRef(false);
+
   const submit = useCallback(
     async (answer: Answer) => {
-      if (busy || !sid) return;
+      if (inFlight.current || !sid) return;
+      inFlight.current = true;
       setBusy(true);
       setError("");
       try {
@@ -70,10 +77,11 @@ export function useTakeSession(invite: string) {
           setError(e instanceof Error ? e.message : "answer failed");
         }
       } finally {
+        inFlight.current = false;
         setBusy(false);
       }
     },
-    [busy, sid, token],
+    [sid, token],
   );
 
   const deadline = useMemo(() => parseTime(delivery?.Deadline), [delivery?.Deadline]);
