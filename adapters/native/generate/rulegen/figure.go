@@ -177,10 +177,13 @@ func questionCellSVG(dx, dy float64) string {
 }
 
 // svgDataURI wraps a body of SVG cells into a titled <svg> of the given size and
-// encodes it as a base64 data-URI (unambiguous — no escaping pitfalls).
+// encodes it as a base64 data-URI (unambiguous — no escaping pitfalls). The root
+// carries explicit width/height (not just a viewBox): a viewBox alone gives an
+// aspect ratio but no intrinsic size, so an <img> referencing it collapses to
+// 0x0 in Chromium and the figure renders blank.
 func svgDataURI(w, h float64, title, body string) string {
-	svg := fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %g %g" role="img">`+
-		`<title>%s</title>%s</svg>`, w, h, title, body)
+	svg := fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%g" height="%g" viewBox="0 0 %g %g" role="img">`+
+		`<title>%s</title>%s</svg>`, w, h, w, h, title, body)
 	return "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(svg))
 }
 

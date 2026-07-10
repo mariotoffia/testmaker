@@ -192,6 +192,11 @@ func TestOptionsRenderAsSVG(t *testing.T) {
 		if !strings.Contains(svg, "<svg") || !strings.Contains(svg, "</svg>") {
 			t.Fatalf("option %s: decoded payload is not an svg document: %.60q", o.ID, svg)
 		}
+		// The root must declare intrinsic width/height, not just a viewBox: an
+		// <img> referencing a size-less SVG collapses to 0x0 and renders blank.
+		if !strings.Contains(svg, "width=") || !strings.Contains(svg, "height=") {
+			t.Fatalf("option %s: svg root lacks intrinsic width/height: %.90q", o.ID, svg)
+		}
 	}
 	// The matrix stimulus carries the grid media alongside the prompt text.
 	if len(snaps[0].Stimulus) < 2 || snaps[0].Stimulus[1].MediaKind != item.MediaGrid {

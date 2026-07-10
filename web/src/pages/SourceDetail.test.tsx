@@ -80,6 +80,32 @@ describe("SourceDetail ingest", () => {
     await waitFor(() => expect(screen.getByText("8")).toBeInTheDocument());
   });
 
+  it("surfaces the server's reason when ingest is unsupported for this source", async () => {
+    // Most catalogue sources have no normalizer wired; the server 501s with a
+    // precise reason and the UI must show it, not a generic "Ingest failed."
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes("whoami"))
+          return Promise.resolve(new Response(JSON.stringify({ role: "operator", mode: "none" }), { status: 200 }));
+        if (url.endsWith("/ingest"))
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ code: "ingest.no_normalizer", error: 'no normalizer registered for source "s1"' }),
+              { status: 501, headers: { "Content-Type": "application/json" } },
+            ),
+          );
+        return Promise.resolve(new Response(JSON.stringify(source), { status: 200 }));
+      }),
+    );
+    renderDetail();
+    await waitFor(() => expect(screen.getByText("Src One")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /^ingest$/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/no normalizer registered for source "s1"/)).toBeInTheDocument(),
+    );
+  });
+
   it("navigates to the jobs page after an async ingest", async () => {
     stubFetch({ id: "j1", kind: "ingest", sourceId: "s1", state: "queued", createdAt: "", startedAt: "", endedAt: "" });
     renderDetail();

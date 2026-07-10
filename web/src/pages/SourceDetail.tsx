@@ -3,13 +3,20 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSource, useApiToken } from "../api/hooks";
 import { Async } from "../components/Async";
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 import type { IngestReport, Job } from "../api/types";
 
 // isJob distinguishes the async 202 envelope (a Job, has a state) from the sync
 // 200 IngestReport — the endpoints share one client method (C6 / ADR-0007).
 function isJob(r: Job | IngestReport): r is Job {
   return "state" in r;
+}
+
+// errText surfaces the server's own reason (e.g. "no normalizer registered for
+// source X") instead of a generic "failed" — most sources in the catalogue have
+// no ingest wired, and the operator needs to see which.
+function errText(e: unknown): string {
+  return e instanceof ApiError ? e.message : "unexpected error";
 }
 
 // SourceDetail shows one source's provenance and license, and hosts the ingest
@@ -86,9 +93,11 @@ export default function SourceDetail() {
                   {ingestLLM.isPending ? "Ingesting…" : "Ingest (LLM)"}
                 </button>
               </div>
-              {ingest.isError && <p className="text-sm text-red-600">Ingest failed.</p>}
+              {ingest.isError && (
+                <p className="text-sm text-red-600">Ingest failed: {errText(ingest.error)}.</p>
+              )}
               {ingestLLM.isError && (
-                <p className="text-sm text-red-600">LLM ingest failed (the server may have no LLM backend configured).</p>
+                <p className="text-sm text-red-600">LLM ingest failed: {errText(ingestLLM.error)}.</p>
               )}
               {report && (
                 <p className="text-sm text-green-700">
