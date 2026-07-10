@@ -5007,7 +5007,7 @@ git add web && git commit -m "Block 14: web app shell, routing, guarded console 
 > Each task ends with `make webui-test && make webui-lint` green and a commit.
 > The Go gates are unaffected but re-run them at the phase's end (Task 29).
 
-### Task 23: Data hooks + dashboard
+### Task 23: Data hooks + dashboard ✅
 
 **Files:**
 - Create: `web/src/api/hooks.ts`
