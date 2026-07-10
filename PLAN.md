@@ -6483,7 +6483,7 @@ git commit -m "Block 14: embedded-SPA integration test (skips without a build)"
 
 ---
 
-### Task 37: CI — separate web job
+### Task 37: CI — separate web job ✅
 
 **Files:**
 - Modify: `.github/workflows/check.yml`
@@ -6530,7 +6530,7 @@ so the pure-Go `check` job stays Bun-free:
       - name: Build UI then Go binary
         run: |
           make webui
-          cd cmd/testmaker && go build -o /tmp/testmaker.out ./...
+          go build -o /tmp/testmaker.out ./cmd/testmaker   # single main pkg; `./...` errors (webui pkg + main)
 ```
 
 - [ ] **Step 3: Validate the workflow locally** (yaml lint, or push a branch and

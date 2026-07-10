@@ -20,3 +20,38 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Build + lint + test
         run: make check
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install web deps
+        run: cd web && bun install --frozen-lockfile
+      - name: Typecheck + lint
+        run: cd web && bun run typecheck
+      - name: Unit tests
+        run: cd web && bun run test:run
+      - name: Production build
+        run: cd web && bun run build
+
+  # Proves the go:embed path compiles: build the UI, then the single-binary
+  # server that embeds it. Separate job so the pure-Go `check` job stays Bun-free.
+  embed:
+    runs-on: ubuntu-latest
+    needs: [check, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          check-latest: true
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Build UI then Go binary
+        run: |
+          make webui
+          go build -o /tmp/testmaker.out ./cmd/testmaker
