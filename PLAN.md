@@ -5198,7 +5198,7 @@ git add web && git commit -m "Block 14: web data hooks, Async wrapper, dashboard
 
 ---
 
-### Task 24: Sources browser + catalogue sync/upload
+### Task 24: Sources browser + catalogue sync/upload ✅
 
 **Files:**
 - Modify: `web/src/pages/Sources.tsx`

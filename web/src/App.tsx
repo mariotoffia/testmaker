@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Dashboard from "./pages/Dashboard";
 import Sources from "./pages/Sources";
+import SourceDetail from "./pages/SourceDetail";
 import Items from "./pages/Items";
 import Generate from "./pages/Generate";
 import Compose from "./pages/Compose";
@@ -23,6 +24,7 @@ export function AppRoutes() {
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="sources" element={<Sources />} />
+          <Route path="sources/:id" element={<SourceDetail />} />
           <Route path="items" element={<Items />} />
           <Route path="generate" element={<Generate />} />
           <Route path="compose" element={<Compose />} />
