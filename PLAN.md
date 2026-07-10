@@ -5665,7 +5665,7 @@ git add web && git commit -m "Block 14: web compose form, tests list/detail, inv
 
 ---
 
-### Task 29: Console polish + Go-gate checkpoint
+### Task 29: Console polish + Go-gate checkpoint ✅
 
 **Files:**
 - Modify: assorted console pages (empty states, error copy, disabled-button
