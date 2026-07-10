@@ -44,3 +44,6 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+
+.playwright-mcp/
